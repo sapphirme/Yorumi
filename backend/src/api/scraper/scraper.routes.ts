@@ -159,8 +159,14 @@ const getStaleLatestUpdates = async (): Promise<{ latestEpisodes: any[] }> => {
 };
 
 const refreshLatestUpdatesCache = async (): Promise<{ latestEpisodes: any[] }> => {
-    const latest = await scraperService.getAnimePaheLatestUpdates(1, LATEST_HOME_LIMIT);
-    const rawLatestEpisodes = Array.isArray(latest?.data) ? latest.data : [];
+    let latest = await scraperService.getAnimePaheLatestUpdates(1, LATEST_HOME_LIMIT);
+    let rawLatestEpisodes: any[] = Array.isArray(latest?.data) ? latest.data : [];
+
+    if (rawLatestEpisodes.length === 0) {
+        const fallback = await reAnimeScraper.getNewReleases(1, LATEST_HOME_LIMIT);
+        rawLatestEpisodes = Array.isArray(fallback?.data) ? (fallback.data as any[]) : [];
+    }
+
     const latestEpisodes = await enrichAnimeKaiItemsWithFallback(rawLatestEpisodes, 2500);
     const payload = { latestEpisodes };
 
@@ -388,10 +394,18 @@ router.get('/recently-updated', async (req, res) => {
 
     res.set('Cache-Control', 'public, max-age=60, s-maxage=120, stale-while-revalidate=300');
     try {
-        const result = await scraperService.getAnimePaheLatestUpdates(page, limit);
-        const rawItems = Array.isArray(result?.data) ? result.data : [];
+        let result = await scraperService.getAnimePaheLatestUpdates(page, limit);
+        let rawItems: any[] = Array.isArray(result?.data) ? result.data : [];
+        let pagination = result?.pagination;
+
+        if (rawItems.length === 0) {
+            const fallback = await reAnimeScraper.getNewReleases(page, limit);
+            rawItems = Array.isArray(fallback?.data) ? (fallback.data as any[]) : [];
+            pagination = fallback?.pagination || pagination;
+        }
+
         const listItems = await enrichAnimeKaiItemsWithFallback(rawItems, 2500);
-        const payload = { data: listItems, pagination: result.pagination };
+        const payload = { data: listItems, pagination };
 
         if (listItems.length > 0) {
             newReleasesMemCache.set(cacheKey, payload);
@@ -417,10 +431,18 @@ router.get('/animekai/new-releases', async (req, res) => {
 
     res.set('Cache-Control', 'public, max-age=60, s-maxage=120, stale-while-revalidate=300');
     try {
-        const result = await scraperService.getAnimePaheLatestUpdates(page, limit);
-        const rawItems = Array.isArray(result?.data) ? result.data : [];
+        let result = await scraperService.getAnimePaheLatestUpdates(page, limit);
+        let rawItems: any[] = Array.isArray(result?.data) ? result.data : [];
+        let pagination = result?.pagination;
+
+        if (rawItems.length === 0) {
+            const fallback = await reAnimeScraper.getNewReleases(page, limit);
+            rawItems = Array.isArray(fallback?.data) ? (fallback.data as any[]) : [];
+            pagination = fallback?.pagination || pagination;
+        }
+
         const listItems = await enrichAnimeKaiItemsWithFallback(rawItems, 2500);
-        const payload = { data: listItems, pagination: result.pagination };
+        const payload = { data: listItems, pagination };
 
         if (listItems.length > 0) {
             newReleasesMemCache.set(cacheKey, payload);

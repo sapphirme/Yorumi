@@ -374,9 +374,14 @@ const buildHomeFastPayload = async () => {
     const [spotlightRaw, latestEpisodesRaw, trending, seasonal, monthly, topAnime] = await Promise.all([
         withTimeout(new ReAnimeScraper().getSpotlightAnime(), 4000, [] as any[]),
         withTimeout(
-            scraperService.getAnimePaheLatestUpdates(1, 10).then((result) =>
-                Array.isArray(result?.data) ? result.data : []
-            ),
+            scraperService.getAnimePaheLatestUpdates(1, 10).then(async (result) => {
+                let items: any[] = Array.isArray(result?.data) ? result.data : [];
+                if (items.length === 0) {
+                    const fallback = await new ReAnimeScraper().getNewReleases(1, 10);
+                    items = Array.isArray(fallback?.data) ? (fallback.data as any[]) : [];
+                }
+                return items;
+            }),
             3500,
             [] as any[]
         ),
