@@ -455,7 +455,7 @@ export const animeService = {
     },
 
     async getHomeFastData() {
-        const cacheKey = 'home-fast-data-v16';
+        const cacheKey = 'home-fast-data-v18';
         const cached = getCached(cacheKey, DETAIL_CACHE_TTL);
         if (cached) return cached;
 
@@ -488,6 +488,7 @@ export const animeService = {
                         anime.title_english = anime.title_english || item.title;
                         anime.type = item.type || anime.type || 'TV';
                         anime.synopsis = anime.synopsis || item.description || '';
+                        anime.trailer = anime.trailer || item.trailer;
                         if (item.scraperId) anime.scraperId = item.scraperId;
                         return anime;
                     })
@@ -1240,10 +1241,10 @@ export const animeService = {
         }).catch(() => undefined);
     },
 
-    // Get Re:Anime spotlight, enriched with AniList metadata when available.
+    // Get native AniList spotlight, scored from trending, seasonal, monthly, and popular pools.
     async getSpotlightAnime() {
         try {
-            const res = await fetchJsonWithTimeout(`${API_BASE}/scraper/animekai/spotlight`, {}, 12000);
+            const res = await fetchJsonWithTimeout(`${API_BASE}/anilist/native-spotlight`, {}, 12000);
             if (!res.ok) throw new Error('Failed to fetch spotlight');
             const { spotlight } = await res.json();
 
@@ -1266,6 +1267,7 @@ export const animeService = {
                 anime.title_english = anime.title_english || item.title;
                 anime.type = item.type || anime.type || 'TV';
                 anime.synopsis = anime.synopsis || item.description || '';
+                anime.trailer = anime.trailer || item.trailer;
                 if (item.scraperId) anime.scraperId = item.scraperId;
                 return anime;
             });

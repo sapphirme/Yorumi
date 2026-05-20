@@ -8,7 +8,7 @@ import { scraperService } from '../scraper/scraper.service';
 import { tmdbService } from '../scraper/tmdb.service';
 
 const router = Router();
-const HOME_FAST_CACHE_KEY = 'anilist:home:fast:v16';
+const HOME_FAST_CACHE_KEY = 'anilist:home:fast:v18';
 const HOME_FAST_TTL_SECONDS = 120;
 let homeFastMemoryCache: { data: any; timestamp: number } | null = null;
 let homeFastRefreshPromise: Promise<any> | null = null;
@@ -355,6 +355,7 @@ const wrapAniListMediaItems = (items: any[]) =>
         type: item?.format,
         episodes: item?.episodes,
         latestEpisode: item?.nextAiringEpisode?.episode ? item.nextAiringEpisode.episode - 1 : undefined,
+        trailer: item?.trailer,
         id: item?.id || 0,
         mal_id: item?.idMal || item?.id || 0,
         anilist: item,
@@ -372,7 +373,7 @@ const buildHomeFastPayload = async () => {
         }
     };
     const [spotlightRaw, latestEpisodesRaw, trending, seasonal, monthly, topAnime] = await Promise.all([
-        withTimeout(new ReAnimeScraper().getSpotlightAnime(), 4000, [] as any[]),
+        withTimeout(anilistService.getNativeSpotlightAnime(8), 6000, [] as any[]),
         withTimeout(
             scraperService.getAnimePaheLatestUpdates(1, 10).then(async (result) => {
                 let items: any[] = Array.isArray(result?.data) ? result.data : [];
@@ -395,11 +396,7 @@ const buildHomeFastPayload = async () => {
         enrichAnimeKaiItems(latestRawItems),
         new Promise<any[]>((resolve) => setTimeout(() => resolve(buildAnimeKaiFallbackItems(latestRawItems)), 2500)),
     ]);
-    const spotlightRawItems = buildAnimeKaiFallbackItems(Array.isArray(spotlightRaw) ? spotlightRaw : []);
-    const spotlightEnriched = await Promise.race([
-        enrichAnimeKaiItems(spotlightRawItems),
-        new Promise<any[]>((resolve) => setTimeout(() => resolve(spotlightRawItems), 2500)),
-    ]);
+    const spotlightEnriched = wrapAniListMediaItems(Array.isArray(spotlightRaw) ? spotlightRaw : []);
     const spotlight = await Promise.race([
         applyTmdbSpotlightBanners(spotlightEnriched),
         new Promise<any[]>((resolve) => setTimeout(() => resolve(clearSpotlightBanners(spotlightEnriched)), 3500)),
@@ -513,14 +510,28 @@ router.get('/format/:format', async (req, res) => {
     }
 });
 
-// Get spotlight anime (top 10)
+// Get native spotlight anime (top 8)
 router.get('/spotlight', async (_req, res) => {
     try {
-        const spotlight = await anilistService.getSpotlightAnime(10);
+        const media = await anilistService.getNativeSpotlightAnime(8);
+        const spotlight = wrapAniListMediaItems(media);
+        res.set('Cache-Control', 'public, max-age=120, s-maxage=300, stale-while-revalidate=600');
         res.json({ spotlight });
     } catch (error) {
         console.error('Error in spotlight anime route:', error);
         res.status(500).json({ error: 'Failed to fetch spotlight anime' });
+    }
+});
+
+router.get('/native-spotlight', async (_req, res) => {
+    try {
+        const media = await anilistService.getNativeSpotlightAnime(8);
+        const spotlight = wrapAniListMediaItems(media);
+        res.set('Cache-Control', 'public, max-age=120, s-maxage=300, stale-while-revalidate=600');
+        res.json({ spotlight });
+    } catch (error) {
+        console.error('Error in native spotlight route:', error);
+        res.status(500).json({ error: 'Failed to fetch native spotlight anime' });
     }
 });
 

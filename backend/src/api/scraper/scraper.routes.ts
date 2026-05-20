@@ -104,6 +104,20 @@ const clearSpotlightBanners = (items: any[]) =>
         banner: item?.banner || item?.anilist?.bannerImage || undefined,
     }));
 
+const wrapAniListSpotlightItems = (items: any[]) =>
+    (Array.isArray(items) ? items : []).map((item) => ({
+        title: item?.title?.english || item?.title?.romaji || item?.title?.native || 'Unknown',
+        poster: item?.coverImage?.extraLarge || item?.coverImage?.large,
+        banner: item?.bannerImage,
+        type: item?.format,
+        episodes: item?.episodes,
+        latestEpisode: item?.nextAiringEpisode?.episode ? item.nextAiringEpisode.episode - 1 : undefined,
+        trailer: item?.trailer,
+        id: item?.id || 0,
+        mal_id: item?.idMal || item?.id || 0,
+        anilist: item,
+    }));
+
 const refreshSpotlightCache = async (): Promise<{ spotlight: any[] }> => {
     const rawItems = await reAnimeScraper.getSpotlightAnime();
     if (rawItems.length === 0) {
@@ -275,32 +289,23 @@ router.get('/search', async (req, res) => {
 router.get('/animekai/spotlight', async (_req, res) => {
     res.set('Cache-Control', 'public, max-age=60, s-maxage=120, stale-while-revalidate=300');
     try {
-        if (spotlightMemCache && spotlightMemCache.spotlight.length > 0) {
-            res.json(spotlightMemCache);
-            refreshSpotlightCache().catch((error) => {
-                console.error('AnimeKai spotlight background refresh failed:', error?.message || error);
-            });
-            return;
+        const media = await anilistService.getNativeSpotlightAnime(8);
+        const spotlight = await Promise.race([
+            applyTmdbSpotlightBanners(wrapAniListSpotlightItems(media)),
+            new Promise<any[]>((resolve) => setTimeout(() => resolve(clearSpotlightBanners(wrapAniListSpotlightItems(media))), 3500)),
+        ]);
+        const payload = { spotlight };
+        if (spotlight.length > 0) {
+            spotlightMemCache = payload;
+            redis.set(SPOTLIGHT_REDIS_KEY, payload, { ex: CACHE_TTL_SECONDS }).catch(() => undefined);
         }
-
-        const redisHit = await redis.get<any>(SPOTLIGHT_REDIS_KEY).catch(() => null);
-        if (redisHit && Array.isArray(redisHit.spotlight) && redisHit.spotlight.length > 0) {
-            spotlightMemCache = redisHit;
-            res.json(redisHit);
-            refreshSpotlightCache().catch((error) => {
-                console.error('AnimeKai spotlight background refresh failed:', error?.message || error);
-            });
-            return;
-        }
-
-        const payload = await refreshSpotlightCache();
         res.json(payload);
     } catch (error: any) {
-        console.error('AnimeKai spotlight scrape failed, serving stale:', error?.message || error);
+        console.error('Native spotlight failed, serving stale:', error?.message || error);
         const stale = await getStaleSpotlight();
         if (!Array.isArray(stale.spotlight) || stale.spotlight.length === 0) {
             res.set('Cache-Control', 'no-store');
-            res.status(503).json({ error: 'AnimeKai spotlight temporarily unavailable' });
+            res.status(503).json({ error: 'Native spotlight temporarily unavailable' });
             return;
         }
         res.json(stale);

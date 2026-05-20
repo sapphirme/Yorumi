@@ -352,6 +352,11 @@ const MEDIA_FIELDS = `
         url
         site
     }
+    trailer {
+        id
+        site
+        thumbnail
+    }
     synonyms
     staff(perPage: 3, sort: [RELEVANCE, ID]) {
         edges {
@@ -367,6 +372,130 @@ const MEDIA_FIELDS = `
 
 
 export const anilistService = {
+    async getNativeSpotlightAnime(perPage: number = 8) {
+        const limit = Math.max(1, Math.min(perPage, 20));
+        const cacheKey = getCacheKey('native_spotlight_anime', limit);
+        const cached = getFromCache(cacheKey);
+        if (cached) return cached;
+
+        const now = new Date();
+        const month = now.getMonth() + 1;
+        const season = month <= 3 ? 'WINTER' : month <= 6 ? 'SPRING' : month <= 9 ? 'SUMMER' : 'FALL';
+        const seasonYear = now.getFullYear();
+        const monthStart = new Date(seasonYear, now.getMonth(), 1);
+        const monthEnd = new Date(seasonYear, now.getMonth() + 1, 0);
+        const poolSize = Math.max(16, limit * 3);
+        const query = `
+            query ($poolSize: Int, $season: MediaSeason, $seasonYear: Int, $startDateGreater: FuzzyDateInt, $startDateLesser: FuzzyDateInt) {
+                trending: Page(page: 1, perPage: $poolSize) {
+                    media(type: ANIME, sort: TRENDING_DESC, isAdult: false) {
+                        ${MEDIA_FIELDS}
+                    }
+                }
+                seasonal: Page(page: 1, perPage: $poolSize) {
+                    media(type: ANIME, season: $season, seasonYear: $seasonYear, sort: POPULARITY_DESC, isAdult: false) {
+                        ${MEDIA_FIELDS}
+                    }
+                }
+                monthly: Page(page: 1, perPage: $poolSize) {
+                    media(type: ANIME, startDate_greater: $startDateGreater, startDate_lesser: $startDateLesser, sort: POPULARITY_DESC, isAdult: false) {
+                        ${MEDIA_FIELDS}
+                    }
+                }
+                popular: Page(page: 1, perPage: $poolSize) {
+                    media(type: ANIME, sort: POPULARITY_DESC, isAdult: false) {
+                        ${MEDIA_FIELDS}
+                    }
+                }
+            }
+        `;
+
+        let payload: any = null;
+        try {
+            const response = await rateLimitedRequest(query, {
+                poolSize,
+                season,
+                seasonYear,
+                startDateGreater: toDateInt(monthStart) - 1,
+                startDateLesser: toDateInt(monthEnd) + 1,
+            }, { cacheTtlSeconds: 300 });
+            payload = response.data;
+        } catch (error) {
+            console.error('Error fetching native spotlight anime:', error);
+            return [];
+        }
+
+        const candidates = new Map<number, { media: any; score: number; genres: string[] }>();
+        const addCandidate = (media: any, source: 'trending' | 'seasonal' | 'monthly' | 'popular', index: number) => {
+            const id = Number(media?.id || 0);
+            if (!id || media?.isAdult) return;
+            if (!media?.bannerImage && !media?.coverImage?.extraLarge && !media?.coverImage?.large) return;
+
+            const rankScore = Math.max(0, 24 - index);
+            const popularity = Number(media?.popularity || 0);
+            const averageScore = Number(media?.averageScore || media?.meanScore || 0);
+            const hasBackdrop = media?.bannerImage ? 1 : 0;
+            const isAiring = media?.status === 'RELEASING' ? 1 : 0;
+            const isCurrentSeason = media?.seasonYear === new Date().getFullYear() ? 1 : 0;
+            const recentlyAired = media?.nextAiringEpisode?.airingAt
+                ? Math.max(0, 10 - Math.abs((media.nextAiringEpisode.airingAt * 1000 - Date.now()) / (1000 * 60 * 60 * 24)))
+                : 0;
+
+            const sourceWeight = source === 'trending'
+                ? 120
+                : source === 'seasonal'
+                    ? 90
+                    : source === 'monthly'
+                        ? 60
+                        : 35;
+            const score =
+                sourceWeight +
+                rankScore * 5 +
+                Math.log10(Math.max(1, popularity)) * 18 +
+                averageScore * 0.7 +
+                hasBackdrop * 35 +
+                isAiring * 25 +
+                isCurrentSeason * 10 +
+                recentlyAired * 3;
+
+            const existing = candidates.get(id);
+            candidates.set(id, {
+                media,
+                score: (existing?.score || 0) + score,
+                genres: Array.isArray(media?.genres) ? media.genres : [],
+            });
+        };
+
+        (Array.isArray(payload?.trending?.media) ? payload.trending.media : []).forEach((media: any, index: number) => addCandidate(media, 'trending', index));
+        (Array.isArray(payload?.seasonal?.media) ? payload.seasonal.media : []).forEach((media: any, index: number) => addCandidate(media, 'seasonal', index));
+        (Array.isArray(payload?.monthly?.media) ? payload.monthly.media : []).forEach((media: any, index: number) => addCandidate(media, 'monthly', index));
+        (Array.isArray(payload?.popular?.media) ? payload.popular.media : []).forEach((media: any, index: number) => addCandidate(media, 'popular', index));
+
+        const selected: any[] = [];
+        const genreCounts = new Map<string, number>();
+        const ranked = Array.from(candidates.values())
+            .sort((a, b) => b.score - a.score);
+
+        for (const candidate of ranked) {
+            const overusedGenres = candidate.genres.filter((genre) => (genreCounts.get(genre) || 0) >= 3);
+            if (selected.length >= 4 && overusedGenres.length >= Math.min(2, candidate.genres.length)) continue;
+            selected.push(candidate.media);
+            candidate.genres.forEach((genre) => genreCounts.set(genre, (genreCounts.get(genre) || 0) + 1));
+            if (selected.length >= limit) break;
+        }
+
+        if (selected.length < limit) {
+            for (const candidate of ranked) {
+                if (selected.some((media) => media.id === candidate.media.id)) continue;
+                selected.push(candidate.media);
+                if (selected.length >= limit) break;
+            }
+        }
+
+        setCache(cacheKey, selected, CACHE_TTL.trending);
+        return selected;
+    },
+
     async getSpotlightAnime(perPage: number = 10) {
         const cacheKey = getCacheKey('spotlight_anime', perPage);
         const cached = getFromCache(cacheKey);

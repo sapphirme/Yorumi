@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import useEmblaCarousel from 'embla-carousel-react';
-import Autoplay from 'embla-carousel-autoplay';
 import type { Anime } from '../../../types/anime';
 import AnimeLogoImage from '../../../components/anime/AnimeLogoImage';
 import SpotlightSkeleton from './SpotlightSkeleton';
@@ -19,14 +18,14 @@ interface SpotlightHeroProps {
 
 const SpotlightHero: React.FC<SpotlightHeroProps> = ({ animeList, isLoading = false, onAnimeClick, onWatchClick, onAnimeHover }) => {
     const { language } = useTitleLanguage();
-    // Embla Carousel hook with Autoplay
+    // Embla Carousel hook
     const [emblaRef, emblaApi] = useEmblaCarousel({
         loop: true,
         duration: 20
-    }, [
-        Autoplay({ delay: 5000, stopOnInteraction: false, stopOnMouseEnter: false })
-    ]);
+    });
     const [selectedIndex, setSelectedIndex] = useState(0);
+    const [showTrailer, setShowTrailer] = useState(false);
+    const [revealTrailer, setRevealTrailer] = useState(false);
 
     // Update selected index when slide changes
     const onSelect = useCallback(() => {
@@ -50,6 +49,26 @@ const SpotlightHero: React.FC<SpotlightHeroProps> = ({ animeList, isLoading = fa
             onAnimeHover?.(activeAnime);
         }
     }, [animeList, onAnimeHover, selectedIndex]);
+
+    useEffect(() => {
+        setShowTrailer(false);
+        setRevealTrailer(false);
+        const activeAnime = animeList[selectedIndex];
+        const hasTrailer = Boolean(activeAnime?.trailer?.id && activeAnime?.trailer?.site);
+        if (!hasTrailer) return;
+
+        const showTimer = window.setTimeout(() => {
+            setShowTrailer(true);
+        }, 500);
+        const revealTimer = window.setTimeout(() => {
+            setRevealTrailer(true);
+        }, 500);
+
+        return () => {
+            window.clearTimeout(showTimer);
+            window.clearTimeout(revealTimer);
+        };
+    }, [animeList, selectedIndex]);
 
     const handleNext = useCallback(() => {
         if (emblaApi) emblaApi.scrollNext();
@@ -82,7 +101,7 @@ const SpotlightHero: React.FC<SpotlightHeroProps> = ({ animeList, isLoading = fa
                         const isActive = index === selectedIndex;
                         const trailerUrl = trailerId && trailerSite
                             ? (trailerSite === 'youtube'
-                                ? `https://www.youtube.com/embed/${trailerId}?autoplay=1&mute=1&controls=0&loop=1&playlist=${trailerId}&modestbranding=1&playsinline=1`
+                                ? `https://www.youtube-nocookie.com/embed/${trailerId}?autoplay=1&mute=1&controls=0&loop=1&playlist=${trailerId}&modestbranding=1&playsinline=1&rel=0&disablekb=1&fs=0&iv_load_policy=3&cc_load_policy=0&vq=hd1080&hd=1&origin=${encodeURIComponent(window.location.origin)}`
                                 : trailerSite === 'dailymotion'
                                     ? `https://www.dailymotion.com/embed/video/${trailerId}?autoplay=1&mute=1&loop=1&controls=0`
                                     : null)
@@ -90,6 +109,8 @@ const SpotlightHero: React.FC<SpotlightHeroProps> = ({ animeList, isLoading = fa
                         const directDistance = Math.abs(index - selectedIndex);
                         const loopDistance = Math.min(directDistance, animeList.length - directDistance);
                         const shouldLoadBackdrop = loopDistance <= 1;
+                        const shouldCoverTrailer = Boolean(trailerUrl && isActive && showTrailer && !revealTrailer);
+                        const shouldFadeBackdrop = Boolean(trailerUrl && isActive && revealTrailer);
 
                         return (
                             <div
@@ -99,26 +120,29 @@ const SpotlightHero: React.FC<SpotlightHeroProps> = ({ animeList, isLoading = fa
                                 {/* Background Image */}
                                 <div className="absolute inset-0 z-0 select-none">
                                     {trailerUrl && isActive && (
-                                        <div className="absolute inset-0 pointer-events-none">
-                                            <iframe
-                                                className="absolute inset-0 h-full w-full scale-125"
-                                                src={trailerUrl}
-                                                title={`${getDisplayTitle(anime as unknown as Record<string, unknown>, language)} trailer`}
-                                                allow="autoplay; encrypted-media; picture-in-picture"
-                                                allowFullScreen={false}
-                                            />
+                                        <div className={`absolute inset-0 z-0 pointer-events-none transition-opacity duration-300 ${showTrailer ? 'opacity-100' : 'opacity-0'}`}>
+                                            {showTrailer && (
+                                                <iframe
+                                                    className="absolute inset-0 h-full w-full scale-125"
+                                                    src={trailerUrl}
+                                                    title={`${getDisplayTitle(anime as unknown as Record<string, unknown>, language)} trailer`}
+                                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                                    allowFullScreen={false}
+                                                    referrerPolicy="strict-origin-when-cross-origin"
+                                                />
+                                            )}
                                         </div>
                                     )}
                                     <div
-                                        className={`absolute inset-0 bg-no-repeat bg-cover bg-center ${trailerUrl && isActive ? 'opacity-0' : 'opacity-90'}`}
+                                        className={`absolute inset-0 z-10 bg-no-repeat bg-cover bg-center transition-opacity duration-1000 ${shouldFadeBackdrop ? 'opacity-0' : shouldCoverTrailer ? 'opacity-100' : 'opacity-90'}`}
                                         style={{
                                             backgroundImage: shouldLoadBackdrop ? `url(${landscapeImage})` : 'none',
                                         }}
                                     />
                                     {/* Overlay */}
-                                    <div className="absolute inset-0 bg-black/40 pointer-events-none" />
-                                    <div className="absolute inset-0 bg-gradient-to-r from-[#050505] via-[#050505]/70 to-[#050505]/15 pointer-events-none" />
-                                    <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/25 to-transparent pointer-events-none" />
+                                    <div className="absolute inset-0 z-20 bg-black/40 pointer-events-none" />
+                                    <div className="absolute inset-0 z-20 bg-gradient-to-r from-[#050505] via-[#050505]/70 to-[#050505]/15 pointer-events-none" />
+                                    <div className="absolute inset-0 z-20 bg-gradient-to-t from-[#050505] via-[#050505]/25 to-transparent pointer-events-none" />
                                 </div>
 
                                 {/* Content */}
@@ -127,23 +151,19 @@ const SpotlightHero: React.FC<SpotlightHeroProps> = ({ animeList, isLoading = fa
 
                                         {/* Left Column: Text Info */}
                                         <div className="flex-1 pointer-events-auto max-w-2xl w-full min-w-0">
-                                            <div className="text-yorumi-accent font-bold tracking-wider text-sm md:text-base mb-2 md:mb-3 select-none flex items-center gap-3">
-                                                #{index + 1} Spotlight
-                                            </div>
-
                                             {/* Logo */}
-                                            <div className={`${getDisplayTitle(anime as unknown as Record<string, unknown>, language).length > 50 ? 'max-h-8 md:max-h-24' :
-                                                getDisplayTitle(anime as unknown as Record<string, unknown>, language).length > 30 ? 'max-h-10 md:max-h-28' :
-                                                    'max-h-14 md:max-h-32'
-                                                } mb-8 md:mb-12 flex items-start overflow-visible max-w-[80%] md:max-w-none`}>
+                                            <div className={`${getDisplayTitle(anime as unknown as Record<string, unknown>, language).length > 50 ? 'max-h-14 md:max-h-44' :
+                                                getDisplayTitle(anime as unknown as Record<string, unknown>, language).length > 30 ? 'max-h-16 md:max-h-48' :
+                                                    'max-h-20 md:max-h-56'
+                                                } mb-8 md:mb-12 flex items-start overflow-visible max-w-[92%] md:max-w-none`}>
                                                 <AnimeLogoImage
                                                     anilistId={anime.id || anime.mal_id}
                                                     title={getDisplayTitle(anime as unknown as Record<string, unknown>, language)}
                                                     year={anime.year}
                                                     episodes={anime.latestEpisode || anime.episodes}
                                                     format={anime.type}
-                                                    className="drop-shadow-2xl max-h-full origin-left object-contain"
-                                                    size="medium"
+                                                    className="drop-shadow-2xl max-h-full origin-left object-contain text-4xl sm:text-5xl md:text-6xl lg:text-7xl"
+                                                    size="large"
                                                     style={{ maxHeight: 'inherit' }}
                                                 />
                                             </div>
@@ -219,30 +239,30 @@ const SpotlightHero: React.FC<SpotlightHeroProps> = ({ animeList, isLoading = fa
             </div>
 
             {/* Navigation Buttons */}
-            <div className="absolute right-5 top-20 z-20 hidden md:flex gap-2">
+            <div className="absolute z-20 flex gap-3 right-4 md:right-8 bottom-16 md:bottom-8">
                 <button
                     onClick={handlePrev}
-                    className="p-2.5 bg-black/55 hover:bg-yorumi-accent hover:text-yorumi-bg text-white rounded-md border border-white/10 transition-all backdrop-blur-md"
+                    className="p-3 bg-black/55 hover:bg-yorumi-accent hover:text-yorumi-bg text-white rounded-md border border-white/10 transition-all backdrop-blur-md"
                     aria-label="Previous Slide"
                 >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
                 </button>
                 <button
                     onClick={handleNext}
-                    className="p-2.5 bg-black/55 hover:bg-yorumi-accent hover:text-yorumi-bg text-white rounded-md border border-white/10 transition-all backdrop-blur-md"
+                    className="p-3 bg-black/55 hover:bg-yorumi-accent hover:text-yorumi-bg text-white rounded-md border border-white/10 transition-all backdrop-blur-md"
                     aria-label="Next Slide"
                 >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                 </button>
             </div>
 
             {/* Dots Indicator */}
-            <div className="absolute z-20 flex gap-2 right-4 top-1/2 -translate-y-1/2 flex-col md:flex-row md:bottom-8 md:right-8 md:left-auto md:top-auto md:translate-y-0">
+            <div className="absolute z-20 flex gap-2 left-1/2 -translate-x-1/2 bottom-6">
                 {animeList.map((_, idx) => (
                     <button
                         key={idx}
                         onClick={() => scrollTo(idx)}
-                        className={`w-2 h-2 rounded-full transition-all duration-300 ${idx === selectedIndex ? 'bg-yorumi-accent md:w-6 h-6 md:h-2' : 'bg-white/30 hover:bg-white/50'
+                        className={`h-2 rounded-full transition-all duration-300 ${idx === selectedIndex ? 'w-7 bg-yorumi-accent' : 'w-2 bg-white/30 hover:bg-white/50'
                             }`}
                         aria-label={`Go to slide ${idx + 1}`}
                     />
