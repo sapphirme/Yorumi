@@ -5,6 +5,7 @@ import { ReAnimeScraper } from '../../scraper/reanime';
 import { anilistService } from '../anilist/anilist.service';
 import { redis } from '../mapping/mapper';
 import { tmdbService } from './tmdb.service';
+import { getBrowserInstance } from '../../utils/browser';
 
 const router = Router();
 const upstreamCookieJar = new Map<string, string>();
@@ -225,6 +226,148 @@ const getPublicBase = (req: any) => {
         ? xfProtoRaw
         : (req.protocol === 'https' ? 'https' : 'http');
     return `${proto}://${req.get('host')}`;
+};
+
+const buildKwikEmbedProxyUrl = (req: any, targetUrl: string) => {
+    const safeUrl = String(targetUrl || '').trim();
+    if (!safeUrl || !/^https?:\/\//i.test(safeUrl)) return safeUrl;
+    if (/\/api\/scraper\/embed(?:\?|$)/i.test(safeUrl)) return safeUrl;
+
+    return `${getPublicBase(req)}/api/scraper/embed?url=${encodeURIComponent(safeUrl)}`;
+};
+
+const buildScraperProxyUrl = (req: any, targetUrl: string, referer = '') => {
+    const safeUrl = String(targetUrl || '').trim();
+    if (!safeUrl || !/^https?:\/\//i.test(safeUrl)) return safeUrl;
+
+    const safeReferer = String(referer || '').trim();
+    return `${getPublicBase(req)}/api/scraper/proxy?url=${encodeURIComponent(safeUrl)}${safeReferer ? `&referer=${encodeURIComponent(safeReferer)}` : ''}`;
+};
+
+const buildEmbedAssetProxyUrl = (req: any, targetUrl: string) => {
+    const safeUrl = String(targetUrl || '').trim();
+    if (!safeUrl || !/^https?:\/\//i.test(safeUrl)) return safeUrl;
+
+    const target = new URL(safeUrl);
+    const hash = target.hash;
+    target.hash = '';
+    return `${getPublicBase(req)}/api/scraper/embed-asset?url=${encodeURIComponent(target.toString())}${hash}`;
+};
+
+const patchEmbedHtml = (req: any, html: string, origin: string) => {
+    const hostBase = getPublicBase(req);
+    const toAbsolute = (value: string) => {
+        const raw = String(value || '').trim();
+        if (!raw || raw.startsWith('#') || raw.startsWith('data:') || raw.startsWith('blob:') || raw.startsWith('javascript:')) {
+            return raw;
+        }
+        if (raw.startsWith('//')) return `https:${raw}`;
+        if (/^https?:\/\//i.test(raw)) return raw;
+        return new URL(raw, `${origin}/`).toString();
+    };
+    const proxyUrl = (value: string) => {
+        const absolute = toAbsolute(value);
+        if (!/^https?:\/\//i.test(absolute)) return value;
+        return /\.m3u8(?:[?#]|$)/i.test(absolute)
+            ? buildScraperProxyUrl(req, absolute, `${origin}/`)
+            : (new URL(absolute).origin === origin ? buildEmbedAssetProxyUrl(req, absolute) : absolute);
+    };
+
+    const proxyRuntime = `
+<script>
+(() => {
+  const origin = ${JSON.stringify(origin)};
+  const hostBase = ${JSON.stringify(hostBase)};
+  const proxied = /\\/api\\/scraper\\/(?:proxy|embed-asset)\\?/i;
+  const isStreamMedia = (absolute) => {
+    try {
+      const parsed = new URL(absolute);
+      const path = parsed.pathname.toLowerCase();
+      return (
+        path.includes('/stream/') ||
+        /(?:^|[\\/-])segment[-_]/i.test(path) ||
+        /\\.(?:ts|m4s|mp4|aac|cmaf|fmp4|jpg|jpeg)(?:[?#]|$)/i.test(path)
+      );
+    } catch {
+      return false;
+    }
+  };
+  const toAbsolute = (value) => {
+    const raw = String(value || '').trim();
+    if (!raw || raw.startsWith('#') || raw.startsWith('data:') || raw.startsWith('blob:') || raw.startsWith('javascript:')) return raw;
+    try { return new URL(raw, origin + '/').toString(); } catch { return raw; }
+  };
+  const proxify = (value) => {
+    const absolute = toAbsolute(value);
+    if (!/^https?:\\/\\//i.test(absolute) || proxied.test(absolute)) return value;
+    if (/\\.m3u8(?:[?#]|$)/i.test(absolute)) {
+      return hostBase + '/api/scraper/proxy?url=' + encodeURIComponent(absolute) + '&referer=' + encodeURIComponent(origin + '/');
+    }
+    if (isStreamMedia(absolute)) {
+      return hostBase + '/api/scraper/proxy?url=' + encodeURIComponent(absolute) + '&referer=' + encodeURIComponent(origin + '/');
+    }
+    if (new URL(absolute).origin === origin) {
+      const parsed = new URL(absolute);
+      const hash = parsed.hash;
+      parsed.hash = '';
+      return hostBase + '/api/scraper/embed-asset?url=' + encodeURIComponent(parsed.toString()) + hash;
+    }
+    return value;
+  };
+  const originalFetch = window.fetch;
+  if (originalFetch) {
+    window.fetch = (input, init) => {
+      const next = typeof input === 'string' ? proxify(input) : input;
+      return originalFetch.call(window, next, init);
+    };
+  }
+  const originalOpen = XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.open = function(method, url, ...rest) {
+    return originalOpen.call(this, method, proxify(url), ...rest);
+  };
+  const originalSetAttribute = Element.prototype.setAttribute;
+  Element.prototype.setAttribute = function(name, value) {
+    const attr = String(name || '').toLowerCase();
+    if (attr === 'src' || attr === 'href' || attr === 'xlink:href' || attr === 'action') {
+      return originalSetAttribute.call(this, name, proxify(value));
+    }
+    return originalSetAttribute.call(this, name, value);
+  };
+  if (window.SVGElement) {
+    const originalSetAttributeNS = Element.prototype.setAttributeNS;
+    Element.prototype.setAttributeNS = function(namespace, name, value) {
+      const attr = String(name || '').toLowerCase();
+      if (attr === 'href' || attr === 'xlink:href') {
+        return originalSetAttributeNS.call(this, namespace, name, proxify(value));
+      }
+      return originalSetAttributeNS.call(this, namespace, name, value);
+    };
+  }
+  const patchAttr = (proto, attr) => {
+    const desc = Object.getOwnPropertyDescriptor(proto, attr);
+    if (!desc || !desc.set) return;
+    Object.defineProperty(proto, attr, { ...desc, set(value) { desc.set.call(this, proxify(value)); } });
+  };
+  patchAttr(HTMLMediaElement.prototype, 'src');
+  patchAttr(HTMLSourceElement.prototype, 'src');
+})();
+</script>`;
+
+    const cleaned = String(html || '')
+        .replace(/<meta[^>]+http-equiv=["']?content-security-policy["']?[^>]*>/gi, '')
+        .replace(/<meta[^>]+content=["'][^"']*frame-ancestors[^"']*["'][^>]*>/gi, '')
+        .replace(/\b(src|href|action)=["']([^"']+)["']/gi, (_match, attr, value) => `${attr}="${proxyUrl(value)}"`)
+        .replace(/url\((['"]?)(\/app\/[^'")]+)\1\)/gi, (_match, quote, value) => {
+            const proxied = buildEmbedAssetProxyUrl(req, new URL(value, `${origin}/`).toString());
+            return `url(${quote}${proxied}${quote})`;
+        })
+        .replace(/(["'`])(\/app\/[^"'`\s)]+)\1/g, (_match, quote, value) => {
+            const proxied = buildEmbedAssetProxyUrl(req, new URL(value, `${origin}/`).toString());
+            return `${quote}${proxied}${quote}`;
+        });
+    return cleaned.includes('<head')
+        ? cleaned.replace(/<head([^>]*)>/i, `<head$1><base href="${origin}/">${proxyRuntime}`)
+        : `<base href="${origin}/">${proxyRuntime}${cleaned}`;
 };
 
 const sanitizeCookie = (raw: string) => String(raw || '').replace(/[\r\n]/g, '').trim();
@@ -532,14 +675,25 @@ router.get('/streams', async (req, res) => {
         const normalized = Array.isArray(result)
             ? result.map((item: any) => {
                 if (!item?.url || typeof item.url !== 'string') return item;
-                if (item.url.includes('/api/scraper/proxy?')) {
-                    if (item.url.startsWith('/api/')) {
-                        item.url = hostBase + item.url;
+
+                const next = { ...item };
+                const server = String(next.server || '').trim().toLowerCase();
+                const isKwikUrl = /^https?:\/\/([^/]+\.)?kwik\./i.test(next.url);
+                if (server === 'kwik' || isKwikUrl) {
+                    next.url = buildKwikEmbedProxyUrl(req, next.url);
+                    next.isHls = false;
+                    delete next.directUrl;
+                    return next;
+                }
+
+                if (next.url.includes('/api/scraper/proxy?')) {
+                    if (next.url.startsWith('/api/')) {
+                        next.url = hostBase + next.url;
                     } else {
-                        item.url = item.url.replace(/^https?:\/\/[^/]+/i, hostBase);
+                        next.url = next.url.replace(/^https?:\/\/[^/]+/i, hostBase);
                     }
                 }
-                return item;
+                return next;
             })
             : result;
         if (Array.isArray(normalized) && normalized.length === 0) {
@@ -567,6 +721,152 @@ router.post('/prefetch/streams', async (req, res) => {
         res.json(result);
     } catch (error: any) {
         res.status(500).json({ error: error.message });
+    }
+});
+
+router.get('/embed', async (req, res) => {
+    let targetUrl = String(req.query.url || '').trim();
+
+    if (!targetUrl) {
+        return res.status(400).send('Missing url parameter');
+    }
+
+    try {
+        let target = new URL(targetUrl);
+        if (/\/api\/scraper\/embed$/i.test(target.pathname)) {
+            targetUrl = String(target.searchParams.get('url') || '').trim();
+            target = new URL(targetUrl);
+        }
+
+        const host = target.hostname.toLowerCase();
+        if (!/^([^/]+\.)?kwik\./i.test(host)) {
+            return res.status(400).send('Unsupported embed host');
+        }
+
+        const cookieKey = target.origin;
+        const storedCookie = sanitizeCookie(upstreamCookieJar.get(cookieKey) || '');
+        const refererCandidates = [
+            `${target.origin}/`,
+            'https://kwik.cx/',
+            'https://animepahe.pw/',
+        ];
+
+        let html = '';
+        let status = 200;
+        let lastError: any = null;
+
+        for (const referer of refererCandidates) {
+            try {
+                const response = await axios.get(target.toString(), {
+                    responseType: 'text',
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+                        Referer: referer,
+                        Origin: new URL(referer).origin,
+                        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                        'Accept-Language': 'en-US,en;q=0.9',
+                        ...(storedCookie ? { Cookie: storedCookie } : {}),
+                    },
+                    timeout: 15000,
+                });
+
+                const setCookie = response.headers?.['set-cookie'];
+                if (Array.isArray(setCookie) && setCookie.length > 0) {
+                    const merged = mergeCookieHeader(storedCookie, setCookie);
+                    if (merged) upstreamCookieJar.set(cookieKey, merged);
+                }
+
+                html = String(response.data || '');
+                status = response.status;
+                break;
+            } catch (error: any) {
+                lastError = error;
+                if (![401, 403].includes(error?.response?.status)) break;
+            }
+        }
+
+        if (!html) {
+            const browser = await getBrowserInstance();
+            const page = await browser.newPage();
+            try {
+                await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36');
+                await page.setExtraHTTPHeaders({
+                    Referer: 'https://animepahe.pw/',
+                    Origin: 'https://animepahe.pw',
+                    'Accept-Language': 'en-US,en;q=0.9',
+                });
+                await page.goto(target.toString(), { waitUntil: 'domcontentloaded', timeout: 30000 });
+                html = await page.content();
+                status = 200;
+            } finally {
+                await page.close();
+            }
+        }
+
+        if (!html) throw lastError || new Error('Embed host returned no HTML');
+
+        const patchedHtml = patchEmbedHtml(req, html, target.origin);
+
+        res.status(status);
+        res.set('Content-Type', 'text/html; charset=utf-8');
+        res.set('Cache-Control', 'no-store');
+        res.set('Access-Control-Allow-Origin', '*');
+        res.removeHeader('Content-Security-Policy');
+        res.removeHeader('X-Frame-Options');
+        return res.send(patchedHtml);
+    } catch (error: any) {
+        console.error('Scraper embed proxy error:', targetUrl, error?.message || error);
+        return res.status(error?.response?.status || 500).send('Embed proxy error');
+    }
+});
+
+router.get('/embed-asset', async (req, res) => {
+    const targetUrl = String(req.query.url || '').trim();
+
+    if (!targetUrl) {
+        return res.status(400).send('Missing url parameter');
+    }
+
+    try {
+        const target = new URL(targetUrl);
+        const host = target.hostname.toLowerCase();
+        const isAllowedAssetHost =
+            /^([^/]+\.)?kwik\./i.test(host) ||
+            host === 'cdn.jsdelivr.net' ||
+            host === 'cdnjs.cloudflare.com' ||
+            host.endsWith('.cloudflareinsights.com');
+        if (!isAllowedAssetHost) {
+            return res.status(400).send('Unsupported asset host');
+        }
+
+        const cookieKey = target.origin;
+        const storedCookie = sanitizeCookie(upstreamCookieJar.get(cookieKey) || '');
+        const response = await axios.get(target.toString(), {
+            responseType: 'arraybuffer',
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+                Referer: `${target.origin}/`,
+                Origin: target.origin,
+                Accept: '*/*',
+                ...(storedCookie ? { Cookie: storedCookie } : {}),
+            },
+            timeout: 15000,
+        });
+
+        const setCookie = response.headers?.['set-cookie'];
+        if (Array.isArray(setCookie) && setCookie.length > 0) {
+            const merged = mergeCookieHeader(storedCookie, setCookie);
+            if (merged) upstreamCookieJar.set(cookieKey, merged);
+        }
+
+        res.status(response.status);
+        res.set('Content-Type', response.headers['content-type'] || 'application/octet-stream');
+        res.set('Cache-Control', 'public, max-age=300');
+        res.set('Access-Control-Allow-Origin', '*');
+        return res.send(response.data);
+    } catch (error: any) {
+        console.error('Scraper embed asset error:', targetUrl, error?.message || error);
+        return res.status(error?.response?.status || 500).send('Embed asset proxy error');
     }
 });
 

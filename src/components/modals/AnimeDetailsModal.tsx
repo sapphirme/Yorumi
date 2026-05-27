@@ -1,24 +1,23 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { m } from 'framer-motion';
 import type { Anime, Episode } from '../../types/anime';
 import AnimeCard from '../../features/anime/components/AnimeCard';
 import { useTitleLanguage } from '../../context/TitleLanguageContext';
 import { getDisplayTitle } from '../../utils/titleLanguage';
+import { modalBackdropVariants } from '../../utils/motion';
 
 const EpisodeList = ({ episodes, onEpisodeClick }: { episodes: Episode[], onEpisodeClick: (ep: Episode) => void }) => {
+    const episodeKey = `${episodes.length}-${episodes[0]?.session || ''}-${episodes[episodes.length - 1]?.session || ''}`;
+
+    return <EpisodePager key={episodeKey} episodes={episodes} onEpisodeClick={onEpisodeClick} />;
+};
+
+const EpisodePager = ({ episodes, onEpisodeClick }: { episodes: Episode[], onEpisodeClick: (ep: Episode) => void }) => {
     const ITEMS_PER_PAGE = 30;
     const [page, setPage] = useState(1);
     const totalPages = Math.ceil(episodes.length / ITEMS_PER_PAGE);
-    const visibleEpisodes = episodes.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
-
-    useEffect(() => {
-        setPage(1);
-    }, [episodes.length, episodes[0]?.session, episodes[episodes.length - 1]?.session]);
-
-    useEffect(() => {
-        if (page > totalPages) {
-            setPage(totalPages || 1);
-        }
-    }, [page, totalPages]);
+    const currentPage = Math.min(page, totalPages || 1);
+    const visibleEpisodes = episodes.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
     return (
         <div className="mt-6">
@@ -43,7 +42,7 @@ const EpisodeList = ({ episodes, onEpisodeClick }: { episodes: Episode[], onEpis
                     <div className="flex flex-wrap justify-center gap-2">
                         <button
                             onClick={() => setPage((current) => Math.max(1, current - 1))}
-                            disabled={page === 1}
+                            disabled={currentPage === 1}
                             className="min-w-10 rounded-md bg-white/10 px-3 py-1 text-sm text-gray-300 transition-colors hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-40"
                         >
                             Prev
@@ -53,7 +52,7 @@ const EpisodeList = ({ episodes, onEpisodeClick }: { episodes: Episode[], onEpis
                                 key={pageNumber}
                                 onClick={() => setPage(pageNumber)}
                                 className={`min-w-8 rounded-full px-2 py-1 text-sm transition-colors ${
-                                    page === pageNumber ? 'bg-yorumi-500 text-white' : 'bg-white/10 text-gray-400 hover:bg-white/20'
+                                    currentPage === pageNumber ? 'bg-yorumi-500 text-white' : 'bg-white/10 text-gray-400 hover:bg-white/20'
                                 }`}
                             >
                                 {pageNumber}
@@ -61,7 +60,7 @@ const EpisodeList = ({ episodes, onEpisodeClick }: { episodes: Episode[], onEpis
                         ))}
                         <button
                             onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
-                            disabled={page === totalPages}
+                            disabled={currentPage === totalPages}
                             className="min-w-10 rounded-md bg-white/10 px-3 py-1 text-sm text-gray-300 transition-colors hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-40"
                         >
                             Next
@@ -102,7 +101,13 @@ export default function AnimeDetailsModal({ isOpen, anime, episodes, epLoading, 
     };
 
     return (
-        <div className="fixed inset-0 z-40 bg-[#0a0a0a] overflow-y-auto animate-in fade-in duration-300 scrollbar-thin scrollbar-thumb-yorumi-primary scrollbar-track-transparent">
+        <m.div
+            variants={modalBackdropVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            className="fixed inset-0 z-40 bg-[#0a0a0a] overflow-y-auto scrollbar-thin scrollbar-thumb-yorumi-primary scrollbar-track-transparent"
+        >
             <div className="relative min-h-screen pb-20">
                 {/* Back Button - Fixed position top-left */}
                 <button
@@ -204,7 +209,7 @@ export default function AnimeDetailsModal({ isOpen, anime, episodes, epLoading, 
                                 >
                                     Summary
                                     {activeTab === 'summary' && (
-                                        <div className="absolute bottom-0 inset-x-0 h-0.5 bg-pink-500 shadow-[0_0_10px_rgba(236,72,153,0.5)]" />
+                                        <m.div layoutId="anime-details-tab" className="absolute bottom-0 inset-x-0 h-0.5 bg-pink-500 shadow-[0_0_10px_rgba(236,72,153,0.5)]" />
                                     )}
                                 </button>
                                 <button
@@ -213,7 +218,7 @@ export default function AnimeDetailsModal({ isOpen, anime, episodes, epLoading, 
                                 >
                                     Relations
                                     {activeTab === 'relations' && (
-                                        <div className="absolute bottom-0 inset-x-0 h-0.5 bg-pink-500 shadow-[0_0_10px_rgba(236,72,153,0.5)]" />
+                                        <m.div layoutId="anime-details-tab" className="absolute bottom-0 inset-x-0 h-0.5 bg-pink-500 shadow-[0_0_10px_rgba(236,72,153,0.5)]" />
                                     )}
                                 </button>
                             </div>
@@ -423,6 +428,6 @@ export default function AnimeDetailsModal({ isOpen, anime, episodes, epLoading, 
                     </div>
                 </div>
             </div>
-        </div>
+        </m.div>
     );
 }

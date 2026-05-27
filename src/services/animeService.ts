@@ -19,6 +19,16 @@ const normalizeProxyUrl = (url?: string) => {
     if (url.startsWith('/api/')) return `${API_ORIGIN}${url}`;
     return url;
 };
+const isKwikUrl = (url?: string) => /^https?:\/\/([^/]+\.)?kwik\./i.test(String(url || ''));
+const normalizeStreamUrl = (item: { url?: string; server?: string }) => {
+    const url = normalizeProxyUrl(item?.url);
+    const server = String(item?.server || '').trim().toLowerCase();
+    if (String(url || '').includes('/api/scraper/embed')) return url;
+    if (server === 'kwik' || isKwikUrl(url)) {
+        return `${API_ORIGIN}/api/scraper/embed?url=${encodeURIComponent(String(url || ''))}`;
+    }
+    return url;
+};
 const extractScraperIdFromLink = (link?: string) => {
     const raw = String(link || '').trim();
     if (!raw) return '';
@@ -301,7 +311,7 @@ const scraperSearchCache = new Map<string, { data: any[]; timestamp: number }>()
 const SCRAPER_SEARCH_TTL = 5 * 60 * 1000;
 const AZ_LIST_CACHE_TTL = 10 * 60 * 1000;
 const PERSISTED_CACHE_PREFIX = 'yorumi_api_cache_v6';
-const STREAM_CACHE_VERSION = 'v4';
+const STREAM_CACHE_VERSION = 'v6';
 const PERSISTED_STREAM_CACHE_PREFIX = `yorumi_stream_cache_${STREAM_CACHE_VERSION}`;
 
 const readPersistedCache = (key: string, ttl: number) => {
@@ -1143,7 +1153,11 @@ export const animeService = {
                 const normalized = Array.isArray(data)
                     ? data.map((item: any) => ({
                         ...item,
-                        url: normalizeProxyUrl(item?.url),
+                        url: normalizeStreamUrl(item),
+                        directUrl: normalizeProxyUrl(item?.directUrl),
+                        isHls: (String(item?.server || '').trim().toLowerCase() === 'kwik' || isKwikUrl(item?.url))
+                            ? false
+                            : item?.isHls,
                         subtitles: Array.isArray(item?.subtitles)
                             ? item.subtitles.map((sub: any) => ({
                                 ...sub,

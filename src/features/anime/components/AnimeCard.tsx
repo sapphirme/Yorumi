@@ -1,8 +1,10 @@
 import React from 'react';
+import { m } from 'framer-motion';
 import type { Anime } from '../../../types/anime';
 import { useTitleLanguage } from '../../../context/TitleLanguageContext';
 import { getDisplayTitle } from '../../../utils/titleLanguage';
 import { getDisplayImageUrl } from '../../../utils/image';
+import { cardItemVariants, pressMotion } from '../../../utils/motion';
 
 interface AnimeCardProps {
     anime: Anime;
@@ -105,8 +107,12 @@ const AnimeCard: React.FC<AnimeCardProps> = ({
     };
 
     return (
-        <div
+        <m.div
             ref={cardRef}
+            variants={cardItemVariants}
+            initial="initial"
+            animate="animate"
+            whileTap={pressMotion}
             className="select-none cursor-pointer group relative z-0 hover:z-50"
             style={{ perspective: '1000px' }}
             onClick={() => onClick(anime)}
@@ -222,7 +228,7 @@ const AnimeCard: React.FC<AnimeCardProps> = ({
             <h3 className="text-sm font-semibold text-gray-100 line-clamp-2 leading-tight group-hover:text-yorumi-accent transition-colors">
                 {displayTitle}
             </h3>
-        </div>
+        </m.div>
     );
 };
 

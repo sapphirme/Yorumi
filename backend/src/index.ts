@@ -1,4 +1,3 @@
-import 'dotenv/config';
 import app from './app';
 import { warmHomeFastCache } from './api/anilist/anilist.routes';
 import { warmSpotlightCache } from './api/scraper/manga.service';

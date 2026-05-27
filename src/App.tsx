@@ -1,18 +1,23 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { LazyMotion, MotionConfig, domAnimation } from 'framer-motion';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { AppRoutes } from './app/AppRoutes';
 import Navbar from './components/layout/Navbar';
 import Footer from './components/layout/Footer';
+import YumiChat from './components/chat/YumiChat';
 import ScrollToTop from './components/ui/ScrollToTop';
 import { useTitleLanguage } from './context/TitleLanguageContext';
 import { useNavbarSearch } from './features/search/hooks/useNavbarSearch';
 import { useAnime } from './hooks/useAnime';
+import { gentleTransition } from './utils/motion';
 
 function App() {
     const navigate = useNavigate();
     const location = useLocation();
     const { closeViewAll } = useAnime();
     const { language } = useTitleLanguage();
+    const [showScrollToTop, setShowScrollToTop] = useState(false);
+    const [isYumiOpen, setIsYumiOpen] = useState(false);
 
     const queryParams = new URLSearchParams(location.search);
     const activeTab = location.pathname.startsWith('/manga')
@@ -34,6 +39,19 @@ function App() {
             setSearchResults([]);
         }
     }, [location.pathname, setSearchQuery, setSearchResults]);
+
+    useEffect(() => {
+        const toggleFloatingAction = () => {
+            setShowScrollToTop(window.scrollY > 400);
+        };
+
+        toggleFloatingAction();
+        window.addEventListener('scroll', toggleFloatingAction, { passive: true });
+
+        return () => {
+            window.removeEventListener('scroll', toggleFloatingAction);
+        };
+    }, []);
 
     const handleTabChange = (tab: 'anime' | 'manga') => {
         if (tab === 'anime') {
@@ -66,32 +84,42 @@ function App() {
             navigate(activeTab === 'manga' ? '/manga' : '/');
         }
     };
+    const isImmersivePage = location.pathname.includes('/watch/')
+        || location.pathname.includes('/read/')
+        || location.pathname === '/yumi';
 
     return (
-        <div className={`min-h-screen bg-yorumi-bg text-white font-sans ${activeTab === 'manga' ? 'selection:bg-yorumi-manga' : 'selection:bg-yorumi-accent'} selection:text-white overflow-x-hidden`}>
-            <div className="fixed inset-0 pointer-events-none z-0">
-                <div className={`absolute top-[-10%] left-[-10%] w-[40%] h-[40%] ${activeTab === 'manga' ? 'bg-yorumi-manga/5' : 'bg-yorumi-accent/5'} rounded-full blur-[120px]`} />
-                <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-yorumi-main/5 rounded-full blur-[120px]" />
-            </div>
+        <LazyMotion features={domAnimation}>
+            <MotionConfig reducedMotion="user" transition={gentleTransition}>
+                <div className={`min-h-screen bg-yorumi-bg text-white font-sans ${activeTab === 'manga' ? 'selection:bg-yorumi-manga' : 'selection:bg-yorumi-accent'} selection:text-white overflow-x-hidden`}>
+                    <div className="fixed inset-0 pointer-events-none z-0">
+                        <div className={`absolute top-[-10%] left-[-10%] w-[40%] h-[40%] ${activeTab === 'manga' ? 'bg-yorumi-manga/5' : 'bg-yorumi-accent/5'} rounded-full blur-[120px]`} />
+                        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-yorumi-main/5 rounded-full blur-[120px]" />
+                    </div>
 
-            <Navbar
-                activeTab={activeTab}
-                searchQuery={searchQuery}
-                onTabChange={handleTabChange}
-                onSearchChange={setSearchQuery}
-                onSearchSubmit={handleSearchSubmit}
-                onClearSearch={handleClearSearch}
-                onLogoClick={handleLogoClick}
-                searchResults={searchResults}
-                isSearching={isSearching}
-            />
+                    <Navbar
+                        activeTab={activeTab}
+                        searchQuery={searchQuery}
+                        onTabChange={handleTabChange}
+                        onSearchChange={setSearchQuery}
+                        onSearchSubmit={handleSearchSubmit}
+                        onClearSearch={handleClearSearch}
+                        onLogoClick={handleLogoClick}
+                        searchResults={searchResults}
+                        isSearching={isSearching}
+                    />
 
-            <AppRoutes />
+                    <AppRoutes />
 
-            <ScrollToTop activeTab={activeTab as 'anime' | 'manga'} />
+                    <ScrollToTop activeTab={activeTab as 'anime' | 'manga'} isVisible={showScrollToTop && !isYumiOpen} />
 
-            {!location.pathname.includes('/watch/') && !location.pathname.includes('/read/') && <Footer />}
-        </div>
+                    {!isImmersivePage && <Footer />}
+                    {!isImmersivePage && (
+                        <YumiChat isLauncherHidden={showScrollToTop} onOpenChange={setIsYumiOpen} />
+                    )}
+                </div>
+            </MotionConfig>
+        </LazyMotion>
     );
 }
 

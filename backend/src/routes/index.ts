@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import anilistRoutes from '../api/anilist/anilist.routes';
+import yumiChatRoutes from '../api/chat/yumi.routes';
 import imageRoutes from '../api/image/image.routes';
 import importRoutes from '../api/import/import.routes';
 import logoRoutes from '../api/logo/logo.routes';
@@ -12,6 +13,7 @@ import mappingRoutes from '../modules/mapping/mapping.routes';
 const router = Router();
 
 router.use('/anilist', anilistRoutes);
+router.use('/chat', yumiChatRoutes);
 router.use('/scraper', legacyScraperRoutes);
 router.use('/manga', legacyMangaRoutes);
 router.use('/logo', logoRoutes);

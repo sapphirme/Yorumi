@@ -23,6 +23,7 @@
     "embla-carousel-react": "^8.6.0",
     "express": "^5.2.1",
     "firebase": "^12.8.0",
+    "framer-motion": "^12.40.0",
     "fuzzball": "^2.2.3",
     "hls.js": "^1.6.15",
     "lucide-react": "^0.562.0",

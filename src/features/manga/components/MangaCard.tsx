@@ -1,7 +1,9 @@
 import React from 'react';
+import { m } from 'framer-motion';
 import type { Manga } from '../../../types/manga';
 import { useTitleLanguage } from '../../../context/TitleLanguageContext';
 import { getDisplayTitle } from '../../../utils/titleLanguage';
+import { cardItemVariants, pressMotion } from '../../../utils/motion';
 
 interface MangaCardProps {
     manga: Manga;
@@ -67,8 +69,12 @@ const MangaCard: React.FC<MangaCardProps> = ({ manga, onClick, onReadClick, onMo
     };
 
     return (
-        <div
+        <m.div
             ref={cardRef}
+            variants={cardItemVariants}
+            initial="initial"
+            animate="animate"
+            whileTap={pressMotion}
             className="select-none cursor-pointer group relative"
             style={{ perspective: '1000px' }}
             onClick={() => onClick(manga)}
@@ -184,7 +190,14 @@ const MangaCard: React.FC<MangaCardProps> = ({ manga, onClick, onReadClick, onMo
                     {/* Buttons - Read, Detail */}
                     <div className="flex gap-2 translate-z-20">
                         <button
-                            onClick={(e) => { e.stopPropagation(); onReadClick ? onReadClick(manga) : onClick(manga); }}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                if (onReadClick) {
+                                    onReadClick(manga);
+                                } else {
+                                    onClick(manga);
+                                }
+                            }}
                             className="flex-1 flex items-center justify-center gap-1 bg-yorumi-manga hover:bg-yorumi-manga/90 text-white py-1.5 rounded text-[9px] font-bold transition-colors shadow-lg"
                         >
                             <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
@@ -198,7 +211,12 @@ const MangaCard: React.FC<MangaCardProps> = ({ manga, onClick, onReadClick, onMo
                             DETAIL
                         </button>
                         <button
-                            onClick={(e) => { e.stopPropagation(); onToggleList?.(manga); }}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                if (onToggleList) {
+                                    onToggleList(manga);
+                                }
+                            }}
                             className={`flex items-center justify-center p-1.5 rounded transition-colors ${inList ? 'bg-yorumi-manga text-white hover:bg-yorumi-manga/80' : 'bg-white/10 hover:bg-white/20 text-white'}`}
                             title={inList ? "Remove from List" : "Add to List"}
                         >
@@ -220,7 +238,7 @@ const MangaCard: React.FC<MangaCardProps> = ({ manga, onClick, onReadClick, onMo
             <h3 className="text-sm font-semibold text-gray-100 line-clamp-2 leading-tight group-hover:text-yorumi-manga transition-colors">
                 {displayTitle}
             </h3>
-        </div>
+        </m.div>
     );
 };
 

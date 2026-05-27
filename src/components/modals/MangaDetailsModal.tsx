@@ -1,6 +1,8 @@
+import { m } from 'framer-motion';
 import type { Manga } from '../../types/manga';
 import { useTitleLanguage } from '../../context/TitleLanguageContext';
 import { getDisplayTitle } from '../../utils/titleLanguage';
+import { modalBackdropVariants, modalPanelVariants, pressMotion } from '../../utils/motion';
 
 interface MangaDetailsModalProps {
     isOpen: boolean;
@@ -15,8 +17,17 @@ export default function MangaDetailsModal({ isOpen, manga, onClose, onReadNow }:
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md transition-opacity duration-300">
-            <div className="w-full max-w-6xl h-[90vh] bg-[#1a1a1a] rounded-lg overflow-hidden flex flex-col m-4 animate-in fade-in zoom-in duration-300">
+        <m.div
+            variants={modalBackdropVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md transition-opacity duration-300"
+        >
+            <m.div
+                variants={modalPanelVariants}
+                className="w-full max-w-6xl h-[90vh] bg-[#1a1a1a] rounded-lg overflow-hidden flex flex-col m-4"
+            >
                 {/* Header */}
                 <div className="flex items-center justify-between p-6 border-b border-white/10">
                     <div>
@@ -25,11 +36,11 @@ export default function MangaDetailsModal({ isOpen, manga, onClose, onReadNow }:
                             {manga.rank && <span className="text-sm font-bold text-[#facc15]">RANK #{manga.rank}</span>}
                         </div>
                     </div>
-                    <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors p-2 hover:bg-white/10 rounded-full">
+                    <m.button whileTap={pressMotion} onClick={onClose} className="text-gray-400 hover:text-white transition-colors p-2 hover:bg-white/10 rounded-full">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
                         </svg>
-                    </button>
+                    </m.button>
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-gray-800 scrollbar-track-transparent">
@@ -45,15 +56,16 @@ export default function MangaDetailsModal({ isOpen, manga, onClose, onReadNow }:
                                 <div className="absolute inset-0 ring-1 ring-white/10 rounded-lg pointer-events-none" />
                             </div>
 
-                            <button
+                            <m.button
                                 onClick={onReadNow}
+                                whileTap={pressMotion}
                                 className="w-full py-4 bg-[#facc15] hover:bg-[#fbbf24] active:scale-[0.98] text-black font-bold text-lg rounded-xl transition-all shadow-lg shadow-yellow-500/20 flex items-center justify-center gap-2 group"
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6 group-hover:translate-x-1 transition-transform">
                                     <path d="M11.25 4.533A9.707 9.707 0 006 3.75a9.709 9.709 0 00-3.75.75v10.5c0 .394.305.717.69.74A12.79 12.79 0 006 14.25c2.316 0 4.526.84 6.25 2.25 2.502-2.049 5.86-3.21 9.423-3.003a.75.75 0 00.771-.62l.625-5c.038-.306-.118-.6-.395-.733a12.708 12.708 0 00-6.673-1.89A12.748 12.748 0 0011.25 4.534z" />
                                 </svg>
                                 Read Now
-                            </button>
+                            </m.button>
                         </div>
 
                         {/* Right Column - Details */}
@@ -115,7 +127,7 @@ export default function MangaDetailsModal({ isOpen, manga, onClose, onReadNow }:
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
+            </m.div>
+        </m.div>
     );
 }

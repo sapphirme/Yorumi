@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Search, X, Menu, ChevronLeft, Plus, Users } from 'lucide-react';
+import { Search, X, Menu, ChevronLeft, Plus, Users, Sparkles } from 'lucide-react';
 import { animeService } from '../../../services/animeService';
 import { mangaService } from '../../../services/mangaService';
 import { useAuth } from '../../../context/AuthContext';
@@ -11,6 +11,17 @@ import UserMenu from './UserMenu';
 import RandomButton from './RandomButton';
 import NotificationsBell from './NotificationsBell';
 
+interface NavbarSearchResult {
+    id: number | string;
+    title: string;
+    subtitle: string;
+    image: string;
+    url: string;
+    date?: string | number;
+    type?: string;
+    duration?: string | null;
+}
+
 interface NavbarProps {
     activeTab: 'anime' | 'manga';
     searchQuery: string;
@@ -19,7 +30,7 @@ interface NavbarProps {
     onSearchSubmit: (e: React.FormEvent, queryOverride?: string) => void;
     onClearSearch: () => void;
     onLogoClick?: () => void;
-    searchResults?: any[];
+    searchResults?: NavbarSearchResult[];
     isSearching?: boolean;
 }
 
@@ -123,13 +134,13 @@ export default function Navbar({
         }
     };
 
-    const handleResultSelect = (item: any) => {
+    const handleResultSelect = (item: NavbarSearchResult) => {
         setLocalSearchQuery('');
         navigate(item.url);
         onClearSearch();
     };
 
-    const handleMobileResultSelect = (item: any) => {
+    const handleMobileResultSelect = (item: NavbarSearchResult) => {
         setLocalSearchQuery('');
         navigate(item.url);
         onClearSearch();
@@ -161,7 +172,8 @@ export default function Navbar({
             { label: 'New Manga', to: '/manga/new' },
             { label: 'Manhwa', to: '/manga/manhwa' },
             { label: 'One Shot', to: '/manga/one-shot' },
-            { label: 'Community', to: '/users' },
+            { label: 'Yumi', to: '/yumi' },
+            ...(user ? [{ label: 'Community', to: '/users' }] : []),
             { label: 'Profile', to: '/profile?tab=manga-overview' },
         ]
         : [
@@ -172,7 +184,8 @@ export default function Navbar({
             { label: 'OVAs', to: '/anime/ova' },
             { label: 'ONAs', to: '/anime/ona' },
             { label: 'Specials', to: '/anime/specials' },
-            { label: 'Community', to: '/users' },
+            { label: 'Yumi', to: '/yumi' },
+            ...(user ? [{ label: 'Community', to: '/users' }] : []),
             { label: 'Profile', to: '/profile?tab=anime-overview' },
         ];
 
@@ -258,6 +271,15 @@ export default function Navbar({
                             theme={activeTab}
                         />
                         <button
+                            onClick={() => navigate('/yumi')}
+                            className="group flex items-center justify-center p-2 text-gray-500 hover:text-white transition-colors"
+                            title="Yumi"
+                            aria-label="Yumi"
+                        >
+                            <Sparkles className={`w-5 h-5 transition-all duration-300 ${activeTab === 'manga' ? 'group-hover:text-yorumi-manga' : 'group-hover:text-yorumi-accent'} group-hover:-translate-y-0.5 group-hover:scale-110`} />
+                        </button>
+                        {user && (
+                        <button
                             onClick={() => navigate('/users')}
                             className="group flex items-center justify-center p-2 text-gray-500 hover:text-white transition-colors"
                             title="Community"
@@ -265,6 +287,7 @@ export default function Navbar({
                         >
                             <Users className={`w-5 h-5 transition-all duration-300 ${communityHoverColor} group-hover:-translate-y-0.5 group-hover:scale-110`} />
                         </button>
+                        )}
                     </div>
                 </div>
 
@@ -336,12 +359,21 @@ export default function Navbar({
                             theme={activeTab}
                         />
                         <button
+                            onClick={() => handleMobileNavigate('/yumi')}
+                            className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-gray-400 hover:text-white bg-[#1c1c1c] rounded border border-transparent hover:border-white/10 transition-all"
+                        >
+                            <Sparkles className="w-3.5 h-3.5" />
+                            Yumi
+                        </button>
+                        {user && (
+                        <button
                             onClick={() => handleMobileNavigate('/users')}
                             className="flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-gray-400 hover:text-white bg-[#1c1c1c] rounded border border-transparent hover:border-white/10 transition-all"
                         >
                             <Users className="w-3.5 h-3.5" />
                             Community
                         </button>
+                        )}
                     </div>
                 </div>
             </div>

@@ -1,4 +1,6 @@
+import { m } from 'framer-motion';
 import { CLOUDINARY_SHARED_ASSETS } from '../../config/cloudinaryAssets';
+import { cardItemVariants } from '../../utils/motion';
 
 interface LoadingSpinnerProps {
     size?: 'sm' | 'md' | 'lg';
@@ -13,13 +15,20 @@ export default function LoadingSpinner({ size = 'md', text }: LoadingSpinnerProp
     };
 
     return (
-        <div className="flex flex-col items-center justify-center p-8">
-            <img
+        <m.div
+            variants={cardItemVariants}
+            initial="initial"
+            animate="animate"
+            className="flex flex-col items-center justify-center p-8"
+        >
+            <m.img
                 src={CLOUDINARY_SHARED_ASSETS.luffyGif}
                 alt="Loading..."
+                animate={{ y: [0, -4, 0] }}
+                transition={{ duration: 1.4, repeat: Infinity, ease: 'easeInOut' }}
                 className={`object-contain ${sizeClasses[size]}`}
             />
             {text && <p className="mt-4 text-gray-400 text-sm font-bold animate-pulse">{text}</p>}
-        </div>
+        </m.div>
     );
 }

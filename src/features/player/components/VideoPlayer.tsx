@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import Hls from 'hls.js';
 import LoadingSpinner from '../../../components/ui/LoadingSpinner';
 import type { SubtitleTrack } from '../../../types/stream';
+import { API_BASE } from '../../../config/api';
 
 interface VideoPlayerProps {
     streamUrl?: string;
@@ -35,6 +36,13 @@ export default function VideoPlayer({
     const onLoadRef = useRef(onLoad);
     const startAtRef = useRef(startAtSeconds);
     const hasAppliedStartRef = useRef(false);
+    const apiOrigin = API_BASE.replace(/\/+$/, '').replace(/\/api$/i, '');
+    const resolvedStreamUrl = (() => {
+        if (!streamUrl) return streamUrl;
+        if (streamUrl.includes('/api/scraper/embed')) return streamUrl;
+        if (!/^https?:\/\/([^/]+\.)?kwik\./i.test(streamUrl)) return streamUrl;
+        return `${apiOrigin}/api/scraper/embed?url=${encodeURIComponent(streamUrl)}`;
+    })();
 
     useEffect(() => {
         onLoadRef.current = onLoad;
@@ -45,10 +53,10 @@ export default function VideoPlayer({
     }, [startAtSeconds]);
 
     const isHlsStream = isHls || (() => {
-        if (!streamUrl) return false;
-        if (streamUrl.includes('.m3u8')) return true;
+        if (!resolvedStreamUrl) return false;
+        if (resolvedStreamUrl.includes('.m3u8')) return true;
         try {
-            return decodeURIComponent(streamUrl).includes('.m3u8');
+            return decodeURIComponent(resolvedStreamUrl).includes('.m3u8');
         } catch {
             return false;
         }
@@ -66,7 +74,7 @@ export default function VideoPlayer({
 
         Array.from(video.querySelectorAll('track[data-yorumi-subtitle="1"]')).forEach((track) => track.remove());
 
-        if (!streamUrl) {
+        if (!resolvedStreamUrl) {
             video.removeAttribute('src');
             video.load();
             return;
@@ -88,7 +96,7 @@ export default function VideoPlayer({
                 progressive: true,
             });
             hlsRef.current = hls;
-            hls.loadSource(streamUrl);
+            hls.loadSource(resolvedStreamUrl);
             hls.attachMedia(video);
             hls.on(Hls.Events.MANIFEST_PARSED, () => {
                 video.play().catch(() => undefined);
@@ -118,7 +126,7 @@ export default function VideoPlayer({
                 }
             });
         } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-            video.src = streamUrl;
+            video.src = resolvedStreamUrl;
             video.play().catch(() => undefined);
             onLoadRef.current?.();
         }
@@ -129,7 +137,7 @@ export default function VideoPlayer({
                 hlsRef.current = null;
             }
         };
-    }, [streamUrl, isHlsStream, onError]);
+    }, [resolvedStreamUrl, isHlsStream, onError]);
 
     useEffect(() => {
         if (!videoRef.current || !isHlsStream) return;
@@ -160,10 +168,10 @@ export default function VideoPlayer({
             video.removeEventListener('loadedmetadata', applyStart);
             video.removeEventListener('canplay', applyStart);
         };
-    }, [streamUrl, isHlsStream, startAtSeconds]);
+    }, [resolvedStreamUrl, isHlsStream, startAtSeconds]);
 
     useEffect(() => {
-        if (!videoRef.current || !isHlsStream || !streamUrl) return;
+        if (!videoRef.current || !isHlsStream || !resolvedStreamUrl) return;
         const video = videoRef.current;
 
         Array.from(video.querySelectorAll('track[data-yorumi-subtitle="1"]')).forEach((track) => track.remove());
@@ -217,7 +225,7 @@ export default function VideoPlayer({
             track.removeEventListener('load', handleTrackLoaded);
             track.removeEventListener('error', handleTrackError);
         };
-    }, [subtitles, isHlsStream, streamUrl]);
+    }, [subtitles, isHlsStream, resolvedStreamUrl]);
 
     return (
         <div className="watch-player-shell w-full max-w-full h-full max-h-full relative bg-[#0b0c0f] group transition-all duration-300 overflow-hidden rounded-none shadow-none md:rounded-2xl md:shadow-2xl md:shadow-black/80">
@@ -226,7 +234,7 @@ export default function VideoPlayer({
                     <LoadingSpinner />
                     <p className="mt-4 text-gray-400 animate-pulse">Loading Stream...</p>
                 </div>
-            ) : streamUrl && isHlsStream ? (
+            ) : resolvedStreamUrl && isHlsStream ? (
                 <div className="relative w-full max-w-full h-full z-10 flex items-center justify-center overflow-hidden bg-black">
                     <video
                         ref={videoRef}
@@ -262,12 +270,12 @@ export default function VideoPlayer({
                         }}
                     />
                 </div>
-            ) : streamUrl ? (
+            ) : resolvedStreamUrl ? (
                 <div className="relative w-full max-w-full h-full bg-black flex items-center justify-center z-10 overflow-hidden rounded-none md:rounded-2xl">
                     <div className="w-full h-full max-w-full max-h-full flex items-center justify-center bg-black overflow-hidden rounded-none md:rounded-2xl">
                         <iframe
-                            key={`${episodeSession ?? ''}::${streamUrl ?? ''}`}
-                            src={streamUrl}
+                            key={`${episodeSession ?? ''}::${resolvedStreamUrl ?? ''}`}
+                            src={resolvedStreamUrl}
                             className="w-full h-full border-0 bg-black"
                             loading="eager"
                             allowFullScreen

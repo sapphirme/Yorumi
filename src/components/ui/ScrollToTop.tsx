@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ChevronUp } from 'lucide-react';
+import { m } from 'framer-motion';
+import { pressMotion } from '../../utils/motion';
 
 interface ScrollToTopProps {
     /** Scroll threshold in pixels before showing the button */
@@ -8,17 +10,22 @@ interface ScrollToTopProps {
     className?: string;
     /** Active tab to determine theme color */
     activeTab?: 'anime' | 'manga';
+    /** Optional controlled visibility */
+    isVisible?: boolean;
 }
 
-export default function ScrollToTop({ threshold = 400, className = '', activeTab = 'anime' }: ScrollToTopProps) {
-    const [isVisible, setIsVisible] = useState(false);
+export default function ScrollToTop({ threshold = 400, className = '', activeTab = 'anime', isVisible }: ScrollToTopProps) {
+    const [internalIsVisible, setInternalIsVisible] = useState(false);
+    const resolvedIsVisible = isVisible ?? internalIsVisible;
 
     useEffect(() => {
+        if (typeof isVisible === 'boolean') return;
+
         const toggleVisibility = () => {
             if (window.scrollY > threshold) {
-                setIsVisible(true);
+                setInternalIsVisible(true);
             } else {
-                setIsVisible(false);
+                setInternalIsVisible(false);
             }
         };
 
@@ -30,7 +37,7 @@ export default function ScrollToTop({ threshold = 400, className = '', activeTab
         return () => {
             window.removeEventListener('scroll', toggleVisibility);
         };
-    }, [threshold]);
+    }, [threshold, isVisible]);
 
     const scrollToTop = () => {
         window.scrollTo({
@@ -43,9 +50,10 @@ export default function ScrollToTop({ threshold = 400, className = '', activeTab
     const hoverColor = activeTab === 'manga' ? 'hover:bg-yorumi-manga/90' : 'hover:bg-yorumi-accent/90';
 
     return (
-        <button
+        <m.button
             onClick={scrollToTop}
             aria-label="Scroll to top"
+            whileTap={pressMotion}
             className={`
                 fixed bottom-6 right-6 z-50
                 w-12 h-12 rounded-full
@@ -55,7 +63,7 @@ export default function ScrollToTop({ threshold = 400, className = '', activeTab
                 transition-all duration-300 ease-out
                 hover:scale-110 ${hoverColor}
                 active:scale-95
-                ${isVisible
+                ${resolvedIsVisible
                     ? 'opacity-100 translate-y-0 pointer-events-auto'
                     : 'opacity-0 translate-y-4 pointer-events-none'
                 }
@@ -63,6 +71,6 @@ export default function ScrollToTop({ threshold = 400, className = '', activeTab
             `}
         >
             <ChevronUp className="w-6 h-6" strokeWidth={2.5} />
-        </button>
+        </m.button>
     );
 }

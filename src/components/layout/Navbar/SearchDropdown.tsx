@@ -1,6 +1,8 @@
 
+import { AnimatePresence, m } from 'framer-motion';
 import { ChevronRight } from 'lucide-react';
 import { getDisplayImageUrl } from '../../../utils/image';
+import { dropdownVariants, listContainerVariants, cardItemVariants, pressMotion } from '../../../utils/motion';
 
 interface SearchResultItem {
     id: number | string;
@@ -30,8 +32,6 @@ export default function SearchDropdown({
     isLoading,
     theme = 'anime'
 }: SearchDropdownProps) {
-    if (!isVisible) return null;
-
     // Use specific colors from the screenshot approximation
     // Background seems to be a dark blueish-purple or just dark theme default
     // The "View all results" button is pink: #ffb7e0 (approximate from screenshot or yorumi-accent?)
@@ -45,13 +45,23 @@ export default function SearchDropdown({
     const ctaText = isManga ? 'text-white' : 'text-[#150F26]';
 
     return (
-        <div className={`absolute top-full left-0 right-0 mt-2 ${containerBg} rounded-lg overflow-hidden shadow-2xl z-50 border border-white/5 font-sans`}>
+        <AnimatePresence>
+            {isVisible && (
+        <m.div
+            variants={dropdownVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            className={`absolute top-full left-0 right-0 mt-2 ${containerBg} rounded-lg overflow-hidden shadow-2xl z-50 border border-white/5 font-sans origin-top`}
+        >
             {results.length > 0 ? (
                 <>
-                    <div className="max-h-[70vh] overflow-y-auto">
+                    <m.div className="max-h-[70vh] overflow-y-auto" variants={listContainerVariants} initial="initial" animate="animate">
                         {results.map((item) => (
-                            <div
+                            <m.div
                                 key={item.id}
+                                variants={cardItemVariants}
+                                whileTap={pressMotion}
                                 onClick={() => onSelect(item)}
                                 className={`group flex items-center gap-4 p-3 ${hoverBg} cursor-pointer transition-colors border-b border-white/5 last:border-b-0`}
                             >
@@ -80,20 +90,21 @@ export default function SearchDropdown({
                                         {item.duration && <span>{item.duration}</span>}
                                     </div>
                                 </div>
-                            </div>
+                            </m.div>
                         ))}
-                    </div>
+                    </m.div>
 
                     {/* View All Button */}
-                    <div
+                    <m.div
                         onClick={onViewAll}
+                        whileTap={pressMotion}
                         className={`${ctaBg} p-3 flex items-center justify-center gap-2 cursor-pointer transition-colors`}
                     >
                         <span className={`${ctaText} font-bold text-sm uppercase tracking-wide`}>
                             View all results
                         </span>
                         <ChevronRight className={`w-4 h-4 ${ctaText}`} />
-                    </div>
+                    </m.div>
                 </>
             ) : isLoading ? (
                 <div className="p-4 text-center text-gray-400 text-sm">Searching...</div>
@@ -102,6 +113,8 @@ export default function SearchDropdown({
                     No results found
                 </div>
             )}
-        </div>
+        </m.div>
+            )}
+        </AnimatePresence>
     );
 }
