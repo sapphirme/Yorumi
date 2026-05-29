@@ -708,6 +708,35 @@ router.get('/streams', async (req, res) => {
     }
 });
 
+router.get('/playable-stream', async (req, res) => {
+    try {
+        const animeSessionRaw = req.query.anime_session as string;
+        const animeSession = animeSessionRaw?.startsWith('s:') ? animeSessionRaw.substring(2) : animeSessionRaw;
+        const epSessionRaw = req.query.ep_session as string;
+        const epSession = normalizeEpisodeSession(animeSession, epSessionRaw);
+        const direct = String(req.query.direct || '').trim() === '1';
+
+        if (!epSession || !animeSession) {
+            return res.status(400).json({ error: 'anime_session and ep_session are required' });
+        }
+
+        const result = await scraperService.resolvePlayableStream(animeSession, epSession);
+        if (!result) {
+            res.set('Cache-Control', 'no-store');
+            return res.status(404).json({ error: 'No playable stream found' });
+        }
+
+        const url = direct
+            ? result.directUrl
+            : `${getPublicBase(req)}/api/scraper/proxy?url=${encodeURIComponent(result.directUrl)}&referer=${encodeURIComponent('https://animepahe.pw/')}&proxyMedia=1`;
+
+        res.set('Cache-Control', 'no-store');
+        return res.json({ stream: result.stream, url });
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 router.post('/prefetch/streams', async (req, res) => {
     try {
         const animeSession = req.body?.anime_session as string | undefined;

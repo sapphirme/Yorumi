@@ -645,6 +645,31 @@ export class ScraperService {
         );
     }
 
+    async resolvePlayableStream(animeSession: string, epSession: string) {
+        const target = await this.resolveAnimePaheStreamTarget(animeSession, epSession);
+        if (!target) return null;
+
+        this.trackHotStream(target.animeSession, target.epSession);
+        const streams = await this.fetchStreamLinksWithRetries(target.animeSession, target.epSession);
+        if (!Array.isArray(streams) || streams.length === 0) return null;
+
+        const normalizeAudio = (value: unknown) => {
+            const lower = String(value || '').toLowerCase();
+            return /(dub|eng|english)/.test(lower) ? 'dub' : 'sub';
+        };
+        const scoreStream = (stream: any) => {
+            const quality = Number(String(stream?.quality || '').replace(/[^\d]/g, '')) || 0;
+            const subScore = normalizeAudio(stream?.audio) === 'sub' ? 10_000 : 0;
+            const directScore = stream?.directUrl ? 1_000 : 0;
+            return subScore + directScore + quality;
+        };
+        const stream = [...streams].sort((a, b) => scoreStream(b) - scoreStream(a))[0];
+        const directUrl = await this.fastScraper.resolveStreamUrl(stream);
+        if (!directUrl) return null;
+
+        return { stream, directUrl };
+    }
+
     async prefetchStreams(animeSession: string, epSessions: string[]) {
         const uniqueSessions = [...new Set(epSessions.filter(Boolean))];
         await Promise.allSettled(uniqueSessions.map((epSession) => this.getStreams(animeSession, epSession)));
