@@ -315,7 +315,12 @@ const patchEmbedHtml = (req: any, html: string, origin: string) => {
   const originalFetch = window.fetch;
   if (originalFetch) {
     window.fetch = (input, init) => {
-      const next = typeof input === 'string' ? proxify(input) : input;
+      let next = input;
+      if (typeof input === 'string' || input instanceof URL) {
+        next = proxify(input);
+      } else if (input && typeof input.url === 'string') {
+        try { next = new Request(proxify(input.url), input); } catch { next = input; }
+      }
       return originalFetch.call(window, next, init);
     };
   }
@@ -346,6 +351,10 @@ const patchEmbedHtml = (req: any, html: string, origin: string) => {
     if (!desc || !desc.set) return;
     Object.defineProperty(proto, attr, { ...desc, set(value) { desc.set.call(this, proxify(value)); } });
   };
+  patchAttr(HTMLScriptElement.prototype, 'src');
+  patchAttr(HTMLLinkElement.prototype, 'href');
+  patchAttr(HTMLImageElement.prototype, 'src');
+  patchAttr(HTMLIFrameElement.prototype, 'src');
   patchAttr(HTMLMediaElement.prototype, 'src');
   patchAttr(HTMLSourceElement.prototype, 'src');
 })();
