@@ -222,6 +222,40 @@ To run the application as a standard web app (Client + Server):
 
 
 
+### Running the Anime Download CLI
+
+The backend package also ships a small CLI for downloading anime episodes from the scraper source.
+
+```bash
+cd backend
+npm run build
+node dist/cli.js --help
+```
+
+Download an episode:
+
+```bash
+node dist/cli.js download anime "Frieren" --episode 1
+node dist/cli.js download-anime "One Piece" -e 1089 --quality 720 --dub
+```
+
+For local development without building first, use:
+
+```bash
+cd backend
+npm run cli -- download anime "Frieren" -e 1
+```
+
+CLI options:
+
+- `download anime <title>` or `download-anime <title>` searches and downloads an anime episode.
+- `-d, --download <title>` keeps the legacy flag-based form.
+- `-e, --episode <number>` selects the episode number. Defaults to `1`.
+- `-o, --output <dir>` sets the download folder. Defaults to `downloads`.
+- `-q, --quality <height>` prefers a stream height such as `1080` or `720`. Defaults to `best`.
+- `--dub` prefers dubbed audio. `--sub` prefers subbed audio.
+- `-y, --yes` skips prompts and overwrites an existing output file.
+
 ## 📁 Project Structure
 
 ```bash
