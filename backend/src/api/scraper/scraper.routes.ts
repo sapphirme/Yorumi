@@ -6,6 +6,7 @@ import { anilistService } from '../anilist/anilist.service';
 import { redis } from '../mapping/mapper';
 import { tmdbService } from './tmdb.service';
 import { getBrowserInstance } from '../../utils/browser';
+import { getAnimetsuSpotlight } from '../../scraper/animetsu';
 
 const router = Router();
 const upstreamCookieJar = new Map<string, string>();
@@ -440,7 +441,10 @@ router.get('/search', async (req, res) => {
 router.get('/animekai/spotlight', async (_req, res) => {
     res.set('Cache-Control', 'public, max-age=60, s-maxage=120, stale-while-revalidate=300');
     try {
-        const media = await anilistService.getNativeSpotlightAnime(8);
+        let media = await getAnimetsuSpotlight(8);
+        if (!media || media.length === 0) {
+            media = await anilistService.getNativeSpotlightAnime(8);
+        }
         const spotlight = await Promise.race([
             applyTmdbSpotlightBanners(wrapAniListSpotlightItems(media)),
             new Promise<any[]>((resolve) => setTimeout(() => resolve(clearSpotlightBanners(wrapAniListSpotlightItems(media))), 3500)),
