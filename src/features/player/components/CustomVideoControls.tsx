@@ -24,6 +24,7 @@ interface CustomVideoControlsProps {
 
 const PLAYBACK_SPEEDS = [0.25, 1, 1.25, 1.5, 2];
 const QUALITY_OPTIONS = ['1080P', '720P', '360P'];
+const PIP_RETURN_URL_KEY = 'yorumi:pip:return-url';
 const GLASS_BUTTON_CLASS = 'watch-control-glass rounded-full flex items-center justify-center text-white transition-colors shadow-[0_8px_28px_rgba(0,0,0,0.28)]';
 const GLASS_PANEL_CLASS = 'watch-control-glass rounded-full text-white shadow-[0_8px_28px_rgba(0,0,0,0.28)]';
 
@@ -57,6 +58,7 @@ export default function CustomVideoControls({
     const [centerAction, setCenterAction] = useState<{ type: 'play' | 'pause'; id: number } | null>(null);
 
     const controlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const pipReturnUrlRef = useRef('');
     const currentStream = streams[selectedStreamIndex];
     const currentQuality = currentStream ? getMappedQuality(currentStream.quality) : '1080P';
     const hasDub = availableAudios.includes('dub');
@@ -136,6 +138,32 @@ export default function CustomVideoControls({
         video.addEventListener('play', updatePlayState);
         video.addEventListener('pause', updatePlayState);
         video.addEventListener('volumechange', updateVolume);
+        const handleEnterPiP = () => {
+            const returnUrl = window.location.href;
+            pipReturnUrlRef.current = returnUrl;
+            sessionStorage.setItem(PIP_RETURN_URL_KEY, returnUrl);
+        };
+        const handleLeavePiP = () => {
+            const returnUrl = pipReturnUrlRef.current || sessionStorage.getItem(PIP_RETURN_URL_KEY) || '';
+            sessionStorage.removeItem(PIP_RETURN_URL_KEY);
+            if (!returnUrl) return;
+
+            const playerShell = video.closest('.watch-player-shell') as HTMLElement | null;
+            const target = new URL(returnUrl, window.location.origin);
+            const currentKey = `${window.location.pathname}${window.location.search}`;
+            const targetKey = `${target.pathname}${target.search}`;
+
+            window.focus();
+            if (target.origin === window.location.origin && currentKey !== targetKey) {
+                window.location.assign(returnUrl);
+                return;
+            }
+
+            playerShell?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            playerShell?.focus({ preventScroll: true });
+        };
+        video.addEventListener('enterpictureinpicture', handleEnterPiP);
+        video.addEventListener('leavepictureinpicture', handleLeavePiP);
 
         return () => {
             video.removeEventListener('timeupdate', updateTime);
@@ -143,6 +171,8 @@ export default function CustomVideoControls({
             video.removeEventListener('play', updatePlayState);
             video.removeEventListener('pause', updatePlayState);
             video.removeEventListener('volumechange', updateVolume);
+            video.removeEventListener('enterpictureinpicture', handleEnterPiP);
+            video.removeEventListener('leavepictureinpicture', handleLeavePiP);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [videoRef, playbackSpeed, streamKey]);
@@ -200,6 +230,9 @@ export default function CustomVideoControls({
             if (document.pictureInPictureElement) {
                 await document.exitPictureInPicture();
             } else {
+                const returnUrl = window.location.href;
+                pipReturnUrlRef.current = returnUrl;
+                sessionStorage.setItem(PIP_RETURN_URL_KEY, returnUrl);
                 await videoRef.current.requestPictureInPicture();
             }
         }
@@ -223,7 +256,8 @@ export default function CustomVideoControls({
             playerShell.addEventListener('mouseleave', handleMouseLeave);
             const focusPlayer = () => playerShell.focus({ preventScroll: true });
             const handleKeyDown = (event: KeyboardEvent) => {
-                if (event.code !== 'Space') return;
+                const isPlaybackKey = event.code === 'Space' || event.code === 'ArrowLeft' || event.code === 'ArrowRight';
+                if (!isPlaybackKey) return;
 
                 const target = event.target as HTMLElement | null;
                 const targetTag = target?.tagName?.toLowerCase();
@@ -242,7 +276,14 @@ export default function CustomVideoControls({
 
                 if (isEditableTarget || !playerIsActive) return;
                 event.preventDefault();
-                toggleVideoPlayback();
+                if (event.code === 'Space') {
+                    toggleVideoPlayback();
+                } else if (videoRef.current) {
+                    const direction = event.code === 'ArrowRight' ? 1 : -1;
+                    const nextTime = Math.max(0, Math.min(videoRef.current.duration || 0, videoRef.current.currentTime + (direction * 5)));
+                    videoRef.current.currentTime = nextTime;
+                    setCurrentTime(nextTime);
+                }
                 handleMouseMove();
             };
             playerShell.addEventListener('pointerdown', focusPlayer);
