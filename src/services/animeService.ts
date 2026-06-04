@@ -289,6 +289,30 @@ const mapLatestUpdateItemToAnime = (item: any): Anime => {
     return anime;
 };
 
+const isDeadLatestUpdateImage = (value: unknown): boolean => {
+    const raw = String(value || '').trim();
+    if (!raw) return true;
+    const decoded = (() => {
+        try {
+            return decodeURIComponent(raw);
+        } catch {
+            return raw;
+        }
+    })();
+    return /\/mcovers\/a_tbs\/dhw\//i.test(decoded);
+};
+
+const hasUsableLatestUpdateSourceImage = (item: any): boolean => {
+    if (item?.anilist?.coverImage?.large || item?.anilist?.coverImage?.extraLarge) return true;
+    const image = item?.poster || item?.image || item?.snapshot || item?.banner;
+    return !isDeadLatestUpdateImage(image);
+};
+
+const hasUsableLatestUpdateAnimeImage = (anime: Anime): boolean => {
+    const image = anime.images?.jpg?.large_image_url || anime.images?.jpg?.image_url || anime.anilist_cover_image;
+    return !isDeadLatestUpdateImage(image);
+};
+
 const hasAvailableEpisodes = (anime: Anime) => {
     const latestEpisode = Number(anime.latestEpisode || 0);
     const totalEpisodes = Number(anime.episodes || 0);
@@ -555,7 +579,7 @@ export const animeService = {
     },
 
     async getLatestUpdates(): Promise<LatestUpdatesResult> {
-        const cacheKey = 'animepahe-card-latest-updates-v5';
+        const cacheKey = 'animepahe-card-latest-updates-v7';
         const cached = getCached(cacheKey, DETAIL_CACHE_TTL);
         if (cached) return cached;
         const staleCached = getStaleCached(cacheKey);
@@ -574,7 +598,10 @@ export const animeService = {
                 const payload = await res.json();
                 const result: LatestUpdatesResult = {
                     data: Array.isArray(payload?.data)
-                        ? payload.data.map(mapLatestUpdateItemToAnime)
+                        ? payload.data
+                            .filter(hasUsableLatestUpdateSourceImage)
+                            .map(mapLatestUpdateItemToAnime)
+                            .filter(hasUsableLatestUpdateAnimeImage)
                         : []
                 };
 
@@ -598,7 +625,7 @@ export const animeService = {
     },
 
     async getLatestUpdatesPage(page: number = 1, limit: number = 18): Promise<LatestUpdatesPageResult> {
-        const cacheKey = `animepahe-card-latest-updates-page-v4-${page}-${limit}`;
+        const cacheKey = `animepahe-card-latest-updates-page-v6-${page}-${limit}`;
         const cached = getCached(cacheKey, DETAIL_CACHE_TTL);
         if (cached) return cached;
         const staleCached = getStaleCached(cacheKey);
@@ -621,7 +648,10 @@ export const animeService = {
                 const payload = await res.json();
                 const result: LatestUpdatesPageResult = {
                     data: Array.isArray(payload?.data)
-                        ? payload.data.map(mapLatestUpdateItemToAnime)
+                        ? payload.data
+                            .filter(hasUsableLatestUpdateSourceImage)
+                            .map(mapLatestUpdateItemToAnime)
+                            .filter(hasUsableLatestUpdateAnimeImage)
                         : [],
                     pagination: {
                         last_visible_page: payload?.pagination?.last_visible_page || 1,
@@ -1008,7 +1038,7 @@ export const animeService = {
     // Get episodes from scraper. Backend/Redis is the primary cache layer.
     async getEpisodes(session: string, options?: { expectedEpisodes?: number }) {
         const expectedEpisodes = Number(options?.expectedEpisodes || 0);
-        const cacheKey = `episodes:v7:${session}:${expectedEpisodes > 0 ? `min-${expectedEpisodes}` : 'any'}`;
+        const cacheKey = `episodes:v8:${session}:${expectedEpisodes > 0 ? `min-${expectedEpisodes}` : 'any'}`;
         const hasEnoughEpisodes = (payload: any) => {
             const episodes = Array.isArray(payload?.episodes) ? payload.episodes : [];
             if (episodes.length === 0) return false;
@@ -1021,7 +1051,7 @@ export const animeService = {
             return inFlightRequests.get(cacheKey);
         }
 
-        const CACHE_COLLECTION = "anime_episodes_v5";
+        const CACHE_COLLECTION = "anime_episodes_v6";
         const docRef = db ? doc(db, CACHE_COLLECTION, session) : null;
 
         const readFirebaseEpisodes = async (timeoutMs: number): Promise<{ episodes: any[] } | null> => {

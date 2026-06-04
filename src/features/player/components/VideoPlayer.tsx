@@ -110,7 +110,7 @@ export default function VideoPlayer(props: VideoPlayerProps) {
     }, [resolvedStreamUrl, shouldUseNativeVideo, startAtSeconds]);
 
     return (
-        <div className="watch-player-shell w-full max-w-full h-full max-h-full relative bg-[#0b0c0f] group transition-all duration-300 overflow-hidden rounded-none shadow-none md:rounded-2xl md:shadow-2xl md:shadow-black/80">
+        <div className="watch-player-shell w-full max-w-full h-full max-h-full relative bg-[#0b0c0f] group transition-all duration-300 overflow-hidden rounded-none shadow-none outline-none md:rounded-2xl md:shadow-2xl md:shadow-black/80">
             {isLoading ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/90 z-20">
                     <LoadingSpinner />

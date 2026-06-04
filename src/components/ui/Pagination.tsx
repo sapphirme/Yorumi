@@ -23,7 +23,7 @@ export default function Pagination({
         } else {
             // Logic to show generic window of pages around current
             let start = Math.max(1, currentPage - 2);
-            let end = Math.min(lastPage, start + maxVisible - 1);
+            const end = Math.min(lastPage, start + maxVisible - 1);
 
             if (end - start < maxVisible - 1) {
                 start = Math.max(1, end - maxVisible + 1);
@@ -37,6 +37,11 @@ export default function Pagination({
     const pages = getPageNumbers();
     // Extract base color name for bg logic (e.g. 'text-yorumi-accent' -> 'bg-yorumi-accent')
     const activeBgClass = accentColor.replace('text-', 'bg-');
+    const goToPage = (page: number) => {
+        const nextPage = Math.min(lastPage, Math.max(1, page));
+        if (nextPage === currentPage) return;
+        onPageChange(nextPage);
+    };
 
     if (lastPage <= 1) return null;
 
@@ -44,7 +49,7 @@ export default function Pagination({
         <div className="flex items-center justify-center gap-2 mt-12 pb-12">
             {/* First Page */}
             <button
-                onClick={() => onPageChange(1)}
+                onClick={() => goToPage(1)}
                 disabled={currentPage === 1}
                 className="w-10 h-10 rounded-full bg-[#1a1a2e] border border-white/5 flex items-center justify-center text-gray-400 hover:bg-[#2a2a4e] hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
             >
@@ -53,7 +58,7 @@ export default function Pagination({
 
             {/* Previous Page */}
             <button
-                onClick={() => onPageChange(currentPage - 1)}
+                onClick={() => goToPage(currentPage - 1)}
                 disabled={currentPage === 1}
                 className="w-10 h-10 rounded-full bg-[#1a1a2e] border border-white/5 flex items-center justify-center text-gray-400 hover:bg-[#2a2a4e] hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
             >
@@ -64,7 +69,7 @@ export default function Pagination({
             {pages.map((page) => (
                 <button
                     key={page}
-                    onClick={() => onPageChange(page)}
+                    onClick={() => goToPage(page)}
                     className={`w-10 h-10 rounded-full border flex items-center justify-center font-bold text-sm transition-all duration-200
                         ${currentPage === page
                             ? `${activeBgClass} text-white border-transparent shadow-lg shadow-${activeBgClass}/20`
@@ -78,7 +83,7 @@ export default function Pagination({
 
             {/* Next Page */}
             <button
-                onClick={() => onPageChange(currentPage + 1)}
+                onClick={() => goToPage(currentPage + 1)}
                 disabled={currentPage === lastPage}
                 className="w-10 h-10 rounded-full bg-[#1a1a2e] border border-white/5 flex items-center justify-center text-gray-400 hover:bg-[#2a2a4e] hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
             >
@@ -87,7 +92,7 @@ export default function Pagination({
 
             {/* Last Page */}
             <button
-                onClick={() => onPageChange(lastPage)}
+                onClick={() => goToPage(lastPage)}
                 disabled={currentPage === lastPage}
                 className="w-10 h-10 rounded-full bg-[#1a1a2e] border border-white/5 flex items-center justify-center text-gray-400 hover:bg-[#2a2a4e] hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
             >

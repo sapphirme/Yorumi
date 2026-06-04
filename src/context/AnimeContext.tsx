@@ -1600,6 +1600,11 @@ export function AnimeProvider({ children }: { children: ReactNode }) {
     const fetchViewAll = async (type: 'latest' | 'trending' | 'seasonal' | 'continue_watching' | 'popular', page: number) => {
         if (type === 'continue_watching') return;
 
+        setViewAllPagination((prev) => ({
+            ...prev,
+            current_page: page,
+            has_next_page: page < prev.last_visible_page ? true : prev.has_next_page,
+        }));
         setViewAllLoading(true);
         try {
             let data;

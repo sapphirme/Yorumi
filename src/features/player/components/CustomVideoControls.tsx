@@ -94,6 +94,17 @@ export default function CustomVideoControls({
         }
     }, [isPlaying]);
 
+    const toggleVideoPlayback = useCallback(() => {
+        const video = videoRef.current;
+        if (!video) return;
+
+        if (video.paused) {
+            video.play().catch(() => undefined);
+        } else {
+            video.pause();
+        }
+    }, [videoRef]);
+
     useEffect(() => {
         const video = videoRef.current;
         if (!video) return;
@@ -110,8 +121,7 @@ export default function CustomVideoControls({
         const updatePlayState = () => {
             const isVideoPlaying = !video.paused;
             setIsPlaying(isVideoPlaying);
-            // Trigger center animation for every play/pause event
-            setCenterAction({ type: isVideoPlaying ? 'pause' : 'play', id: Date.now() });
+            setCenterAction({ type: isVideoPlaying ? 'play' : 'pause', id: Date.now() });
         };
         
         const updateVolume = () => {
@@ -145,13 +155,7 @@ export default function CustomVideoControls({
 
     const togglePlay = (e?: React.MouseEvent) => {
         if (e) e.stopPropagation();
-        if (videoRef.current) {
-            if (isPlaying) {
-                videoRef.current.pause();
-            } else {
-                videoRef.current.play();
-            }
-        }
+        toggleVideoPlayback();
     };
 
     const toggleMute = () => {
@@ -212,8 +216,35 @@ export default function CustomVideoControls({
     useEffect(() => {
         const playerShell = videoRef.current?.closest('.watch-player-shell') as HTMLElement;
         if (playerShell) {
+            playerShell.tabIndex = 0;
             playerShell.addEventListener('mousemove', handleMouseMove);
             playerShell.addEventListener('mouseleave', handleMouseLeave);
+            const focusPlayer = () => playerShell.focus({ preventScroll: true });
+            const handleKeyDown = (event: KeyboardEvent) => {
+                if (event.code !== 'Space') return;
+
+                const target = event.target as HTMLElement | null;
+                const targetTag = target?.tagName?.toLowerCase();
+                const isEditableTarget = Boolean(
+                    target?.isContentEditable ||
+                    targetTag === 'input' ||
+                    targetTag === 'textarea' ||
+                    targetTag === 'select' ||
+                    targetTag === 'button'
+                );
+                const activeElement = document.activeElement;
+                const playerIsActive = Boolean(
+                    document.fullscreenElement?.contains(playerShell) ||
+                    (activeElement && playerShell.contains(activeElement))
+                );
+
+                if (isEditableTarget || !playerIsActive) return;
+                event.preventDefault();
+                toggleVideoPlayback();
+                handleMouseMove();
+            };
+            playerShell.addEventListener('pointerdown', focusPlayer);
+            playerShell.addEventListener('keydown', handleKeyDown);
             
             const initialTimer = setTimeout(handleMouseMove, 0);
             
@@ -221,9 +252,11 @@ export default function CustomVideoControls({
                 clearTimeout(initialTimer);
                 playerShell.removeEventListener('mousemove', handleMouseMove);
                 playerShell.removeEventListener('mouseleave', handleMouseLeave);
+                playerShell.removeEventListener('pointerdown', focusPlayer);
+                playerShell.removeEventListener('keydown', handleKeyDown);
             };
         }
-    }, [videoRef, handleMouseMove, handleMouseLeave]);
+    }, [videoRef, handleMouseMove, handleMouseLeave, toggleVideoPlayback]);
 
     // Cleanup the center animation state so it fully unmounts
     useEffect(() => {
@@ -238,13 +271,14 @@ export default function CustomVideoControls({
     return (
         <>
             <style>{`
-                @keyframes pulse-in-out {
-                    0% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
-                    50% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
-                    100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
+                @keyframes animetsu-center-pop {
+                    0% { opacity: 0; transform: translate(-50%, -50%) scale(0.62); }
+                    14% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+                    52% { opacity: 0.82; transform: translate(-50%, -50%) scale(1.18); }
+                    100% { opacity: 0; transform: translate(-50%, -50%) scale(1.72); }
                 }
-                .animate-pulse-in-out {
-                    animation: pulse-in-out 500ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+                .animate-animetsu-center-pop {
+                    animation: animetsu-center-pop 520ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
                 }
             `}</style>
             
@@ -252,12 +286,12 @@ export default function CustomVideoControls({
             {centerAction && (
                 <div 
                     key={centerAction.id}
-                    className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-[60] flex items-center justify-center bg-black/50 rounded-full w-[90px] h-[90px] animate-pulse-in-out shadow-xl backdrop-blur-sm"
+                    className="watch-center-pop absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-[60] flex h-16 w-16 items-center justify-center rounded-full bg-[#2A2322]/75 shadow-2xl animate-animetsu-center-pop sm:h-[72px] sm:w-[72px]"
                 >
                     {centerAction.type === 'play' ? (
-                        <Play className="w-10 h-10 text-white fill-current ml-1" />
+                        <Play className="w-8 h-8 text-white fill-current ml-1 sm:h-9 sm:w-9" />
                     ) : (
-                        <Pause className="w-10 h-10 text-white fill-current" />
+                        <Pause className="w-8 h-8 text-white fill-current sm:h-9 sm:w-9" />
                     )}
                 </div>
             )}

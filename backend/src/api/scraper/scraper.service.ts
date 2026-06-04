@@ -338,7 +338,7 @@ export class ScraperService {
     async getAnimePaheLatestReleases(page: number = 1) {
         const safePage = Math.max(1, Math.floor(Number(page) || 1));
         return this.getOrLoad(
-            `animepahe:latest-releases:v1:${safePage}`,
+            `animepahe:latest-releases:v5:${safePage}`,
             5 * 60 * 1000,
             async () => this.allMangaScraper.getLatestUpdates(safePage),
             {
@@ -351,7 +351,7 @@ export class ScraperService {
     async getAnimePaheLatestUpdates(page: number = 1, limit?: number) {
         const safePage = Math.max(1, Math.floor(Number(page) || 1));
         const safeLimit = Math.max(1, Math.floor(Number(limit || 0)) || 0);
-        const cacheKey = `animepahe:latest-updates:v1:${safePage}:${safeLimit || 'all'}`;
+        const cacheKey = `animepahe:latest-updates:v5:${safePage}:${safeLimit || 'all'}`;
 
         return this.getOrLoad(
             cacheKey,
@@ -406,7 +406,7 @@ export class ScraperService {
         const safePage = Math.max(1, Math.floor(Number(page) || 1));
         const safeLimit = Math.max(1, Math.floor(Number(limit || 18)) || 18);
         return this.getOrLoad(
-            `allmanga:latest-updates:v1:${safePage}:${safeLimit}`,
+            `allmanga:latest-updates:v5:${safePage}:${safeLimit}`,
             5 * 60 * 1000,
             async () => this.allMangaScraper.getLatestUpdates(safePage, safeLimit),
             {

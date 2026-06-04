@@ -244,6 +244,39 @@ export class AllMangaScraper {
         return `${ANIMETSU_IMAGE_PROXY}${raw.startsWith('/') ? raw : `/${raw}`}`;
     }
 
+    private isLikelyDeadImageUrl(value: unknown) {
+        const url = String(value || '').trim();
+        return !url || /\/mcovers\/a_tbs\/dhw\//i.test(url);
+    }
+
+    private async isReachableImageUrl(value: unknown) {
+        const url = String(value || '').trim();
+        if (this.isLikelyDeadImageUrl(url)) return false;
+
+        try {
+            const response = await axios.head(url, {
+                headers: requestHeaders,
+                timeout: 5_000,
+                validateStatus: (status) => status >= 200 && status < 400,
+            });
+            const contentType = String(response.headers?.['content-type'] || '').toLowerCase();
+            return !contentType || contentType.startsWith('image/');
+        } catch {
+            try {
+                const response = await axios.get(url, {
+                    headers: { ...requestHeaders, Range: 'bytes=0-0' },
+                    timeout: 5_000,
+                    responseType: 'arraybuffer',
+                    validateStatus: (status) => status >= 200 && status < 400,
+                });
+                const contentType = String(response.headers?.['content-type'] || '').toLowerCase();
+                return contentType.startsWith('image/');
+            } catch {
+                return false;
+            }
+        }
+    }
+
     private async getAnimetsuEpisodeThumbnails(show: AllMangaShow | null | undefined): Promise<Map<number, string>> {
         const title = String(show?.englishName || show?.name || '').trim();
         if (!title) return new Map();
@@ -653,7 +686,7 @@ export class AllMangaScraper {
         });
     }
 
-    async getLatestUpdates(page: number = 1, limit: number = 18) {
+    private async fetchLatestUpdatesPage(page: number, limit: number) {
         const safePage = Math.max(1, Math.floor(Number(page) || 1));
         const safeLimit = Math.max(1, Math.floor(Number(limit) || 18));
         const payload = await this.gql<{ data?: { shows?: { edges?: AllMangaShow[]; pageInfo?: any } } }>({
@@ -671,14 +704,69 @@ export class AllMangaScraper {
 
         const edges = Array.isArray(payload?.data?.shows?.edges) ? payload.data.shows.edges : [];
         const pageInfo = payload?.data?.shows?.pageInfo || {};
-        const data = edges.map((show) => this.mapShowToAnime(show)).filter(Boolean);
+
+        return { edges, pageInfo };
+    }
+
+    private async filterLatestUpdatesWithImages(shows: AllMangaShow[]) {
+        const mappedData = shows
+            .map((show) => this.mapShowToAnime(show))
+            .filter((item): item is AnimeSearchResult & Record<string, unknown> => Boolean(item?.poster || item?.image || item?.banner));
+        const obviousValid = mappedData.filter((item) => !this.isLikelyDeadImageUrl(item?.poster || item?.image || item?.banner));
+        const needsValidation = mappedData.filter((item) => this.isLikelyDeadImageUrl(item?.poster || item?.image || item?.banner));
+        const validation = await Promise.all(needsValidation.map(async (item) => ({
+            item,
+            hasReachableImage: await this.isReachableImageUrl(item?.poster || item?.image || item?.banner),
+        })));
+
+        return [
+            ...obviousValid,
+            ...validation
+                .filter((entry) => entry.hasReachableImage)
+                .map((entry) => entry.item),
+        ];
+    }
+
+    async getLatestUpdates(page: number = 1, limit: number = 18) {
+        const safePage = Math.max(1, Math.floor(Number(page) || 1));
+        const safeLimit = Math.max(1, Math.floor(Number(limit) || 18));
+        const targetStart = (safePage - 1) * safeLimit;
+        const targetEnd = targetStart + safeLimit;
+        const rawLimit = Math.max(40, safeLimit * 3);
+        const filteredItems: Array<AnimeSearchResult & Record<string, unknown>> = [];
+        let currentRawPage = 1;
+        let latestPageInfo: any = {};
+        let totalResults = 0;
+        let hasNextPage = true;
+
+        while (filteredItems.length < targetEnd && hasNextPage) {
+            const { edges, pageInfo } = await this.fetchLatestUpdatesPage(currentRawPage, rawLimit);
+            latestPageInfo = pageInfo;
+            totalResults = totalResults || Number(pageInfo?.total || 0);
+            if (edges.length === 0) break;
+
+            const validItems = await this.filterLatestUpdatesWithImages(edges);
+            filteredItems.push(...validItems);
+            currentRawPage += 1;
+            hasNextPage = pageInfo?.hasNextPage === false ? false : true;
+        }
+
+        const data = filteredItems.slice(targetStart, targetEnd);
+        const estimatedLastPage = Math.max(
+            safePage,
+            totalResults
+                ? Math.ceil(totalResults / safeLimit)
+                : Number(latestPageInfo.totalPages || 0)
+                ? Math.ceil((Number(latestPageInfo.totalPages || 1) * rawLimit) / safeLimit)
+                : safePage + (hasNextPage ? 1 : 0)
+        );
 
         return {
             data,
             pagination: {
-                current_page: Number(pageInfo.page || safePage),
-                last_visible_page: Number(pageInfo.totalPages || safePage),
-                has_next_page: Boolean(pageInfo.hasNextPage),
+                current_page: safePage,
+                last_visible_page: estimatedLastPage,
+                has_next_page: filteredItems.length >= targetEnd || hasNextPage,
             },
         };
     }
