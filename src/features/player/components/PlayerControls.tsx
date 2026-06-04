@@ -1,5 +1,6 @@
 import { ChevronLeft, ChevronRight, Settings, Maximize, Minimize } from 'lucide-react';
 import type { StreamLink } from '../../../types/stream';
+import type { StreamServerKey } from '../../../hooks/useStreams';
 
 interface PlayerControlsProps {
     isExpanded: boolean;
@@ -8,6 +9,8 @@ interface PlayerControlsProps {
     selectedStreamIndex: number;
     streams: StreamLink[];
     selectedAudio: 'sub' | 'dub';
+    selectedServer: StreamServerKey;
+    serverOptions: Array<{ key: StreamServerKey; label: string }>;
     availableAudios: Array<'sub' | 'dub'>;
     showQualityMenu: boolean;
     onPrev: () => void;
@@ -16,6 +19,7 @@ interface PlayerControlsProps {
     setShowQualityMenu: (show: boolean) => void;
     onQualityChange: (index: number) => void;
     onSetAutoQuality: () => void;
+    onServerChange: (server: StreamServerKey) => void;
     onAudioChange: (audio: 'sub' | 'dub') => void;
 }
 
@@ -26,6 +30,8 @@ export default function PlayerControls({
     selectedStreamIndex,
     streams,
     selectedAudio,
+    selectedServer,
+    serverOptions,
     availableAudios,
     showQualityMenu,
     onPrev,
@@ -34,14 +40,24 @@ export default function PlayerControls({
     setShowQualityMenu,
     onQualityChange,
     onSetAutoQuality,
+    onServerChange,
     onAudioChange
 }: PlayerControlsProps) {
-    const selectedStream = streams[selectedStreamIndex];
-    const selectedQualityLabel = isAutoQuality
-        ? 'Auto'
-        : `${selectedStream?.quality || 'Quality'}`;
+    const getStreamSourceLabel = (stream?: StreamLink) => {
+        const key = String(stream?.server || stream?.provider || '').trim().toLowerCase();
+        if (key === 'native') return 'Native HLS';
+        if (key === 'kwik') return 'Kwik';
+        if (stream?.isHls) return 'HLS';
+        return key ? key.replace(/(^|\s|-)\w/g, (match) => match.toUpperCase()) : 'Source';
+    };
+    const getStreamQualityLabel = (stream?: StreamLink) => {
+        const quality = String(stream?.quality || '').trim();
+        if (!quality) return 'Unknown';
+        return quality.endsWith('P') ? quality : quality.replace(/\s?p$/i, '') + 'P';
+    };
+    const selectedServerLabel = serverOptions.find((server) => server.key === selectedServer)?.label || 'Auto';
     return (
-        <div className="hidden md:block watch-safe-bottom bg-[#202020] px-2 py-2 md:bg-transparent md:px-0">
+        <div className="block watch-safe-bottom bg-[#202020] px-2 py-2 md:bg-transparent md:px-0">
             {/* Controls Row */}
             <div className="flex items-center gap-1.5 pb-1 overflow-x-auto no-scrollbar md:gap-2 md:flex-nowrap md:overflow-visible">
                 {/* Previous */}
@@ -77,7 +93,7 @@ export default function PlayerControls({
                     >DUB</button>
                 </div>
 
-                {/* Quality Selector */}
+                {/* Server / Quality Selector */}
                 <div className="relative flex-shrink-0 z-50">
                     <button
                         onClick={() => setShowQualityMenu(!showQualityMenu)}
@@ -85,7 +101,7 @@ export default function PlayerControls({
                     >
                         <Settings className="w-3.5 h-3.5 md:w-4 md:h-4" />
                         <span className="text-[13px] md:text-sm">
-                            {selectedQualityLabel}
+                            {selectedServerLabel}
                         </span>
                     </button>
                     {showQualityMenu && (
@@ -94,21 +110,37 @@ export default function PlayerControls({
                             {/* Mobile: Central Modal */}
                             <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-[#1a1a1a] border border-white/10 rounded-xl p-2 min-w-[200px] shadow-2xl flex flex-col gap-1 z-50 sm:hidden">
                                 <div className="px-3 py-2 text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 border-b border-white/5">
-                                    Select Quality
+                                    Select Server
                                 </div>
                                 <button
-                                    onClick={onSetAutoQuality}
-                                    className={`w-full text-left px-4 py-3 text-base rounded-lg transition-colors ${isAutoQuality ? 'bg-yorumi-accent text-white font-bold' : 'text-gray-300 hover:bg-white/10'}`}
+                                    onClick={() => {
+                                        onServerChange('auto');
+                                        onSetAutoQuality();
+                                    }}
+                                    className={`w-full text-left px-4 py-3 text-base rounded-lg transition-colors ${selectedServer === 'auto' ? 'bg-yorumi-accent text-white font-bold' : 'text-gray-300 hover:bg-white/10'}`}
                                 >
                                     Auto
                                 </button>
+                                {serverOptions.filter((server) => server.key !== 'auto').map((server) => (
+                                    <button
+                                        key={server.key}
+                                        onClick={() => onServerChange(server.key)}
+                                        className={`w-full text-left px-4 py-3 text-base rounded-lg transition-colors ${selectedServer === server.key ? 'bg-yorumi-accent text-white font-bold' : 'text-gray-300 hover:bg-white/10'}`}
+                                    >
+                                        {server.label}
+                                    </button>
+                                ))}
+                                {streams.length > 0 && (
+                                    <div className="my-1 border-t border-white/10" />
+                                )}
                                 {streams.map((stream, idx) => (
                                     <button
                                         key={idx}
                                         onClick={() => onQualityChange(idx)}
                                         className={`w-full text-left px-4 py-3 text-base rounded-lg transition-colors ${!isAutoQuality && selectedStreamIndex === idx ? 'bg-yorumi-accent text-white font-bold' : 'text-gray-300 hover:bg-white/10'}`}
                                     >
-                                        <span>{stream.quality ? stream.quality.replace(/\s?p$/i, '') : 'Unknown'}P</span>
+                                        <span>{getStreamQualityLabel(stream)}</span>
+                                        <span className="ml-2 text-xs text-gray-400">{getStreamSourceLabel(stream)}</span>
                                         {stream.isHls && <span className="ml-2 text-xs text-gray-400">(HLS)</span>}
                                     </button>
                                 ))}
@@ -117,18 +149,34 @@ export default function PlayerControls({
                             {/* Desktop: Popover */}
                             <div className="hidden sm:flex absolute bottom-full right-0 mb-2 bg-[#1a1a1a] border border-white/10 rounded-lg p-1.5 min-w-[140px] shadow-xl flex-col gap-1 z-[60]">
                                 <button
-                                    onClick={onSetAutoQuality}
-                                    className={`w-full text-left px-3 py-1.5 text-sm rounded-md transition-colors ${isAutoQuality ? 'bg-yorumi-accent/20 text-yorumi-accent' : 'text-gray-300 hover:bg-white/10'}`}
+                                    onClick={() => {
+                                        onServerChange('auto');
+                                        onSetAutoQuality();
+                                    }}
+                                    className={`w-full text-left px-3 py-1.5 text-sm rounded-md transition-colors ${selectedServer === 'auto' ? 'bg-yorumi-accent/20 text-yorumi-accent' : 'text-gray-300 hover:bg-white/10'}`}
                                 >
                                     Auto
                                 </button>
+                                {serverOptions.filter((server) => server.key !== 'auto').map((server) => (
+                                    <button
+                                        key={server.key}
+                                        onClick={() => onServerChange(server.key)}
+                                        className={`w-full text-left px-3 py-1.5 text-sm rounded-md transition-colors ${selectedServer === server.key ? 'bg-yorumi-accent/20 text-yorumi-accent' : 'text-gray-300 hover:bg-white/10'}`}
+                                    >
+                                        {server.label}
+                                    </button>
+                                ))}
+                                {streams.length > 0 && (
+                                    <div className="my-1 border-t border-white/10" />
+                                )}
                                 {streams.map((stream, idx) => (
                                     <button
                                         key={idx}
                                         onClick={() => onQualityChange(idx)}
                                         className={`w-full text-left px-3 py-1.5 text-sm rounded-md transition-colors ${!isAutoQuality && selectedStreamIndex === idx ? 'bg-yorumi-accent/20 text-yorumi-accent' : 'text-gray-300 hover:bg-white/10'}`}
                                     >
-                                        <span>{stream.quality ? stream.quality.replace(/\s?p$/i, '') : 'Unknown'}P</span>
+                                        <span>{getStreamQualityLabel(stream)}</span>
+                                        <span className="ml-2 text-[10px] text-gray-400">{getStreamSourceLabel(stream)}</span>
                                         {stream.isHls && <span className="ml-2 text-[10px] text-gray-400">(HLS)</span>}
                                     </button>
                                 ))}

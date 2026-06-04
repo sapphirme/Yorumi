@@ -43,6 +43,7 @@ export default function SearchDropdown({
     const hoverBg = isManga ? 'hover:bg-[#24193f]' : 'hover:bg-white/5';
     const ctaBg = isManga ? 'bg-yorumi-manga hover:bg-yorumi-manga/90' : 'bg-yorumi-accent hover:bg-yorumi-accent/90';
     const ctaText = isManga ? 'text-white' : 'text-[#150F26]';
+    const fallbackImage = 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 96 128%22%3E%3Crect width=%2296%22 height=%22128%22 fill=%22%23172233%22/%3E%3Cpath d=%22M32 52h32v24H32z%22 fill=%22%232b3a51%22/%3E%3Cpath d=%22M38 60l7 8 6-6 9 12H36z%22 fill=%22%235c708f%22/%3E%3C/svg%3E';
 
     return (
         <AnimatePresence>
@@ -68,9 +69,14 @@ export default function SearchDropdown({
                                 {/* Image */}
                                 <div className="w-12 h-16 shrink-0 rounded overflow-hidden relative">
                                     <img
-                                        src={getDisplayImageUrl(item.image)}
+                                        src={getDisplayImageUrl(item.image) || fallbackImage}
                                         alt={item.title}
                                         className="w-full h-full object-cover"
+                                        onError={(event) => {
+                                            if (event.currentTarget.src !== fallbackImage) {
+                                                event.currentTarget.src = fallbackImage;
+                                            }
+                                        }}
                                     />
                                 </div>
 

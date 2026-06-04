@@ -6,7 +6,7 @@ import { storage } from '../utils/storage';
 import { preloadLogos } from '../components/anime/AnimeLogoImage';
 import { useAuth } from './AuthContext';
 import { getDisplayImageUrl } from '../utils/image';
-import { isAnimePaheSessionId, isSupportedScraperSessionId } from '../utils/animeNavigation';
+import { isSupportedScraperSessionId } from '../utils/animeNavigation';
 import { setLocalStorageWithCleanup } from '../utils/localStorageQuota';
 
 interface AnimeContextType {
@@ -308,7 +308,7 @@ export function AnimeProvider({ children }: { children: ReactNode }) {
     };
 
     // SessionStorage-backed episode cache (survives in-app navigation)
-    const EPISODE_CACHE_PREFIX = 'yorumi_ep_cache_v2';
+    const EPISODE_CACHE_PREFIX = 'yorumi_ep_cache_v3';
     const readEpisodeSessionCache = (animeKey: string): { session: string; episodes: Episode[] } | null => {
         try {
             const raw = sessionStorage.getItem(`${EPISODE_CACHE_PREFIX}:${animeKey}`);
@@ -436,7 +436,7 @@ export function AnimeProvider({ children }: { children: ReactNode }) {
         }
 
         const hintedScraperId = extractDirectScraperSession(hint.scraperId);
-        if (isAnimePaheSessionId(hintedScraperId)) {
+        if (isSupportedScraperSessionId(hintedScraperId)) {
             nextAnime.scraperId = hintedScraperId;
         }
 
@@ -446,7 +446,7 @@ export function AnimeProvider({ children }: { children: ReactNode }) {
     const hydrateFastDetails = (fastData: any, fallbackAnime: Anime): Anime => {
         const hydratedAnime = (fastData?.data ? { ...fallbackAnime, ...fastData.data } : { ...fallbackAnime }) as Anime;
         const fastSession = String(fastData?.scraperSession || '').trim();
-        if (isAnimePaheSessionId(fastSession)) {
+        if (isSupportedScraperSessionId(fastSession)) {
             hydratedAnime.scraperId = fastSession;
         }
         return preserveFreshnessHint(hydratedAnime, fallbackAnime);
@@ -455,7 +455,7 @@ export function AnimeProvider({ children }: { children: ReactNode }) {
     const applyHydratedEpisodes = (targetAnime: Anime, fastData: any) => {
         if (!Array.isArray(fastData?.episodes) || fastData.episodes.length === 0) return false;
         const session = extractDirectScraperSession(fastData?.scraperSession);
-        if (!isAnimePaheSessionId(session)) return false;
+        if (!isSupportedScraperSessionId(session)) return false;
 
         const normalizedFastEpisodes = normalizeEpisodesList(fastData.episodes);
         const nextEpisodes = trimEpisodesForAnime(targetAnime, normalizedFastEpisodes);
@@ -1006,7 +1006,7 @@ export function AnimeProvider({ children }: { children: ReactNode }) {
                 const candidateMap = new Map<string, any>();
                 const rankCandidates = () => {
                     const allCandidates = Array.from(candidateMap.values())
-                        .filter((candidate: any) => isAnimePaheSessionId(candidate?.session));
+                        .filter((candidate: any) => isSupportedScraperSessionId(candidate?.session));
 
                     const strictCandidates = allCandidates.filter((candidate) => isStrictCandidate(candidate, anime));
                     const hasStrictMatches = strictCandidates.length > 0;
@@ -1042,12 +1042,12 @@ export function AnimeProvider({ children }: { children: ReactNode }) {
 
                 for (let index = 0; index < queryList.length; index += 3) {
                     const results = await Promise.all(
-                        queryList.slice(index, index + 3).map(q => animeService.searchAnimePahe(q).then(res => res || []).catch(() => []))
+                        queryList.slice(index, index + 3).map(q => animeService.searchAllManga(q).then(res => res || []).catch(() => []))
                     );
 
                     results.flat().forEach((candidate: any) => {
                         const session = String(candidate?.session || '').trim();
-                        if (isAnimePaheSessionId(session) && !candidateMap.has(session)) {
+                        if (isSupportedScraperSessionId(session) && !candidateMap.has(session)) {
                             candidateMap.set(session, candidate);
                         }
                     });
@@ -1079,7 +1079,7 @@ export function AnimeProvider({ children }: { children: ReactNode }) {
 
         // Fast path: when scraperId is already known, avoid extra mapping/search calls.
         const directScraperSession = extractDirectScraperSession(anime.scraperId);
-        if (directScraperSession && isAnimePaheSessionId(directScraperSession)) {
+        if (directScraperSession && isSupportedScraperSessionId(directScraperSession)) {
             session = directScraperSession;
             if (cacheKey) {
                 scraperSessionCache.current.set(cacheKey, session);
@@ -1089,7 +1089,7 @@ export function AnimeProvider({ children }: { children: ReactNode }) {
 
         if (!session && cacheKey && scraperSessionCache.current.has(cacheKey)) {
             const cachedSession = extractDirectScraperSession(scraperSessionCache.current.get(cacheKey));
-            if (cachedSession && isAnimePaheSessionId(cachedSession)) {
+            if (cachedSession && isSupportedScraperSessionId(cachedSession)) {
                 session = cachedSession;
                 sessionFromCache = true;
             } else {
@@ -1101,7 +1101,7 @@ export function AnimeProvider({ children }: { children: ReactNode }) {
                 try {
                     const persistedMapping = await animeService.getAnimeMapping(mappingKey);
                     const cachedSession = extractDirectScraperSession(persistedMapping);
-                    if (cachedSession && isAnimePaheSessionId(cachedSession)) {
+                    if (cachedSession && isSupportedScraperSessionId(cachedSession)) {
                         session = cachedSession;
                         sessionFromCache = true;
                         if (cacheKey) scraperSessionCache.current.set(cacheKey, cachedSession);
@@ -1260,7 +1260,7 @@ export function AnimeProvider({ children }: { children: ReactNode }) {
         if (cacheKey) {
             const sessionCached = readEpisodeSessionCache(cacheKey);
             if (sessionCached) {
-                if (!isAnimePaheSessionId(sessionCached.session) || !hasEnoughEpisodes(anime, sessionCached.episodes)) {
+                if (!isSupportedScraperSessionId(sessionCached.session) || !hasEnoughEpisodes(anime, sessionCached.episodes)) {
                     try {
                         sessionStorage.removeItem(`${EPISODE_CACHE_PREFIX}:${cacheKey}`);
                     } catch {

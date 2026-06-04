@@ -5,7 +5,7 @@ import type { Anime } from "../types/anime";
 import { db, isFirebaseEnabled } from "./firebase";
 import { API_BASE } from "../config/api";
 import { getDisplayImageUrl } from "../utils/image";
-import { isAnimePaheSessionId, isSupportedScraperSessionId } from "../utils/animeNavigation";
+import { isSupportedScraperSessionId } from "../utils/animeNavigation";
 import { setLocalStorageWithCleanup } from "../utils/localStorageQuota";
 
 const apiClient = axios.create({
@@ -312,7 +312,7 @@ const scraperSearchCache = new Map<string, { data: any[]; timestamp: number }>()
 const SCRAPER_SEARCH_TTL = 5 * 60 * 1000;
 const AZ_LIST_CACHE_TTL = 10 * 60 * 1000;
 const PERSISTED_CACHE_PREFIX = 'yorumi_api_cache_v6';
-const STREAM_CACHE_VERSION = 'v8';
+const STREAM_CACHE_VERSION = 'v9';
 const PERSISTED_STREAM_CACHE_PREFIX = `yorumi_stream_cache_${STREAM_CACHE_VERSION}`;
 
 const readPersistedCache = (key: string, ttl: number) => {
@@ -435,9 +435,9 @@ const clearCachedStream = (key: string) => {
 };
 
 const getAnimeDetailsCacheKey = (id: number | string) => `anime-details:v4:${id}`;
-const getAnimeDetailsFastCacheKey = (id: number | string) => `anime-details-fast:v11:${id}`;
-const getStreamCacheKey = (animeSession: string, episodeSession: string) =>
-    `streams:${STREAM_CACHE_VERSION}:${animeSession}:${episodeSession}`;
+const getAnimeDetailsFastCacheKey = (id: number | string) => `anime-details-fast:v12:${id}`;
+const getStreamCacheKey = (animeSession: string, episodeSession: string, provider = 'auto') =>
+    `streams:${STREAM_CACHE_VERSION}:${provider}:${animeSession}:${episodeSession}`;
 const isAnimePaheOnlyStream = (item: any) => {
     const provider = String(item?.provider || '').trim().toLowerCase();
     return !provider || provider === 'animepahe';
@@ -855,7 +855,7 @@ export const animeService = {
             if (hasSufficientEpisodePayload(cachedAnime, { episodes: cachedEpisodes })) {
                 return cached;
             }
-            if (cachedSession && !isAnimePaheSessionId(cachedSession)) {
+            if (cachedSession && !isSupportedScraperSessionId(cachedSession)) {
                 clearCacheEntry(cacheKey);
             }
         }
@@ -871,7 +871,7 @@ export const animeService = {
                 }
                 const payload = await res.json();
                 const mappedAnime = payload?.anime ? (mapAnilistToAnime(payload.anime) as Anime) : null;
-                const scraperSession = extractAnimePaheSession(payload?.scraperSession);
+                const scraperSession = extractSupportedScraperSession(payload?.scraperSession);
                 if (mappedAnime && scraperSession) {
                     mappedAnime.scraperId = scraperSession;
                 }
@@ -938,6 +938,32 @@ export const animeService = {
         return fetchPromise;
     },
 
+    async searchAllManga(title: string) {
+        const normalizedTitle = title.trim().toLowerCase();
+        const cacheKey = `allmanga-search:${normalizedTitle}`;
+        const cached = getCached(cacheKey, SCRAPER_SEARCH_TTL);
+        if (cached) return cached;
+        if (inFlightRequests.has(cacheKey)) {
+            return inFlightRequests.get(cacheKey);
+        }
+
+        const fetchPromise = apiClient.get('/scraper/search/allmanga', {
+            params: { q: title },
+        })
+            .then(({ data }) => {
+                if (Array.isArray(data) && data.length > 0) {
+                    setCache(cacheKey, data, SCRAPER_SEARCH_TTL);
+                }
+                return data;
+            })
+            .finally(() => {
+                inFlightRequests.delete(cacheKey);
+            });
+
+        inFlightRequests.set(cacheKey, fetchPromise);
+        return fetchPromise;
+    },
+
     // Get popular this season from AniList (Deduplicated)
     async getPopularThisSeason(page: number = 1, limit: number = 10) {
         const cacheKey = `popular-season-${page}-${limit}`;
@@ -982,7 +1008,7 @@ export const animeService = {
     // Get episodes from scraper. Backend/Redis is the primary cache layer.
     async getEpisodes(session: string, options?: { expectedEpisodes?: number }) {
         const expectedEpisodes = Number(options?.expectedEpisodes || 0);
-        const cacheKey = `episodes:v6:${session}:${expectedEpisodes > 0 ? `min-${expectedEpisodes}` : 'any'}`;
+        const cacheKey = `episodes:v7:${session}:${expectedEpisodes > 0 ? `min-${expectedEpisodes}` : 'any'}`;
         const hasEnoughEpisodes = (payload: any) => {
             const episodes = Array.isArray(payload?.episodes) ? payload.episodes : [];
             if (episodes.length === 0) return false;
@@ -1134,8 +1160,9 @@ export const animeService = {
     },
 
     // Get stream links from scraper
-    async getStreams(animeSession: string, episodeSession: string) {
-        const cacheKey = getStreamCacheKey(animeSession, episodeSession);
+    async getStreams(animeSession: string, episodeSession: string, options?: { provider?: string; title?: string; episodeNumber?: number }) {
+        const provider = String(options?.provider || 'auto').trim().toLowerCase() || 'auto';
+        const cacheKey = getStreamCacheKey(animeSession, episodeSession, provider);
         const cached = getCachedStream(cacheKey);
         if (cached) return cached;
 
@@ -1151,6 +1178,9 @@ export const animeService = {
                     params: {
                         anime_session: animeSession,
                         ep_session: episodeSession,
+                        provider,
+                        ...(options?.episodeNumber ? { ep_number: options.episodeNumber } : {}),
+                        ...(options?.title ? { title: options.title } : {}),
                     },
                 });
                 const normalized = Array.isArray(data)
@@ -1169,7 +1199,7 @@ export const animeService = {
                             : item?.subtitles,
                     }))
                     : data;
-                const filtered = Array.isArray(normalized) && extractAnimePaheSession(animeSession)
+                const filtered = Array.isArray(normalized) && (provider === 'auto' || provider === 'animepahe') && extractAnimePaheSession(animeSession)
                     ? normalized.filter((item: any) => isAnimePaheOnlyStream(item))
                     : normalized;
                 const resolved = filtered;
@@ -1186,21 +1216,21 @@ export const animeService = {
         return fetchPromise;
     },
 
-    invalidateStreamCache(animeSession: string, episodeSession?: string) {
+    invalidateStreamCache(animeSession: string, episodeSession?: string, provider = 'auto') {
         if (!animeSession) return;
 
         if (episodeSession) {
-            clearCachedStream(getStreamCacheKey(animeSession, episodeSession));
-            inFlightRequests.delete(getStreamCacheKey(animeSession, episodeSession));
+            clearCachedStream(getStreamCacheKey(animeSession, episodeSession, provider));
+            inFlightRequests.delete(getStreamCacheKey(animeSession, episodeSession, provider));
             return;
         }
 
-        const prefix = `streams:${STREAM_CACHE_VERSION}:${animeSession}:`;
+        const prefix = `streams:${STREAM_CACHE_VERSION}:`;
         Array.from(streamCache.keys())
-            .filter((key) => key.startsWith(prefix))
+            .filter((key) => key.startsWith(prefix) && key.includes(`:${animeSession}:`))
             .forEach((key) => clearCachedStream(key));
         Array.from(inFlightRequests.keys())
-            .filter((key) => key.startsWith(prefix))
+            .filter((key) => key.startsWith(prefix) && key.includes(`:${animeSession}:`))
             .forEach((key) => inFlightRequests.delete(key));
         try {
             for (let i = sessionStorage.length - 1; i >= 0; i -= 1) {

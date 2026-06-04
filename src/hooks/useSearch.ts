@@ -4,6 +4,17 @@ import type { Manga } from '../types/manga';
 import { animeService } from '../services/animeService';
 import { mangaService } from '../services/mangaService';
 
+type SearchResponse = {
+    data?: (Anime | Manga)[];
+    pagination?: {
+        last_visible_page: number;
+        current_page: number;
+        has_next_page: boolean;
+    };
+};
+
+const SEARCH_CACHE_TTL_MS = 3 * 60 * 1000;
+
 export function useSearch(activeTab: 'anime' | 'manga', onSearchStart?: () => void, isAZList: boolean = false) {
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<(Anime | Manga)[]>([]);
@@ -15,7 +26,6 @@ export function useSearch(activeTab: 'anime' | 'manga', onSearchStart?: () => vo
         has_next_page: false
     });
     const responseCacheRef = useRef(new Map<string, { data: (Anime | Manga)[]; pagination?: typeof searchPagination; timestamp: number }>());
-    const SEARCH_CACHE_TTL_MS = 3 * 60 * 1000;
 
     const performSearch = useCallback(async (query: string, page: number, isLoadMore: boolean = false) => {
         const normalizedQuery = query.trim();
@@ -49,14 +59,14 @@ export function useSearch(activeTab: 'anime' | 'manga', onSearchStart?: () => vo
         if (!isLoadMore) setIsSearching(true);
 
         try {
-            let newData: any;
+            let newData: SearchResponse;
             if (activeTab === 'anime') {
                 if (isAZList) {
                     // Handle empty query as 'All' for AZ list
                     const target = normalizedQuery || 'All';
                     newData = await animeService.getAZList(target, page);
                 } else {
-                    newData = await animeService.searchAnimeScraper(normalizedQuery, page);
+                    newData = await animeService.searchAnime(normalizedQuery, page, 24);
                 }
             } else {
                 if (isAZList) {

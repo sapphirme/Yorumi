@@ -9,14 +9,13 @@ import Pagination from '../components/ui/Pagination';
 import type { Anime } from '../types/anime';
 import type { Manga } from '../types/manga';
 import { animeService } from '../services/animeService';
+import { getAnimeDetailsRouteId } from '../utils/animeNavigation';
 
 export default function SearchPage() {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
     const query = searchParams.get('q') || '';
     const type = (searchParams.get('type') as 'anime' | 'manga') || 'anime';
-    const isAnimePaheSession = (value: unknown) =>
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(value || '').trim());
 
     // Derived state for UI
     const alphabets = ['All', '#', '0-9', ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')];
@@ -118,11 +117,8 @@ export default function SearchPage() {
                                 key={item.id || item.scraperId || item.mal_id}
                                 anime={item}
                                 onClick={() => {
-                                    if (item.scraperId && isAnimePaheSession(item.scraperId)) {
-                                        navigate(`/anime/details/s:${item.scraperId}`, { state: { anime: item } });
-                                    } else {
-                                        navigate(`/anime/details/${item.mal_id}`, { state: { anime: item } });
-                                    }
+                                    const routeId = getAnimeDetailsRouteId(item) || item.id || item.mal_id;
+                                    navigate(`/anime/details/${routeId}`, { state: { anime: item } });
                                 }}
                             />
                         ))

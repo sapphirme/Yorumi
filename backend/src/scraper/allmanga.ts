@@ -1,0 +1,729 @@
+import axios from 'axios';
+import crypto from 'crypto';
+import type { AnimeSearchResult, Episode, StreamLink } from './types';
+
+const API_URL = 'https://api.allanime.day/api';
+const ALLMANGA_REFERER = 'https://allmanga.to';
+const ALLANIME_ORIGIN = 'https://youtu-chan.com';
+const ANIMETSU_API_URL = 'https://animetsu.net/v2/api/anime';
+const ANIMETSU_REFERER = 'https://animetsu.net/';
+const ANIMETSU_IMAGE_PROXY = 'https://swiftstream.top/proxy';
+const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0';
+const EPISODE_QUERY_HASH = 'd405d0edd690624b66baba3068e0edc3ac90f1597d898a1ec8db4e5c43c00fec';
+
+const SEARCH_GQL = `query($search:SearchInput $limit:Int $page:Int $translationType:VaildTranslationTypeEnumType $countryOrigin:VaildCountryOriginEnumType){shows(search:$search limit:$limit page:$page translationType:$translationType countryOrigin:$countryOrigin){edges{_id name availableEpisodes __typename}}}`;
+const LATEST_UPDATES_GQL = `query($search:SearchInput $limit:Int $page:Int $translationType:VaildTranslationTypeEnumType $countryOrigin:VaildCountryOriginEnumType){shows(search:$search limit:$limit page:$page translationType:$translationType countryOrigin:$countryOrigin){edges{_id name englishName thumbnail banner type status score averageScore season availableEpisodes lastEpisodeDate lastEpisodeInfo lastEpisodeTimestamp episodeCount genres slugTime} pageInfo{total totalPages page hasNextPage}}}`;
+const EPISODE_INFOS_GQL = `query($showId:String! $episodeNumStart:Float! $episodeNumEnd:Float!){episodeInfos(showId:$showId episodeNumStart:$episodeNumStart episodeNumEnd:$episodeNumEnd){_id notes description thumbnails uploadDates episodeIdNum vidInforssub vidInforsdub}}`;
+const EPISODE_GQL = `query($showId:String! $translationType:VaildTranslationTypeEnumType! $episodeString:String!){episode(showId:$showId translationType:$translationType episodeString:$episodeString){episodeString sourceUrls}}`;
+
+const HEX_MAP: Record<string, string> = {
+    79: 'A', '7a': 'B', '7b': 'C', '7c': 'D', '7d': 'E', '7e': 'F', '7f': 'G', 70: 'H', 71: 'I', 72: 'J',
+    73: 'K', 74: 'L', 75: 'M', 76: 'N', 77: 'O', 68: 'P', 69: 'Q', '6a': 'R', '6b': 'S', '6c': 'T',
+    '6d': 'U', '6e': 'V', '6f': 'W', 60: 'X', 61: 'Y', 62: 'Z', 59: 'a', '5a': 'b', '5b': 'c',
+    '5c': 'd', '5d': 'e', '5e': 'f', '5f': 'g', 50: 'h', 51: 'i', 52: 'j', 53: 'k', 54: 'l',
+    55: 'm', 56: 'n', 57: 'o', 48: 'p', 49: 'q', '4a': 'r', '4b': 's', '4c': 't', '4d': 'u',
+    '4e': 'v', '4f': 'w', 40: 'x', 41: 'y', 42: 'z', '08': '0', '09': '1', '0a': '2', '0b': '3',
+    '0c': '4', '0d': '5', '0e': '6', '0f': '7', '00': '8', '01': '9', 15: '-', 16: '.', 67: '_',
+    46: '~', '02': ':', 17: '/', '07': '?', '1b': '#', 63: '[', 65: ']', 78: '@', 19: '!', '1c': '$',
+    '1e': '&', 10: '(', 11: ')', 12: '*', 13: '+', 14: ',', '03': ';', '05': '=', '1d': '%',
+};
+
+type TranslationType = 'sub' | 'dub';
+type AllMangaSource = { sourceUrl?: string; sourceName?: string; priority?: number };
+type AllMangaShow = {
+    _id?: string;
+    name?: string;
+    englishName?: string | null;
+    thumbnail?: string | null;
+    banner?: string | null;
+    type?: string | null;
+    status?: string | null;
+    score?: number | null;
+    averageScore?: number | null;
+    season?: { quarter?: string; year?: number } | null;
+    availableEpisodes?: Record<string, number>;
+    lastEpisodeDate?: Record<string, unknown>;
+    lastEpisodeInfo?: Record<string, { episodeString?: string }>;
+    lastEpisodeTimestamp?: Record<string, number>;
+    episodeCount?: number | string | null;
+    genres?: string[];
+};
+type AllMangaEpisodeInfo = {
+    _id?: string;
+    notes?: string | null;
+    description?: string | null;
+    thumbnails?: string[];
+    uploadDates?: Record<string, string>;
+    episodeIdNum?: number;
+    vidInforssub?: { vidDuration?: number; vidResolution?: number };
+    vidInforsdub?: { vidDuration?: number; vidResolution?: number };
+};
+type ClockLink = { link?: string; resolutionStr?: string };
+type AnimetsuSearchResult = {
+    id?: string;
+    title?: {
+        romaji?: string | null;
+        english?: string | null;
+        native?: string | null;
+    };
+    total_eps?: number | null;
+    mal_id?: number | null;
+    anilist_id?: number | null;
+};
+type AnimetsuEpisode = {
+    ep_num?: number;
+    img?: string | null;
+};
+
+const requestHeaders = {
+    'User-Agent': USER_AGENT,
+    Referer: ALLMANGA_REFERER,
+    Origin: ALLMANGA_REFERER,
+    Accept: '*/*',
+};
+
+const animetsuHeaders = {
+    'User-Agent': USER_AGENT,
+    Referer: ANIMETSU_REFERER,
+    Origin: ANIMETSU_REFERER.replace(/\/$/, ''),
+    Accept: 'application/json',
+};
+
+export class AllMangaScraper {
+    static isAllMangaSession(value: unknown) {
+        return /^am-[a-z0-9]+$/i.test(String(value || '').trim());
+    }
+
+    static toSession(showId: string) {
+        return `am-${showId}`;
+    }
+
+    static fromSession(value: unknown) {
+        const raw = String(value || '').trim().replace(/^s:/i, '').split(/[?#]/)[0];
+        const match = raw.match(/^am-([a-z0-9]+)$/i);
+        return match?.[1] || '';
+    }
+
+    private decodeUrl(encoded: string) {
+        const clean = encoded.startsWith('--') ? encoded.slice(2) : encoded;
+        let result = '';
+        for (let i = 0; i < clean.length; i += 2) {
+            const pair = clean.slice(i, i + 2);
+            result += HEX_MAP[pair] ?? pair;
+        }
+        return result.replace(/\\u002F/gi, '/').replace(/\\\|/g, '');
+    }
+
+    private decryptTobeparsed(blob: string): AllMangaSource[] {
+        try {
+            const raw = Buffer.from(blob, 'base64');
+            const key = crypto.createHash('sha256').update('Xot36i3lK3:v1').digest();
+            const iv = Buffer.concat([raw.subarray(1, 13), Buffer.from([0, 0, 0, 2])]);
+            const ciphertext = raw.subarray(13, raw.length - 16);
+            const decipher = crypto.createDecipheriv('aes-256-ctr', key, iv);
+            const plain = decipher.update(ciphertext, undefined, 'utf8') + decipher.final('utf8');
+            try {
+                const parsed = JSON.parse(plain);
+                if (Array.isArray(parsed)) return parsed;
+                if (Array.isArray(parsed?.episode?.sourceUrls)) return parsed.episode.sourceUrls;
+            } catch {
+                const sources: AllMangaSource[] = [];
+                for (const chunk of plain.split(/[{}]/)) {
+                    const urlMatch = chunk.match(/"sourceUrl"\s*:\s*"(--[^"]+)"/);
+                    if (!urlMatch) continue;
+                    const nameMatch = chunk.match(/"sourceName"\s*:\s*"([^"]+)"/);
+                    const priorityMatch = chunk.match(/"priority"\s*:\s*([0-9.]+)/);
+                    sources.push({
+                        sourceUrl: urlMatch[1],
+                        sourceName: nameMatch?.[1] || '',
+                        priority: priorityMatch ? Number(priorityMatch[1]) : 0,
+                    });
+                }
+                if (sources.length > 0) return sources;
+            }
+            return [];
+        } catch {
+            return [];
+        }
+    }
+
+    private parseEpisodeSources(payload: unknown): AllMangaSource[] {
+        const data = payload as { data?: { episode?: { sourceUrls?: AllMangaSource[] }; tobeparsed?: string }; tobeparsed?: string };
+        if (Array.isArray(data?.data?.episode?.sourceUrls)) return data.data.episode.sourceUrls;
+
+        const encrypted = data?.data?.tobeparsed || data?.tobeparsed;
+        return encrypted ? this.decryptTobeparsed(encrypted) : [];
+    }
+
+    private async gql<T>(variables: Record<string, unknown>, query: string): Promise<T | null> {
+        try {
+            const response = await axios.post<T>(
+                API_URL,
+                { variables, query },
+                {
+                    timeout: 12_000,
+                    headers: {
+                        ...requestHeaders,
+                        'Content-Type': 'application/json',
+                    },
+                }
+            );
+            return response.data;
+        } catch {
+            return null;
+        }
+    }
+
+    private async episodeGql(variables: Record<string, unknown>) {
+        try {
+            const params = new URLSearchParams({
+                variables: JSON.stringify(variables),
+                extensions: JSON.stringify({
+                    persistedQuery: { version: 1, sha256Hash: EPISODE_QUERY_HASH },
+                }),
+            });
+            const response = await axios.get(`${API_URL}?${params.toString()}`, {
+                timeout: 12_000,
+                headers: {
+                    ...requestHeaders,
+                    Origin: ALLANIME_ORIGIN,
+                },
+            });
+            if (response.data?.data?.tobeparsed || response.data?.data?.episode?.sourceUrls) {
+                return response.data;
+            }
+        } catch {
+            // Fall back to POST below.
+        }
+        return this.gql(variables, EPISODE_GQL);
+    }
+
+    private normalizeTitle(value: unknown) {
+        return String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    }
+
+    private scoreAnimetsuCandidate(show: AllMangaShow | null | undefined, candidate: AnimetsuSearchResult) {
+        const showTitles = [
+            show?.englishName,
+            show?.name,
+        ].map((title) => this.normalizeTitle(title)).filter((title) => title.length >= 4);
+        const candidateTitles = [
+            candidate?.title?.english,
+            candidate?.title?.romaji,
+            candidate?.title?.native,
+        ].map((title) => this.normalizeTitle(title)).filter((title) => title.length >= 4);
+
+        let score = 0;
+        for (const showTitle of showTitles) {
+            for (const candidateTitle of candidateTitles) {
+                if (showTitle === candidateTitle) score = Math.max(score, 120);
+                else if (showTitle.includes(candidateTitle) || candidateTitle.includes(showTitle)) score = Math.max(score, 80);
+            }
+        }
+
+        const expectedEpisodes = Math.max(
+            Number(show?.availableEpisodes?.sub || 0),
+            Number(show?.availableEpisodes?.dub || 0),
+            Number(show?.episodeCount || 0),
+        );
+        const candidateEpisodes = Number(candidate?.total_eps || 0);
+        if (score > 0 && expectedEpisodes > 0 && candidateEpisodes > 0) {
+            const diff = Math.abs(expectedEpisodes - candidateEpisodes);
+            if (diff === 0) score += 16;
+            else if (diff <= 3) score += 8;
+            else if (diff > 12) score -= 16;
+        }
+
+        return score;
+    }
+
+    private normalizeAnimetsuImage(value: unknown) {
+        const raw = String(value || '').trim();
+        if (!raw) return '';
+        if (/^https?:\/\//i.test(raw)) return raw;
+        return `${ANIMETSU_IMAGE_PROXY}${raw.startsWith('/') ? raw : `/${raw}`}`;
+    }
+
+    private async getAnimetsuEpisodeThumbnails(show: AllMangaShow | null | undefined): Promise<Map<number, string>> {
+        const title = String(show?.englishName || show?.name || '').trim();
+        if (!title) return new Map();
+
+        try {
+            const searchUrl = `${ANIMETSU_API_URL}/search`;
+            const search = await axios.get<{ results?: AnimetsuSearchResult[] }>(searchUrl, {
+                params: { query: title },
+                headers: animetsuHeaders,
+                timeout: 8_000,
+            });
+            const candidates = Array.isArray(search.data?.results) ? search.data.results : [];
+            const best = candidates
+                .map((candidate) => ({ candidate, score: this.scoreAnimetsuCandidate(show, candidate) }))
+                .filter((entry) => entry.score > 0 && entry.candidate?.id)
+                .sort((a, b) => b.score - a.score)[0]?.candidate;
+            if (!best?.id) return new Map();
+
+            const episodes = await axios.get<AnimetsuEpisode[]>(`${ANIMETSU_API_URL}/eps/${best.id}`, {
+                headers: animetsuHeaders,
+                timeout: 8_000,
+            });
+            const thumbnailMap = new Map<number, string>();
+            (Array.isArray(episodes.data) ? episodes.data : []).forEach((episode) => {
+                const episodeNumber = Number(episode?.ep_num || 0);
+                const image = this.normalizeAnimetsuImage(episode?.img);
+                if (Number.isFinite(episodeNumber) && episodeNumber > 0 && image) {
+                    thumbnailMap.set(episodeNumber, image);
+                }
+            });
+            return thumbnailMap;
+        } catch (error) {
+            console.warn(`[AllManga] Failed to fetch Animetsu episode thumbnails for "${title}"`, error);
+            return new Map();
+        }
+    }
+
+    private sanitizeTitle(value: string) {
+        return value
+            .replace(/[''`´]/g, '')
+            .replace(/[:!.]/g, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+
+    private candidateTitles(title: string) {
+        const candidates = new Set<string>();
+        const add = (value: string) => {
+            const normalized = String(value || '').replace(/\s+/g, ' ').trim();
+            if (normalized) candidates.add(normalized);
+        };
+        add(title);
+        add(this.sanitizeTitle(title));
+        add(title.replace(/\bseason\s+\d+\b/ig, '').trim());
+        add(title.replace(/\b\d+(st|nd|rd|th)\s+season\b/ig, '').trim());
+        return [...candidates].filter(Boolean).slice(0, 5);
+    }
+
+    private async search(query: string, translationType: TranslationType): Promise<AllMangaShow[]> {
+        const payload = await this.gql<{ data?: { shows?: { edges?: AllMangaShow[] } } }>({
+            search: {
+                allowAdult: true,
+                allowUnknown: false,
+                query: query.toLowerCase(),
+            },
+            limit: 40,
+            page: 1,
+            translationType,
+            countryOrigin: 'ALL',
+        }, SEARCH_GQL);
+
+        return Array.isArray(payload?.data?.shows?.edges) ? payload.data.shows.edges : [];
+    }
+
+    async searchAnime(query: string): Promise<Array<AnimeSearchResult & Record<string, unknown>>> {
+        const cleanQuery = String(query || '').trim();
+        if (!cleanQuery) return [];
+
+        const showMap = new Map<string, AllMangaShow>();
+        for (const candidate of this.candidateTitles(cleanQuery)) {
+            const [subShows, dubShows] = await Promise.all([
+                this.search(candidate, 'sub').catch(() => []),
+                this.search(candidate, 'dub').catch(() => []),
+            ]);
+            [...subShows, ...dubShows].forEach((show) => {
+                const showId = String(show?._id || '').trim();
+                if (showId && !showMap.has(showId)) showMap.set(showId, show);
+            });
+        }
+
+        return [...showMap.values()]
+            .map((show) => ({
+                show,
+                mapped: this.mapShowToAnime(show),
+                score: Math.max(
+                    this.scoreShow(cleanQuery, show, 'sub', 1),
+                    this.scoreShow(cleanQuery, show, 'dub', 1)
+                ),
+            }))
+            .filter((entry) => entry.mapped && entry.score > 0)
+            .sort((a, b) => b.score - a.score)
+            .map((entry) => entry.mapped as AnimeSearchResult & Record<string, unknown>);
+    }
+
+    private absoluteAssetUrl(value: unknown) {
+        const raw = String(value || '').trim();
+        if (!raw) return '';
+        if (/^https?:\/\//i.test(raw)) return raw;
+        if (raw.startsWith('//')) return `https:${raw}`;
+        return `https://allanime.day/${raw.replace(/^\/+/, '')}`;
+    }
+
+    private formatDuration(seconds: unknown) {
+        const value = Number(seconds || 0);
+        if (!Number.isFinite(value) || value <= 0) return undefined;
+        const minutes = Math.max(1, Math.round(value / 60));
+        return `${minutes} min`;
+    }
+
+    private pickLatestEpisode(show: AllMangaShow, audio: TranslationType = 'sub') {
+        const infoEpisode = Number(show.lastEpisodeInfo?.[audio]?.episodeString || 0);
+        if (infoEpisode > 0) return infoEpisode;
+        return Number(show.availableEpisodes?.[audio] || 0) || undefined;
+    }
+
+    private mapShowToAnime(show: AllMangaShow): AnimeSearchResult & Record<string, unknown> | null {
+        const showId = String(show._id || '').trim();
+        const title = String(show.englishName || show.name || '').trim();
+        if (!showId || !title) return null;
+
+        const latestEpisode = this.pickLatestEpisode(show, 'sub') || this.pickLatestEpisode(show, 'dub');
+        const poster = this.absoluteAssetUrl(show.thumbnail);
+        const score = Number(show.score || show.averageScore ? (show.score || Number(show.averageScore) / 10) : 0);
+        const year = Number(show.season?.year || 0) || undefined;
+
+        return {
+            id: AllMangaScraper.toSession(showId),
+            session: AllMangaScraper.toSession(showId),
+            scraperId: AllMangaScraper.toSession(showId),
+            title,
+            jname: show.name,
+            url: `/anime/${AllMangaScraper.toSession(showId)}`,
+            poster,
+            image: poster,
+            banner: this.absoluteAssetUrl(show.banner),
+            status: show.status || 'Unknown',
+            type: show.type || 'TV',
+            episodes: Number(show.episodeCount || latestEpisode || 0) || undefined,
+            latestEpisode,
+            sub: Number(show.availableEpisodes?.sub || 0) || undefined,
+            dub: Number(show.availableEpisodes?.dub || 0) || undefined,
+            year: year ? String(year) : undefined,
+            score: Number.isFinite(score) && score > 0 ? String(score) : undefined,
+            source: 'allmanga',
+            allMangaId: showId,
+            genres: Array.isArray(show.genres) ? show.genres : [],
+            season: show.season,
+            latestTimestamp: Number(show.lastEpisodeTimestamp?.sub || show.lastEpisodeTimestamp?.dub || 0) || undefined,
+        };
+    }
+
+    private mapEpisodeInfo(showId: string, info: AllMangaEpisodeInfo, fallbackSnapshot?: string, preferredSnapshot?: string): Episode | null {
+        const episodeNumber = Number(info.episodeIdNum || 0);
+        if (!Number.isFinite(episodeNumber) || episodeNumber <= 0) return null;
+
+        const thumbnail = (Array.isArray(info.thumbnails) ? info.thumbnails : [])
+            .map((url) => this.absoluteAssetUrl(url))
+            .sort((a, b) => {
+                const aLooksDead = /\/data2?\/ep_tbs\//i.test(a) ? 1 : 0;
+                const bLooksDead = /\/data2?\/ep_tbs\//i.test(b) ? 1 : 0;
+                return aLooksDead - bLooksDead;
+            })
+            .find(Boolean);
+        const duration = this.formatDuration(info.vidInforssub?.vidDuration || info.vidInforsdub?.vidDuration);
+
+        return {
+            id: `${AllMangaScraper.toSession(showId)}?ep=${episodeNumber}`,
+            session: `${AllMangaScraper.toSession(showId)}?ep=${episodeNumber}`,
+            episodeNumber,
+            url: `/watch/${AllMangaScraper.toSession(showId)}?ep=${episodeNumber}`,
+            title: info.notes || undefined,
+            duration,
+            snapshot: preferredSnapshot || thumbnail || fallbackSnapshot,
+            isSubbed: Boolean(info.vidInforssub),
+            isDubbed: Boolean(info.vidInforsdub),
+        };
+    }
+
+    private scoreShow(query: string, show: AllMangaShow, translationType: TranslationType, episodeNumber: number) {
+        const target = this.normalizeTitle(query);
+        const title = this.normalizeTitle(show.name);
+        if (!target || !title) return 0;
+        let score = 0;
+        if (target === title) score = 120;
+        else if (target === 'onepiece' && title === '1p') score = 118;
+        else if (title.includes(target) || target.includes(title)) score = 80;
+        if (score <= 0) return 0;
+
+        const availableEpisodes = Number(show.availableEpisodes?.[translationType] || 0);
+        if (episodeNumber > 0 && availableEpisodes >= episodeNumber) score += 30;
+        if (availableEpisodes > 1) score += Math.min(25, Math.floor(availableEpisodes / 50));
+        return score;
+    }
+
+    private async resolveShow(title: string, translationType: TranslationType, episodeNumber: number) {
+        for (const candidate of this.candidateTitles(title)) {
+            const shows = await this.search(candidate, translationType);
+            const ranked = shows
+                .filter((show) => show?._id)
+                .map((show) => ({ show, score: this.scoreShow(candidate, show, translationType, episodeNumber) }))
+                .sort((a, b) => b.score - a.score);
+            const best = ranked.find((entry) => entry.score > 0)?.show || ranked[0]?.show;
+            if (best?._id) return best;
+        }
+        return null;
+    }
+
+    private async getShowById(showId: string): Promise<AllMangaShow | null> {
+        const payload = await this.gql<{ data?: { show?: AllMangaShow } }>({ _id: showId }, `query($_id:String!){show(_id:$_id){_id name englishName thumbnail banner type status score averageScore season availableEpisodes lastEpisodeInfo episodeCount genres}}`);
+        return payload?.data?.show || null;
+    }
+
+    private async getEpisodeSources(showId: string, episodeNumber: number, translationType: TranslationType) {
+        const base = Number.isInteger(episodeNumber) ? String(episodeNumber) : String(episodeNumber);
+        const candidates = base.includes('.') ? [base] : [base, `${base}.0`];
+
+        for (const episodeString of candidates) {
+            const payload = await this.episodeGql({
+                showId,
+                translationType,
+                episodeString,
+            });
+            const sources = this.parseEpisodeSources(payload);
+            if (sources.length > 0) return sources;
+        }
+        return [];
+    }
+
+    private normalizeClockUrl(path: string) {
+        if (path.startsWith('//')) return `https:${path}`;
+        if (path.startsWith('/')) return `https://allanime.day${path}`;
+        if (/^https?:\/\//i.test(path)) return path;
+        return `https://allanime.day/${path}`;
+    }
+
+    private async resolveSource(source: AllMangaSource, audio: TranslationType): Promise<StreamLink[]> {
+        const sourceUrl = String(source.sourceUrl || '');
+        if (!sourceUrl) return [];
+
+        if (/^https?:\/\//i.test(sourceUrl) && !/\/clock(?:\.json)?(?:[?#]|$)/i.test(sourceUrl)) {
+            const server = String(source.sourceName || 'allmanga');
+            const isIframe = /ok\.ru|streamsb|mp4upload|embed|\/e\//i.test(sourceUrl);
+            return [{
+                quality: '720',
+                audio,
+                provider: 'allmanga',
+                server,
+                url: sourceUrl,
+                directUrl: isIframe ? undefined : sourceUrl,
+                isHls: /\.m3u8(?:[?#]|$)/i.test(sourceUrl),
+                referer: ALLMANGA_REFERER,
+            }];
+        }
+
+        if (!sourceUrl.startsWith('--')) return [];
+
+        const decodedPath = this.decodeUrl(sourceUrl).replace('/clock', '/clock.json');
+        const fetchUrl = this.normalizeClockUrl(decodedPath);
+
+        try {
+            const sourceName = String(source.sourceName || 'allmanga');
+            if (/fast4speed\.rsvp/i.test(fetchUrl) || sourceName === 'Yt-mp4') {
+                const finalUrl = await this.followRedirects(fetchUrl);
+                if (!finalUrl) return [];
+                return [{
+                    quality: '720',
+                    audio,
+                    provider: 'allmanga',
+                    server: sourceName,
+                    url: finalUrl,
+                    directUrl: finalUrl,
+                    isHls: /\.m3u8(?:[?#]|$)/i.test(finalUrl),
+                    referer: /(^|\.)googlevideo\.com$/i.test(new URL(finalUrl).hostname) ? 'https://www.youtube.com' : ALLMANGA_REFERER,
+                }];
+            }
+
+            const response = await axios.get<{ links?: ClockLink[] }>(fetchUrl, {
+                timeout: 12_000,
+                headers: requestHeaders,
+                maxRedirects: 5,
+            });
+            const links = Array.isArray(response.data?.links) ? response.data.links : [];
+            return links
+                .filter((link) => link?.link)
+                .sort((a, b) => (parseInt(String(b.resolutionStr || ''), 10) || 0) - (parseInt(String(a.resolutionStr || ''), 10) || 0))
+                .map((link) => {
+                    const url = String(link.link || '');
+                    return {
+                        quality: String(link.resolutionStr || '').replace(/[^\d]/g, '') || '720',
+                        audio,
+                        provider: 'allmanga',
+                        server: sourceName,
+                        url,
+                        directUrl: url,
+                        isHls: /\.m3u8(?:[?#]|$)/i.test(url),
+                        referer: ALLMANGA_REFERER,
+                    };
+                });
+        } catch {
+            return [];
+        }
+    }
+
+    private async followRedirects(url: string, maxHops = 10): Promise<string | null> {
+        let current = url;
+        for (let hop = 0; hop < maxHops; hop += 1) {
+            try {
+                const response = await axios.get(current, {
+                    timeout: 12_000,
+                    headers: requestHeaders,
+                    maxRedirects: 0,
+                    responseType: 'stream',
+                    validateStatus: (status) => status >= 200 && status < 400,
+                });
+                response.data?.destroy?.();
+                const location = response.headers?.location;
+                if (response.status >= 300 && response.status < 400 && location) {
+                    current = new URL(location, current).href;
+                    continue;
+                }
+                return current;
+            } catch (error: any) {
+                const status = Number(error?.response?.status || 0);
+                const location = error?.response?.headers?.location;
+                error?.response?.data?.destroy?.();
+                if (status >= 300 && status < 400 && location) {
+                    current = new URL(location, current).href;
+                    continue;
+                }
+                return null;
+            }
+        }
+        return current;
+    }
+
+    async getLinksForEpisodeNumber(title: string, episodeNumber: number): Promise<StreamLink[]> {
+        const cleanTitle = String(title || '').trim();
+        if (!cleanTitle || !Number.isFinite(episodeNumber) || episodeNumber <= 0) return [];
+
+        const allLinks: StreamLink[] = [];
+        for (const audio of ['sub', 'dub'] as const) {
+            const show = await this.resolveShow(cleanTitle, audio, episodeNumber);
+            if (!show?._id) continue;
+
+            const sources = await this.getEpisodeSources(show._id, episodeNumber, audio);
+            const orderedSources = sources
+                .filter((source) => source?.sourceUrl)
+                .sort((a, b) => {
+                    const aDirect = /^https?:\/\//i.test(String(a.sourceUrl || '')) ? 1 : 0;
+                    const bDirect = /^https?:\/\//i.test(String(b.sourceUrl || '')) ? 1 : 0;
+                    return (bDirect - aDirect) || (Number(b.priority || 0) - Number(a.priority || 0));
+                });
+
+            for (const source of orderedSources) {
+                const links = await this.resolveSource(source, audio);
+                allLinks.push(...links);
+                if (links.some((link) => !link.isHls)) break;
+            }
+        }
+
+        const seen = new Set<string>();
+        return allLinks.filter((link) => {
+            const key = `${link.audio}:${link.quality}:${link.url}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+    }
+
+    async getLinksForShowId(showId: string, episodeNumber: number): Promise<StreamLink[]> {
+        if (!showId || !Number.isFinite(episodeNumber) || episodeNumber <= 0) return [];
+
+        const allLinks: StreamLink[] = [];
+        for (const audio of ['sub', 'dub'] as const) {
+            const sources = await this.getEpisodeSources(showId, episodeNumber, audio);
+            const orderedSources = sources
+                .filter((source) => source?.sourceUrl)
+                .sort((a, b) => {
+                    const aDirect = /^https?:\/\//i.test(String(a.sourceUrl || '')) ? 1 : 0;
+                    const bDirect = /^https?:\/\//i.test(String(b.sourceUrl || '')) ? 1 : 0;
+                    return (bDirect - aDirect) || (Number(b.priority || 0) - Number(a.priority || 0));
+                });
+
+            for (const source of orderedSources) {
+                const links = await this.resolveSource(source, audio);
+                allLinks.push(...links);
+                if (links.some((link) => !link.isHls)) break;
+            }
+        }
+
+        const seen = new Set<string>();
+        return allLinks.filter((link) => {
+            const key = `${link.audio}:${link.quality}:${link.url}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+    }
+
+    async getLatestUpdates(page: number = 1, limit: number = 18) {
+        const safePage = Math.max(1, Math.floor(Number(page) || 1));
+        const safeLimit = Math.max(1, Math.floor(Number(limit) || 18));
+        const payload = await this.gql<{ data?: { shows?: { edges?: AllMangaShow[]; pageInfo?: any } } }>({
+            search: {
+                sortBy: 'Latest_Update',
+                sortDirection: 'DSC',
+                allowAdult: true,
+                allowUnknown: false,
+            },
+            limit: safeLimit,
+            page: safePage,
+            translationType: 'sub',
+            countryOrigin: 'ALL',
+        }, LATEST_UPDATES_GQL);
+
+        const edges = Array.isArray(payload?.data?.shows?.edges) ? payload.data.shows.edges : [];
+        const pageInfo = payload?.data?.shows?.pageInfo || {};
+        const data = edges.map((show) => this.mapShowToAnime(show)).filter(Boolean);
+
+        return {
+            data,
+            pagination: {
+                current_page: Number(pageInfo.page || safePage),
+                last_visible_page: Number(pageInfo.totalPages || safePage),
+                has_next_page: Boolean(pageInfo.hasNextPage),
+            },
+        };
+    }
+
+    async getAnimeInfo(sessionOrShowId: string) {
+        const showId = AllMangaScraper.fromSession(sessionOrShowId) || String(sessionOrShowId || '').trim();
+        if (!showId) return null;
+        const show = await this.getShowById(showId);
+        return show ? this.mapShowToAnime(show) : null;
+    }
+
+    async getEpisodes(sessionOrShowId: string): Promise<{ episodes: Episode[]; lastPage: number }> {
+        const showId = AllMangaScraper.fromSession(sessionOrShowId) || String(sessionOrShowId || '').trim();
+        if (!showId) return { episodes: [], lastPage: 1 };
+
+        const show = await this.getShowById(showId);
+        const fallbackSnapshot = this.absoluteAssetUrl(show?.banner) || this.absoluteAssetUrl(show?.thumbnail);
+        const total = Math.max(
+            Number(show?.availableEpisodes?.sub || 0),
+            Number(show?.availableEpisodes?.dub || 0),
+            Number(show?.episodeCount || 0),
+            1
+        );
+
+        const infos: AllMangaEpisodeInfo[] = [];
+        const chunkSize = 100;
+        for (let start = 1; start <= total; start += chunkSize) {
+            const end = Math.min(total, start + chunkSize - 1);
+            const payload = await this.gql<{ data?: { episodeInfos?: AllMangaEpisodeInfo[] } }>({
+                showId,
+                episodeNumStart: start,
+                episodeNumEnd: end,
+            }, EPISODE_INFOS_GQL);
+            const chunk = Array.isArray(payload?.data?.episodeInfos) ? payload.data.episodeInfos : [];
+            infos.push(...chunk);
+        }
+
+        const animetsuThumbnails = await this.getAnimetsuEpisodeThumbnails(show);
+        const episodes = infos
+            .map((info) => this.mapEpisodeInfo(showId, info, fallbackSnapshot, animetsuThumbnails.get(Number(info.episodeIdNum || 0))))
+            .filter(Boolean) as Episode[];
+
+        return {
+            episodes: episodes.sort((a, b) => Number(a.episodeNumber) - Number(b.episodeNumber)),
+            lastPage: 1,
+        };
+    }
+}

@@ -17,8 +17,8 @@ let latestUpdatesMemCache: { latestEpisodes: any[] } | null = null;
 const newReleasesMemCache = new Map<string, { data: any[]; pagination: any }>();
 const SPOTLIGHT_REDIS_KEY = 'reanime:spotlight:enriched:v2';
 const LATEST_HOME_LIMIT = 10;
-const LATEST_REDIS_KEY = 'animepahe:latest-updates:cards:v3';
-const NEW_RELEASES_REDIS_PREFIX = 'animepahe:new-releases:cards:v2';
+const LATEST_REDIS_KEY = 'allmanga:latest-updates:cards:v1';
+const NEW_RELEASES_REDIS_PREFIX = 'allmanga:new-releases:cards:v1';
 const CACHE_TTL_SECONDS = 300; // 5 min fresh window
 
 const buildAnimeKaiFallbackItems = (items: any[]) => {
@@ -174,7 +174,7 @@ const getStaleLatestUpdates = async (): Promise<{ latestEpisodes: any[] }> => {
 };
 
 const refreshLatestUpdatesCache = async (): Promise<{ latestEpisodes: any[] }> => {
-    const latest = await scraperService.getAnimePaheLatestUpdates(1, LATEST_HOME_LIMIT);
+    const latest = await scraperService.getAllMangaLatestUpdates(1, LATEST_HOME_LIMIT);
     const rawLatestEpisodes: any[] = Array.isArray(latest?.data) ? latest.data : [];
     const latestEpisodes = await enrichAnimeKaiItemsWithFallback(rawLatestEpisodes, 2500);
     const payload = { latestEpisodes };
@@ -469,7 +469,20 @@ router.get('/search/animepahe', async (req, res) => {
         if (!query) {
             return res.status(400).json({ error: 'Query parameter q is required' });
         }
-        const result = await scraperService.searchAnimePahe(query);
+        res.set('Cache-Control', 'no-store');
+        res.json([]);
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+router.get('/search/allmanga', async (req, res) => {
+    try {
+        const query = req.query.q as string;
+        if (!query) {
+            return res.status(400).json({ error: 'Query parameter q is required' });
+        }
+        const result = await scraperService.searchAllManga(query);
         res.set('Cache-Control', 'public, max-age=120, s-maxage=300, stale-while-revalidate=600');
         res.json(result);
     } catch (error: any) {
@@ -515,7 +528,7 @@ router.get('/animekai/latest-updates', async (_req, res) => {
         const payload = await refreshLatestUpdatesCache();
         res.json(payload);
     } catch (error: any) {
-        console.error('AnimeKai latest-updates scrape failed, serving stale:', error?.message || error);
+        console.error('AllManga latest-updates scrape failed, serving stale:', error?.message || error);
         const stale = await getStaleLatestUpdates();
         res.json(stale);
     }
@@ -527,10 +540,10 @@ router.get('/animepahe/latest-releases', async (req, res) => {
     res.set('Cache-Control', 'public, max-age=60, s-maxage=120, stale-while-revalidate=300');
 
     try {
-        const result = await scraperService.getAnimePaheLatestReleases(page);
+        const result = await scraperService.getAllMangaLatestUpdates(page);
         res.json(result);
     } catch (error: any) {
-        console.error(`AnimePahe latest releases failed (page=${page}):`, error?.message || error);
+        console.error(`AllManga latest releases failed (page=${page}):`, error?.message || error);
         const safePage = Math.max(1, page);
         res.status(503).json({
             data: [],
@@ -550,7 +563,7 @@ router.get('/recently-updated', async (req, res) => {
 
     res.set('Cache-Control', 'public, max-age=60, s-maxage=120, stale-while-revalidate=300');
     try {
-        const result = await scraperService.getAnimePaheLatestUpdates(page, limit);
+        const result = await scraperService.getAllMangaLatestUpdates(page, limit);
         const rawItems: any[] = Array.isArray(result?.data) ? result.data : [];
         const pagination = result?.pagination;
 
@@ -564,7 +577,7 @@ router.get('/recently-updated', async (req, res) => {
 
         res.json(payload);
     } catch (error: any) {
-        console.error(`AnimePahe recently-updated (page=${page}) failed, serving stale:`, error?.message || error);
+        console.error(`AllManga recently-updated (page=${page}) failed, serving stale:`, error?.message || error);
         const stale = await getStaleNewReleases(cacheKey);
         res.json(stale || {
             data: [],
@@ -581,7 +594,7 @@ router.get('/animekai/new-releases', async (req, res) => {
 
     res.set('Cache-Control', 'public, max-age=60, s-maxage=120, stale-while-revalidate=300');
     try {
-        const result = await scraperService.getAnimePaheLatestUpdates(page, limit);
+        const result = await scraperService.getAllMangaLatestUpdates(page, limit);
         const rawItems: any[] = Array.isArray(result?.data) ? result.data : [];
         const pagination = result?.pagination;
 
@@ -595,7 +608,7 @@ router.get('/animekai/new-releases', async (req, res) => {
 
         res.json(payload);
     } catch (error: any) {
-        console.error(`AnimeKai new-releases (page=${page}) scrape failed, serving stale:`, error?.message || error);
+        console.error(`AllManga new-releases (page=${page}) scrape failed, serving stale:`, error?.message || error);
         const stale = await getStaleNewReleases(cacheKey);
         res.json(stale || {
             data: [],
@@ -604,39 +617,19 @@ router.get('/animekai/new-releases', async (req, res) => {
     }
 });
 
-router.get('/animekai/az-list/:letter', async (req, res) => {
-    try {
-        const letter = String(req.params.letter || 'All');
-        const page = req.query.page ? parseInt(req.query.page as string, 10) : 1;
-        const result = await reAnimeScraper.getAZList(letter, page);
-        res.set('Cache-Control', 'public, max-age=60, s-maxage=120, stale-while-revalidate=300');
-        res.json(result);
-    } catch (error: any) {
-        res.status(500).json({ error: error.message });
-    }
+router.get('/animekai/az-list/:letter', async (_req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.json({ data: [], pagination: { current_page: 1, last_visible_page: 1, has_next_page: false } });
 });
 
 router.get('/animekai/genres', async (_req, res) => {
-    try {
-        const genres = await reAnimeScraper.getGenres();
-        res.set('Cache-Control', 'public, max-age=300, s-maxage=600, stale-while-revalidate=1800');
-        res.json({ genres });
-    } catch (error: any) {
-        res.status(500).json({ error: error.message });
-    }
+    res.set('Cache-Control', 'no-store');
+    res.json({ genres: [] });
 });
 
-router.get('/animekai/genre/:name', async (req, res) => {
-    try {
-        const genre = String(req.params.name || '').trim();
-        const page = req.query.page ? parseInt(req.query.page as string, 10) : 1;
-        const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 24;
-        const result = await reAnimeScraper.getGenreAnime(genre, page, limit);
-        res.set('Cache-Control', 'public, max-age=60, s-maxage=120, stale-while-revalidate=300');
-        res.json(result);
-    } catch (error: any) {
-        res.status(500).json({ error: error.message });
-    }
+router.get('/animekai/genre/:name', async (_req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.json({ data: [], pagination: { current_page: 1, last_visible_page: 1, has_next_page: false } });
 });
 
 router.get('/animekai/top-trending', async (req, res) => {
@@ -684,19 +677,31 @@ router.get('/streams', async (req, res) => {
         if (!epSession || !animeSession) {
             return res.status(400).json({ error: 'anime_session and ep_session are required' });
         }
-        const result = await scraperService.getStreams(animeSession, epSession);
+        const provider = String(req.query.provider || 'auto').trim().toLowerCase();
+        const title = String(req.query.title || '').trim();
+        const episodeNumber = Number(req.query.ep_number || 0) || undefined;
+        const result = await scraperService.getStreams(animeSession, epSession, { provider, title, episodeNumber });
         const hostBase = getPublicBase(req);
         const normalized = Array.isArray(result)
             ? result.map((item: any) => {
                 if (!item?.url || typeof item.url !== 'string') return item;
 
                 const next = { ...item };
+                const providerName = String(next.provider || '').trim().toLowerCase();
                 const server = String(next.server || '').trim().toLowerCase();
                 const isKwikUrl = /^https?:\/\/([^/]+\.)?kwik\./i.test(next.url);
                 if (server === 'kwik' || isKwikUrl) {
                     next.url = buildKwikEmbedProxyUrl(req, next.url);
                     next.isHls = false;
                     delete next.directUrl;
+                    return next;
+                }
+
+                if (providerName === 'allmanga' && /^https?:\/\//i.test(next.url)) {
+                    next.url = buildScraperProxyUrl(req, next.url, next.referer || 'https://allmanga.to', true);
+                    if (next.directUrl && /^https?:\/\//i.test(next.directUrl)) {
+                        next.directUrl = buildScraperProxyUrl(req, next.directUrl, next.referer || 'https://allmanga.to', true);
+                    }
                     return next;
                 }
 
@@ -741,14 +746,15 @@ router.get('/playable-stream', async (req, res) => {
         }
 
         const streamReferer = (() => {
+            const referer = String(result.stream?.referer || '').trim();
             const streamUrl = String(result.stream?.url || '').trim();
             try {
                 const parsed = new URL(streamUrl);
                 if (/^([^/]+\.)?kwik\./i.test(parsed.host)) return streamUrl;
             } catch {
-                // Fall back to AnimePahe below.
+                // Fall back to the generic media proxy below.
             }
-            return 'https://animepahe.pw/';
+            return referer || '';
         })();
 
         const url = direct
@@ -936,6 +942,12 @@ router.get('/proxy', async (req, res) => {
     }
 
     try {
+        const streamToBuffer = (stream: any) => new Promise<Buffer>((resolve, reject) => {
+            const chunks: Buffer[] = [];
+            stream.on('data', (chunk: Buffer | string) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
+            stream.on('end', () => resolve(Buffer.concat(chunks)));
+            stream.on('error', reject);
+        });
         const target = new URL(targetUrl);
         const cookieKey = target.origin;
         const storedCookie = sanitizeCookie(upstreamCookieJar.get(cookieKey) || '');
@@ -954,7 +966,7 @@ router.get('/proxy', async (req, res) => {
             for (const includeOrigin of [false, true]) {
                 try {
                     response = await axios.get(targetUrl, {
-                        responseType: 'arraybuffer',
+                        responseType: 'stream',
                         headers: {
                             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
                             Referer: referer,
@@ -1007,15 +1019,18 @@ router.get('/proxy', async (req, res) => {
             targetUrl.includes('.m3u8');
 
         if (isSubtitle) {
-            const text = Buffer.from(response.data).toString('utf-8');
+            const text = (await streamToBuffer(response.data)).toString('utf-8');
             return res.send(text);
         }
 
         if (!isM3u8) {
-            return res.send(response.data);
+            req.on('close', () => {
+                response.data?.destroy?.();
+            });
+            return response.data.pipe(res);
         }
 
-        const body = Buffer.from(response.data).toString('utf-8');
+        const body = (await streamToBuffer(response.data)).toString('utf-8');
         const urlObj = new URL(targetUrl);
         const basePath = targetUrl.substring(0, targetUrl.lastIndexOf('/') + 1);
         // Preserve the original upstream referer across nested HLS playlists.

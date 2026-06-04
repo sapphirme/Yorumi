@@ -17,9 +17,13 @@ export const getMappedQuality = (q: string): string => {
  */
 export const getStreamData = async (
     episode: Episode,
-    scraperSession: string
+    scraperSession: string,
+    options?: { provider?: string; title?: string }
 ): Promise<StreamLink[]> => {
-    const data = await animeService.getStreams(scraperSession, episode.session);
+    const data = await animeService.getStreams(scraperSession, episode.session, {
+        ...options,
+        episodeNumber: Number(episode.episodeNumber || 0) || undefined,
+    });
 
     if (data && data.length > 0) {
         const scoreStream = (stream: StreamLink) => {
@@ -40,7 +44,8 @@ export const getStreamData = async (
         sortedData.forEach((s: StreamLink) => {
             const mapped = getMappedQuality(s.quality);
             const audio = String(s.audio || 'sub').toLowerCase();
-            const key = `${audio}:${mapped}`;
+            const source = String(s.server || s.provider || s.url || 'source').toLowerCase();
+            const key = `${audio}:${source}:${mapped}`;
             if (!qualityMap.has(key)) {
                 qualityMap.set(key, s);
             }

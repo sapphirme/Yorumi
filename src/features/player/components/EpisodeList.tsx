@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { LayoutList, LayoutGrid, Search, ArrowUpDown } from 'lucide-react';
 import type { Anime, Episode } from '../../../types/anime';
+import { getDisplayImageUrl } from '../../../utils/image';
 
 interface EpisodeListProps {
     episodes: Episode[];
@@ -30,7 +31,13 @@ export default function EpisodeList({
         .filter(num => num > parseFloat(currentEpNumber))
         .sort((a, b) => a - b)[0];
 
-    const getPreviewImage = (ep: Episode) => ep.snapshot || '';
+    const fallbackPreviewImage = getDisplayImageUrl(
+        anime?.anilist_banner_image ||
+        anime?.images?.jpg?.large_image_url ||
+        anime?.images?.jpg?.image_url ||
+        ''
+    );
+    const getPreviewImage = (ep: Episode) => getDisplayImageUrl(ep.snapshot || '') || fallbackPreviewImage;
 
     // Filter + sort episodes
     const filteredEpisodes = episodes
@@ -90,7 +97,7 @@ export default function EpisodeList({
     }, []);
 
     return (
-        <aside className="w-full xl:w-[420px] shrink-0 flex flex-col h-[480px] xl:h-full overflow-hidden order-2 rounded-none shadow-none bg-[#0b0c0f] md:rounded-2xl md:shadow-2xl md:shadow-black/80">
+        <aside className="w-full xl:w-[420px] 2xl:w-[436px] shrink-0 flex flex-col h-[480px] xl:h-[min(calc(100dvh-104px),calc((100vw-476px)/1.777))] xl:min-h-[520px] xl:max-h-[760px] overflow-hidden order-2 rounded-none shadow-none bg-[#0b0c0f] md:rounded-2xl md:shadow-2xl md:shadow-black/80">
             <div className="px-5 pt-5 pb-4 flex flex-col gap-4">
                 <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex flex-col pt-1">
@@ -221,6 +228,10 @@ export default function EpisodeList({
                                                         className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                                                         loading="lazy"
                                                         onError={(event) => {
+                                                            if (fallbackPreviewImage && event.currentTarget.src !== fallbackPreviewImage) {
+                                                                event.currentTarget.src = fallbackPreviewImage;
+                                                                return;
+                                                            }
                                                             event.currentTarget.style.display = 'none';
                                                         }}
                                                     />

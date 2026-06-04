@@ -15,9 +15,12 @@ export const isAnimePaheSessionId = (value: unknown): boolean =>
 export const isGenericScraperSessionId = (value: unknown): boolean =>
     /^[a-z0-9-]+$/i.test(String(value || '').trim());
 
+export const isProviderScraperSessionId = (value: unknown): boolean =>
+    /^consumet:[a-z0-9-]+:.+/i.test(String(value || '').trim());
+
 export const isSupportedScraperSessionId = (value: unknown): boolean => {
     const normalized = String(value || '').trim();
-    return isAnimePaheSessionId(normalized) || isGenericScraperSessionId(normalized);
+    return isAnimePaheSessionId(normalized) || isGenericScraperSessionId(normalized) || isProviderScraperSessionId(normalized);
 };
 
 export const getDirectScraperRouteId = (value: unknown): string => {

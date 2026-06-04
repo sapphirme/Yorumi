@@ -28,6 +28,40 @@ type TmdbSearchResult = {
     popularity?: number;
 };
 
+type TmdbMediaType = 'tv' | 'movie';
+
+type TmdbWatchProvider = {
+    provider_id: number;
+    provider_name: string;
+    logo_path?: string | null;
+    display_priority?: number;
+};
+
+type TmdbWatchProviderRegion = {
+    link?: string;
+    flatrate?: TmdbWatchProvider[];
+    free?: TmdbWatchProvider[];
+    ads?: TmdbWatchProvider[];
+    rent?: TmdbWatchProvider[];
+    buy?: TmdbWatchProvider[];
+};
+
+export type WatchProviderOption = {
+    id: number;
+    name: string;
+    logoUrl?: string;
+    type: 'flatrate' | 'free' | 'ads' | 'rent' | 'buy';
+    displayPriority: number;
+};
+
+export type WatchProviderResult = {
+    tmdbId: number;
+    mediaType: TmdbMediaType;
+    country: string;
+    link?: string;
+    providers: WatchProviderOption[];
+};
+
 const normalizeTitle = (value: unknown) =>
     String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
@@ -37,7 +71,7 @@ const getYear = (value: unknown) => {
 };
 
 class TmdbService {
-    private memoryCache = new Map<string, { expiresAt: number; value: string | null }>();
+    private memoryCache = new Map<string, { expiresAt: number; value: unknown }>();
 
     private isConfigured() {
         return Boolean(TMDB_ACCESS_TOKEN || TMDB_API_KEY);
@@ -88,33 +122,25 @@ class TmdbService {
         return score;
     }
 
-    async resolveBackdrop(input: TmdbSearchInput): Promise<string | undefined> {
+    private getMediaTypes(format?: string): TmdbMediaType[] {
+        return String(format || '').toUpperCase() === 'MOVIE'
+            ? ['movie', 'tv']
+            : ['tv', 'movie'];
+    }
+
+    private async findBestMatch(input: TmdbSearchInput) {
         const titles = [
             ...(Array.isArray(input.titles) ? input.titles : []),
             input.title,
         ].map((title) => String(title || '').trim()).filter(Boolean);
         const titleTokens = [...new Set(titles.map(normalizeTitle).filter(Boolean))];
-        if (titleTokens.length === 0 || !this.isConfigured()) return undefined;
+        if (titleTokens.length === 0 || !this.isConfigured()) return null;
 
         const year = getYear(input.year);
-        const cacheKey = `tmdb:backdrop:v1:${titleTokens.join('|')}:${year}:${String(input.format || '').toUpperCase()}`;
-        const now = Date.now();
-        const mem = this.memoryCache.get(cacheKey);
-        if (mem && mem.expiresAt > now) return mem.value || undefined;
-
-        const redisCached = await cacheGet<string | null>(cacheKey).catch(() => null);
-        if (redisCached !== null) {
-            this.memoryCache.set(cacheKey, { expiresAt: now + 24 * 60 * 60 * 1000, value: redisCached });
-            return redisCached || undefined;
-        }
-
-        const mediaTypes = String(input.format || '').toUpperCase() === 'MOVIE'
-            ? ['movie', 'tv']
-            : ['tv', 'movie'];
-        const candidates: TmdbSearchResult[] = [];
+        const candidates: Array<{ candidate: TmdbSearchResult; mediaType: TmdbMediaType }> = [];
 
         for (const title of titles.slice(0, 3)) {
-            for (const mediaType of mediaTypes) {
+            for (const mediaType of this.getMediaTypes(input.format)) {
                 const payload = await this.get<{ results?: TmdbSearchResult[] }>(`/search/${mediaType}`, {
                     query: title,
                     include_adult: false,
@@ -127,24 +153,115 @@ class TmdbService {
                 }).catch(() => null);
 
                 if (Array.isArray(payload?.results)) {
-                    candidates.push(...payload.results);
+                    candidates.push(...payload.results.map((candidate) => ({ candidate, mediaType })));
                 }
             }
         }
 
-        const best = candidates
-            .filter((candidate) => candidate.backdrop_path || candidate.poster_path)
-            .map((candidate) => ({
-                candidate,
-                score: this.scoreCandidate(candidate, titleTokens, year),
+        return candidates
+            .map((entry) => ({
+                ...entry,
+                score: this.scoreCandidate(entry.candidate, titleTokens, year),
             }))
-            .sort((a, b) => b.score - a.score)[0]?.candidate;
+            .sort((a, b) => b.score - a.score)[0] || null;
+    }
+
+    async resolveBackdrop(input: TmdbSearchInput): Promise<string | undefined> {
+        const titles = [
+            ...(Array.isArray(input.titles) ? input.titles : []),
+            input.title,
+        ].map((title) => String(title || '').trim()).filter(Boolean);
+        const titleTokens = [...new Set(titles.map(normalizeTitle).filter(Boolean))];
+        if (titleTokens.length === 0 || !this.isConfigured()) return undefined;
+
+        const year = getYear(input.year);
+        const cacheKey = `tmdb:backdrop:v1:${titleTokens.join('|')}:${year}:${String(input.format || '').toUpperCase()}`;
+        const now = Date.now();
+        const mem = this.memoryCache.get(cacheKey);
+        if (mem && mem.expiresAt > now) return (mem.value as string | null) || undefined;
+
+        const redisCached = await cacheGet<string | null>(cacheKey).catch(() => null);
+        if (redisCached !== null) {
+            this.memoryCache.set(cacheKey, { expiresAt: now + 24 * 60 * 60 * 1000, value: redisCached });
+            return redisCached || undefined;
+        }
+
+        const best = (await this.findBestMatch(input))?.candidate;
         const resolved = this.buildImageUrl(best?.backdrop_path || best?.poster_path) || null;
 
         this.memoryCache.set(cacheKey, { expiresAt: now + 24 * 60 * 60 * 1000, value: resolved });
         cacheSet(cacheKey, resolved, 24 * 60 * 60).catch(() => undefined);
 
         return resolved || undefined;
+    }
+
+    async resolveWatchProviders(input: TmdbSearchInput & { country?: string }): Promise<WatchProviderResult | null> {
+        const titles = [
+            ...(Array.isArray(input.titles) ? input.titles : []),
+            input.title,
+        ].map((title) => String(title || '').trim()).filter(Boolean);
+        const titleTokens = [...new Set(titles.map(normalizeTitle).filter(Boolean))];
+        if (titleTokens.length === 0 || !this.isConfigured()) return null;
+
+        const country = String(input.country || 'US').trim().toUpperCase().replace(/[^A-Z]/g, '').slice(0, 2) || 'US';
+        const cacheKey = `tmdb:watch-providers:v1:${titleTokens.join('|')}:${getYear(input.year)}:${String(input.format || '').toUpperCase()}:${country}`;
+        const now = Date.now();
+        const mem = this.memoryCache.get(cacheKey);
+        if (mem && mem.expiresAt > now) return (mem.value as WatchProviderResult | null) || null;
+
+        const redisCached = await cacheGet<WatchProviderResult | null>(cacheKey).catch(() => null);
+        if (redisCached !== null) {
+            this.memoryCache.set(cacheKey, { expiresAt: now + 24 * 60 * 60 * 1000, value: redisCached });
+            return redisCached || null;
+        }
+
+        const match = await this.findBestMatch(input);
+        if (!match?.candidate?.id) {
+            this.memoryCache.set(cacheKey, { expiresAt: now + 6 * 60 * 60 * 1000, value: null });
+            cacheSet(cacheKey, null, 6 * 60 * 60).catch(() => undefined);
+            return null;
+        }
+
+        const payload = await this.get<{ results?: Record<string, TmdbWatchProviderRegion> }>(
+            `/${match.mediaType}/${match.candidate.id}/watch/providers`,
+            {}
+        ).catch(() => null);
+        const region = payload?.results?.[country];
+        if (!region) {
+            this.memoryCache.set(cacheKey, { expiresAt: now + 6 * 60 * 60 * 1000, value: null });
+            cacheSet(cacheKey, null, 6 * 60 * 60).catch(() => undefined);
+            return null;
+        }
+
+        const seen = new Set<string>();
+        const providerTypes: Array<WatchProviderOption['type']> = ['flatrate', 'free', 'ads', 'rent', 'buy'];
+        const providers = providerTypes.flatMap((type) =>
+            (region[type] || []).map((provider) => ({
+                id: provider.provider_id,
+                name: provider.provider_name,
+                logoUrl: this.buildImageUrl(provider.logo_path, 'w92') || undefined,
+                type,
+                displayPriority: Number(provider.display_priority || 0),
+            }))
+        ).filter((provider) => {
+            const key = `${provider.id}:${provider.type}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return Boolean(provider.id && provider.name);
+        }).sort((a, b) => a.displayPriority - b.displayPriority);
+
+        const resolved: WatchProviderResult = {
+            tmdbId: match.candidate.id,
+            mediaType: match.mediaType,
+            country,
+            link: region.link,
+            providers,
+        };
+
+        this.memoryCache.set(cacheKey, { expiresAt: now + 24 * 60 * 60 * 1000, value: resolved });
+        cacheSet(cacheKey, resolved, 24 * 60 * 60).catch(() => undefined);
+
+        return resolved;
     }
 }
 

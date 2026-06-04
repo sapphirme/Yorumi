@@ -25,7 +25,7 @@ export function usePlayer(animeId: string | undefined, animeSlugTitle?: string) 
     } = animeHook;
 
     // 2. Stream Data
-    const streamsHook = useStreams(scraperSession);
+    const streamsHook = useStreams(scraperSession, selectedAnime?.title || animeSlugTitle);
     const {
         currentStream,
         streamLoading,
@@ -34,12 +34,15 @@ export function usePlayer(animeId: string | undefined, animeSlugTitle?: string) 
         hasResolvedStreams,
         isAutoQuality,
         selectedAudio,
+        selectedServer,
+        serverOptions,
         availableAudios,
         selectedStreamIndex,
         showQualityMenu,
         setShowQualityMenu,
         handleQualityChange: applyQualityChange,
         setAutoQuality: applyAutoQuality,
+        handleServerChange: applyServerChange,
         setSelectedAudio: applySelectedAudio,
         tryNextStream,
         clearStreams,
@@ -466,22 +469,36 @@ export function usePlayer(animeId: string | undefined, animeSlugTitle?: string) 
         applyAutoQuality();
     };
 
+    const setSelectedServer = (server: typeof selectedServer) => {
+        autoLoadAttemptKeyRef.current = '';
+        resetEpisodePlaybackState(true);
+        applyServerChange(server);
+    };
+
     const setSelectedAudio = (audio: 'sub' | 'dub') => {
         autoLoadAttemptKeyRef.current = '';
         resetEpisodePlaybackState(true);
         applySelectedAudio(audio);
     };
 
+    const sortedEpisodes = [...episodes].sort(
+        (a, b) => parseEpisodeNumber(a.episodeNumber) - parseEpisodeNumber(b.episodeNumber)
+    );
+    const currentEpisodeIndex = sortedEpisodes.findIndex((episode) => (
+        String(episode.session || '') === String(currentEpisode?.session || '')
+        || String(episode.episodeNumber) === String(epNumParam)
+    ));
+    const prevEpisode = currentEpisodeIndex > 0 ? sortedEpisodes[currentEpisodeIndex - 1] : null;
+    const nextEpisode = currentEpisodeIndex >= 0 && currentEpisodeIndex < sortedEpisodes.length - 1
+        ? sortedEpisodes[currentEpisodeIndex + 1]
+        : null;
+
     const handlePrevEp = () => {
-        const targetNum = parseInt(epNumParam) - 1;
-        const target = episodes.find(e => parseInt(e.episodeNumber) === targetNum);
-        if (target) handleEpisodeClick(target);
+        if (prevEpisode) handleEpisodeClick(prevEpisode);
     };
 
     const handleNextEp = () => {
-        const targetNum = parseInt(epNumParam) + 1;
-        const target = episodes.find(e => parseInt(e.episodeNumber) === targetNum);
-        if (target) handleEpisodeClick(target);
+        if (nextEpisode) handleEpisodeClick(nextEpisode);
     };
 
     // Derived State
@@ -530,9 +547,13 @@ export function usePlayer(animeId: string | undefined, animeSlugTitle?: string) 
         isExpanded,
         isAutoQuality,
         selectedAudio,
+        selectedServer,
+        serverOptions,
         availableAudios,
         showQualityMenu,
         selectedStreamIndex,
+        canPrevEpisode: Boolean(prevEpisode),
+        canNextEpisode: Boolean(nextEpisode),
 
         // Actions
         toggleExpand,
@@ -544,6 +565,7 @@ export function usePlayer(animeId: string | undefined, animeSlugTitle?: string) 
         setShowQualityMenu,
         handleQualityChange,
         setAutoQuality,
+        setSelectedServer,
         setSelectedAudio,
         handlePlaybackProgress,
         handleStreamError,

@@ -266,9 +266,8 @@ export default function HomePage() {
                 pagination={anime.viewAllPagination}
                 onPageChange={anime.changeViewAllPage}
                 onBack={anime.closeViewAll}
-                onAnimeClick={(item) => handleWatchClick(item)}
+                onAnimeClick={(item) => handleAnimeClick(item, 'Latest Updates')}
                 onAnimeHover={handleAnimeHover}
-                variant="landscape"
             />
         );
     }

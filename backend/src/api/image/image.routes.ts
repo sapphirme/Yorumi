@@ -17,7 +17,7 @@ router.get('/proxy', async (req, res) => {
         const decodedUrl = decodeURIComponent(url);
         
         // Anti-abuse check: only allow images from known domains or relative to scraper BASE_URLs
-        const allowedDomains = ['mangakatana.com', 's4.anilist.co', 'media.kitsu.io'];
+        const allowedDomains = ['mangakatana.com', 's4.anilist.co', 'media.kitsu.io', 'allanime.day', 'allmanga.to'];
         const urlObj = new URL(decodedUrl);
         
         if (!allowedDomains.includes(urlObj.hostname) && !urlObj.hostname.endsWith('mangakatana.com')) {
@@ -29,7 +29,8 @@ router.get('/proxy', async (req, res) => {
             responseType: 'arraybuffer',
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-                'Referer': urlObj.origin, // Use the origin of the image as Referer
+                'Referer': urlObj.hostname.includes('allanime') ? 'https://allmanga.to/' : urlObj.origin,
+                'Origin': urlObj.hostname.includes('allanime') ? 'https://allmanga.to' : urlObj.origin,
             },
             timeout: 10000,
         });

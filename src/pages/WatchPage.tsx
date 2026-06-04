@@ -6,7 +6,6 @@ import { usePlayer } from '../features/player/hooks/usePlayer';
 // Feature Components
 import EpisodeList from '../features/player/components/EpisodeList';
 import VideoPlayer from '../features/player/components/VideoPlayer';
-import PlayerControls from '../features/player/components/PlayerControls';
 import { useTitleLanguage } from '../context/TitleLanguageContext';
 import { getDisplayTitle } from '../utils/titleLanguage';
 import { getAnimeDetailsRouteId } from '../utils/animeNavigation';
@@ -67,18 +66,19 @@ export default function WatchPage() {
         isExpanded,
         isAutoQuality,
         selectedAudio,
+        selectedServer,
         availableAudios,
-        showQualityMenu,
         selectedStreamIndex,
-        toggleExpand,
         reloadPlayer,
         handlePrevEp,
         handleNextEp,
         handleEpisodeClick,
-        setShowQualityMenu,
         handleQualityChange,
         setAutoQuality,
+        setSelectedServer,
         setSelectedAudio,
+        canPrevEpisode,
+        canNextEpisode,
         setIsPlayerReady,
         handlePlaybackProgress,
         handleStreamError,
@@ -171,7 +171,7 @@ export default function WatchPage() {
             {/* 1. Header Row (Fixed) */}
 
 
-            <div className="flex-1 flex flex-col min-h-0 w-full max-w-full overflow-hidden px-0 pb-0 pt-4 gap-4 md:px-10 md:pb-10 md:gap-8 relative z-10">
+            <div className="flex-1 flex flex-col min-h-0 w-full max-w-full overflow-hidden px-0 pb-0 pt-4 gap-4 md:px-7 md:pb-8 md:gap-6 2xl:px-9 relative z-10">
                 <div className="flex items-center gap-3 shrink-0 min-w-0 px-4 md:px-0">
                     <button
                         onClick={() => navigate('/')}
@@ -199,14 +199,14 @@ export default function WatchPage() {
                     )}
                 </div>
 
-                <div className="flex-1 flex flex-col xl:flex-row min-h-0 w-full max-w-full relative overflow-hidden gap-0 xl:gap-8">
-                        <div className="w-full max-w-full xl:flex-1 min-w-0 relative flex flex-col overflow-hidden items-center">
+                <div className="flex-1 flex flex-col xl:flex-row min-h-0 w-full max-w-[1810px] mx-auto relative overflow-hidden gap-0 xl:gap-6 2xl:gap-7 xl:items-start">
+                        <div className="w-full max-w-full xl:flex-[1_1_auto] min-w-0 relative flex flex-col overflow-hidden items-center">
                             {/* Constrained Column - Ensures 16:9 ratio is never broken by viewport height */}
                             <div
-                                className={`mx-auto w-full max-w-full min-w-0 h-auto xl:h-full flex flex-col gap-0 md:gap-6 ${
+                                className={`mx-auto w-full max-w-full min-w-0 h-auto flex flex-col gap-0 ${
                                     isExpanded
                                         ? 'xl:max-w-[min(96vw,calc((100vh-248px)*1.777))]'
-                                        : 'xl:max-w-[calc((100vh-252px)*1.777)]'
+                                        : 'xl:max-w-[min(calc((100dvh-104px)*1.777),calc(100vw-476px))]'
                                 }`}
                             >
                                 {/* Video Player Card - Maximized & End-to-End Alignment */}
@@ -223,27 +223,19 @@ export default function WatchPage() {
                                         onError={handleStreamError}
                                         onProgress={handlePlaybackProgress}
                                         startAtSeconds={resumeAtSeconds}
-                                    />
-                                </div>
-
-                                {/* Player Controls - Aligned end-to-end with the video player above */}
-                                <div className="shrink-0 px-0 md:px-0">
-                                    <PlayerControls
-                                        isExpanded={isExpanded}
-                                        canPrev={epNum !== '1'}
-                                        isAutoQuality={isAutoQuality}
-                                        selectedStreamIndex={selectedStreamIndex}
-                                        streams={streams}
+                                        onNextEpisode={canNextEpisode ? handleNextEp : undefined}
+                                        onPrevEpisode={canPrevEpisode ? handlePrevEp : undefined}
+                                        hasNextEpisode={canNextEpisode}
                                         selectedAudio={selectedAudio}
                                         availableAudios={availableAudios}
-                                        showQualityMenu={showQualityMenu}
-                                        onPrev={handlePrevEp}
-                                        onNext={handleNextEp}
-                                        onToggleExpand={toggleExpand}
-                                        setShowQualityMenu={setShowQualityMenu}
+                                        onAudioChange={setSelectedAudio}
+                                        streams={streams}
+                                        selectedStreamIndex={selectedStreamIndex}
+                                        isAutoQuality={isAutoQuality}
                                         onQualityChange={handleQualityChange}
                                         onSetAutoQuality={setAutoQuality}
-                                        onAudioChange={setSelectedAudio}
+                                        selectedServer={selectedServer}
+                                        onServerChange={setSelectedServer}
                                     />
                                 </div>
                             </div>

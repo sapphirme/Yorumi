@@ -5,17 +5,44 @@ import type { StreamLink } from '../types/stream';
 import { animeService } from '../services/animeService';
 import { getStreamData, getMappedQuality } from '../utils/streamUtils';
 
-export function useStreams(scraperSession: string | null) {
+const getSourceKey = (stream: StreamLink) => {
+    const server = String(stream.server || '').trim().toLowerCase();
+    const provider = String(stream.provider || '').trim().toLowerCase();
+    if (server) return server;
+    if (provider) return provider;
+    if (stream.isHls) return 'hls';
+    return 'embed';
+};
+
+const getSourceLabel = (stream: StreamLink) => {
+    const key = getSourceKey(stream);
+    if (key === 'native') return 'Native HLS';
+    if (key === 'kwik') return 'Kwik';
+    if (key === 'hls') return 'HLS';
+    if (key === 'embed') return 'Embed';
+    return key.replace(/(^|\s|-)\w/g, (match) => match.toUpperCase());
+};
+
+export type StreamServerKey = 'auto' | 'allmanga';
+
+export const STREAM_SERVER_OPTIONS: Array<{ key: StreamServerKey; label: string }> = [
+    { key: 'auto', label: 'Auto' },
+    { key: 'allmanga', label: 'AllManga' },
+];
+
+export function useStreams(scraperSession: string | null, animeTitle?: string) {
     const [currentEpisode, setCurrentEpisode] = useState<Episode | null>(null);
     const [allStreams, setAllStreams] = useState<StreamLink[]>([]);
     const [streams, setStreams] = useState<StreamLink[]>([]);
     const [selectedStreamIndex, setSelectedStreamIndex] = useState<number>(0);
     const [isAutoQuality, setIsAutoQuality] = useState(true);
     const [selectedAudio, setSelectedAudio] = useState<'sub' | 'dub'>('sub');
+    const [selectedServer, setSelectedServer] = useState<StreamServerKey>('auto');
     const [showQualityMenu, setShowQualityMenu] = useState(false);
     const [streamLoading, setStreamLoading] = useState(false);
     const streamCache = useRef(new Map<string, Promise<StreamLink[]>>());
     const activeLoadRequestRef = useRef(0);
+    const previousServerRef = useRef<StreamServerKey>('auto');
 
     const currentStream = streams[selectedStreamIndex] || null;
     const normalizeDirectScraperSession = (value: unknown) => {
@@ -52,24 +79,25 @@ export function useStreams(scraperSession: string | null) {
     const ensureStreamData = useCallback((episode: Episode): Promise<StreamLink[]> => {
         const activeSession = normalizeDirectScraperSession(scraperSession);
         if (!activeSession) return Promise.resolve([]);
-        if (!streamCache.current.has(episode.session)) {
-            const promise = getStreamData(episode, activeSession)
+        const cacheKey = `${selectedServer}:${episode.session}`;
+        if (!streamCache.current.has(cacheKey)) {
+            const promise = getStreamData(episode, activeSession, { provider: selectedServer, title: animeTitle })
                 .then((data) => {
                     if (!Array.isArray(data) || data.length === 0) {
-                        streamCache.current.delete(episode.session);
+                        streamCache.current.delete(cacheKey);
                         return [];
                     }
                     return data;
                 })
                 .catch(e => {
                     console.error('Failed to load stream', e);
-                    streamCache.current.delete(episode.session);
+                    streamCache.current.delete(cacheKey);
                     return [];
                 });
-            streamCache.current.set(episode.session, promise);
+            streamCache.current.set(cacheKey, promise);
         }
-        return streamCache.current.get(episode.session)!;
-    }, [scraperSession]);
+        return streamCache.current.get(cacheKey)!;
+    }, [scraperSession, selectedServer, animeTitle]);
 
     const prefetchStream = useCallback((episode: Episode) => {
         if (scraperSession) ensureStreamData(episode);
@@ -82,21 +110,37 @@ export function useStreams(scraperSession: string | null) {
         return [...set];
     }, [allStreams]);
 
+    const availableSources = useMemo(() => {
+        const map = new Map<string, string>();
+        const audioStreams = allStreams.filter((s) => normalizeAudio(s.audio) === selectedAudio);
+        const sourceStreams = audioStreams.length > 0 ? audioStreams : allStreams;
+
+        sourceStreams.forEach((stream) => {
+            const key = getSourceKey(stream);
+            if (!map.has(key)) map.set(key, getSourceLabel(stream));
+        });
+
+        return [
+            { key: 'auto', label: 'Auto' },
+            ...Array.from(map.entries()).map(([key, label]) => ({ key, label })),
+        ];
+    }, [allStreams, selectedAudio]);
+
     const filterStreams = useCallback((raw: StreamLink[], audio: 'sub' | 'dub') => {
         let next = raw.filter((s) => normalizeAudio(s.audio) === audio);
         if (next.length === 0) next = raw;
-
         const sorted = [...next].sort((a, b) => scoreStream(b) - scoreStream(a));
-        const dedupedByQuality = new Map<string, StreamLink>();
+        const dedupedBySourceQuality = new Map<string, StreamLink>();
 
         sorted.forEach((stream) => {
             const qualityKey = getMappedQuality(String(stream.quality || '0'));
-            if (!dedupedByQuality.has(qualityKey)) {
-                dedupedByQuality.set(qualityKey, stream);
+            const key = `${getSourceKey(stream)}:${qualityKey}`;
+            if (!dedupedBySourceQuality.has(key)) {
+                dedupedBySourceQuality.set(key, stream);
             }
         });
 
-        return Array.from(dedupedByQuality.values());
+        return Array.from(dedupedBySourceQuality.values());
     }, [scoreStream]);
 
     useEffect(() => {
@@ -149,6 +193,13 @@ export function useStreams(scraperSession: string | null) {
         }
     }, [ensureStreamData, selectedAudio, filterStreams]);
 
+    useEffect(() => {
+        if (previousServerRef.current === selectedServer) return;
+        previousServerRef.current = selectedServer;
+        if (!currentEpisode) return;
+        loadStream(currentEpisode);
+    }, [selectedServer, currentEpisode, loadStream]);
+
     const handleQualityChange = useCallback((index: number) => {
         setSelectedStreamIndex(index);
         setIsAutoQuality(false);
@@ -187,6 +238,7 @@ export function useStreams(scraperSession: string | null) {
         setStreams([]);
         setSelectedStreamIndex(0);
         setSelectedAudio('sub');
+        setSelectedServer('auto');
         setStreamLoading(false);
         streamCache.current.clear();
     }, []);
@@ -196,9 +248,16 @@ export function useStreams(scraperSession: string | null) {
         streamCache.current.delete(session);
         const activeSession = normalizeDirectScraperSession(scraperSession);
         if (activeSession) {
-            animeService.invalidateStreamCache(activeSession, session);
+            animeService.invalidateStreamCache(activeSession, session, selectedServer);
         }
-    }, [scraperSession]);
+    }, [scraperSession, selectedServer]);
+
+    const handleServerChange = useCallback((server: StreamServerKey) => {
+        setSelectedServer(server);
+        setSelectedStreamIndex(0);
+        setIsAutoQuality(true);
+        setShowQualityMenu(false);
+    }, []);
 
     return {
         // State
@@ -208,7 +267,10 @@ export function useStreams(scraperSession: string | null) {
         selectedStreamIndex,
         isAutoQuality,
         selectedAudio,
+        selectedServer,
+        serverOptions: STREAM_SERVER_OPTIONS,
         availableAudios,
+        availableSources,
         showQualityMenu,
         currentStream,
         streamLoading,
@@ -218,6 +280,7 @@ export function useStreams(scraperSession: string | null) {
         prefetchStream,
         handleQualityChange,
         setAutoQuality,
+        handleServerChange,
         setShowQualityMenu,
         setSelectedAudio,
         tryNextStream,

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { anilistService } from './anilist.service';
-import { AnimePaheScraper } from '../../scraper/animepahe';
+import { AllMangaScraper } from '../../scraper/allmanga';
 import { ReAnimeScraper } from '../../scraper/reanime';
 import { redis } from '../mapping/mapper';
 import { mappingService } from '../mapping/mapping.service';
@@ -12,12 +12,21 @@ const HOME_FAST_CACHE_KEY = 'anilist:home:fast:v18';
 const HOME_FAST_TTL_SECONDS = 120;
 let homeFastMemoryCache: { data: any; timestamp: number } | null = null;
 let homeFastRefreshPromise: Promise<any> | null = null;
-const FORCED_ANIMEPAHE_SESSIONS: Record<number, string> = {
-    21: '086c4017-75aa-5c60-83b4-2099f9c6dfc2', // ONE PIECE
-};
-const isAnimePaheSession = (value: unknown) =>
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(value || '').trim());
+const isAllMangaSession = (value: unknown) => AllMangaScraper.isAllMangaSession(value);
 const isGenericScraperSession = (value: unknown) => /^[a-z0-9-]+$/i.test(String(value || '').trim());
+const toAnimePaheMirrorSlug = (value: unknown) =>
+    String(value || '')
+        .trim()
+        .toLowerCase()
+        .replace(/['’]/g, '')
+        .replace(/&/g, ' and ')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+const buildAnimePaheMirrorSession = (details: any) => {
+    const title = details?.title?.english || details?.title?.romaji || '';
+    const slug = toAnimePaheMirrorSlug(title);
+    return slug ? `apch:${slug}` : null;
+};
 const normalizeTitleToken = (value: string) => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 const hasExplicitSeasonMarker = (title: string) => {
     const value = String(title || '');
@@ -138,14 +147,14 @@ const findRankedScraperCandidates = async (details: any) => {
 
     const searchAndAdd = async (batch: string[]) => {
         const resultSets = await Promise.all(
-            batch.map((title) => scraperService.searchAnimePahe(title).catch(() => []))
+            batch.map((title) => scraperService.searchAllManga(title).catch(() => []))
         );
 
         resultSets.forEach((found) => {
             if (!Array.isArray(found)) return;
             found.forEach((candidate) => {
                 const session = String(candidate?.session || '').trim();
-                if (session && isAnimePaheSession(session) && !candidateMap.has(session)) {
+                if (session && isAllMangaSession(session) && !candidateMap.has(session)) {
                     candidateMap.set(session, candidate);
                 }
             });
@@ -198,6 +207,7 @@ const isCompatibleResolvedSession = (
 ) => {
     const current = String(resolvedSession || '').trim();
     if (!current) return false;
+    if (!Array.isArray(rankedCandidates) || rankedCandidates.length === 0) return true;
 
     const currentEntry = rankedCandidates.find(
         ({ candidate }) => String(candidate?.session || '').trim() === current
@@ -375,7 +385,7 @@ const buildHomeFastPayload = async () => {
     const [spotlightRaw, latestEpisodesRaw, trending, seasonal, monthly, topAnime] = await Promise.all([
         withTimeout(anilistService.getNativeSpotlightAnime(8), 6000, [] as any[]),
         withTimeout(
-            scraperService.getAnimePaheLatestUpdates(1, 10).then((result) =>
+            scraperService.getAllMangaLatestUpdates(1, 10).then((result) =>
                 Array.isArray(result?.data) ? result.data : []
             ),
             5500,
@@ -736,13 +746,14 @@ router.get('/anime/:id/fast', async (req, res) => {
 
         if (id.startsWith('s:')) {
             resolvedSession = id.substring(2).trim() || null;
-            if (!resolvedSession || (!isAnimePaheSession(resolvedSession) && !isGenericScraperSession(resolvedSession))) {
+            if (!resolvedSession || (!isAllMangaSession(resolvedSession) && !isGenericScraperSession(resolvedSession))) {
                 res.status(400).json({ error: 'Unsupported scraper session' });
                 return;
             }
-            const genericScraperSession = !isAnimePaheSession(resolvedSession);
-            const scraperDetails = isAnimePaheSession(resolvedSession)
-                ? await new AnimePaheScraper().getAnimeInfo(resolvedSession)
+            const allMangaSession = isAllMangaSession(resolvedSession);
+            const genericScraperSession = !allMangaSession;
+            const scraperDetails = allMangaSession
+                    ? await scraperService.getAllMangaAnimeInfo(resolvedSession)
                 : await new ReAnimeScraper().getAnimeInfo(resolvedSession);
 
             if (genericScraperSession) {
@@ -807,14 +818,7 @@ router.get('/anime/:id/fast', async (req, res) => {
                 return;
             }
 
-            const forcedSession = FORCED_ANIMEPAHE_SESSIONS[numericId];
-            if (forcedSession) {
-                resolvedSession = forcedSession;
-            }
-
-            const mapped = !resolvedSession
-                ? await mappingService.getMapping(String(numericId)).catch(() => null)
-                : null;
+            const mapped = await mappingService.getMapping(String(numericId)).catch(() => null);
             if (mapped?.id) {
                 resolvedSession = String(mapped.id).trim();
             }
@@ -857,7 +861,7 @@ router.get('/anime/:id/fast', async (req, res) => {
                 for (const { candidate } of rankedCandidates) {
                     const candidateSession = String(candidate?.session || '');
                     if (!candidateSession || candidateSession === String(resolvedSession || '')) continue;
-                    if (!isAnimePaheSession(candidateSession)) continue;
+                    if (!isAllMangaSession(candidateSession)) continue;
 
                     const retry = await getEpisodesWithTimeout(candidateSession);
                     const retryEpisodes = Array.isArray(retry?.episodes) ? retry.episodes : [];
@@ -906,12 +910,13 @@ router.get('/anime/:id', async (req, res) => {
         // Hybrid Logic for Scraper IDs (e.g. s:one-piece-100)
         if (id.startsWith('s:')) {
             const scraperId = id.substring(2);
-            if (!scraperId || (!isAnimePaheSession(scraperId) && !isGenericScraperSession(scraperId))) {
+            if (!scraperId || (!isAllMangaSession(scraperId) && !isGenericScraperSession(scraperId))) {
                 return res.status(400).json({ error: 'Unsupported scraper session' });
             }
-            const genericScraperSession = !isAnimePaheSession(scraperId);
-            const scraperDetails = isAnimePaheSession(scraperId)
-                ? await new AnimePaheScraper().getAnimeInfo(scraperId)
+            const allMangaSession = isAllMangaSession(scraperId);
+            const genericScraperSession = !allMangaSession;
+            const scraperDetails = allMangaSession
+                ? await scraperService.getAllMangaAnimeInfo(scraperId)
                 : await new ReAnimeScraper().getAnimeInfo(scraperId);
             if (!scraperDetails) {
                 return res.status(404).json({ error: 'Anime not found on scraper' });

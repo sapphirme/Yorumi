@@ -6,6 +6,8 @@ import * as cheerio from 'cheerio';
 
 const BASE_URL = 'https://animepahe.pw';
 const API_URL = 'https://animepahe.pw/api';
+const MIRROR_BASE_URL = 'https://animepahe.ch';
+const MIRROR_SESSION_PREFIX = 'apch:';
 
 export interface AnimeSearchResult {
     id: string;
@@ -81,6 +83,43 @@ export class AnimePaheScraper {
     };
     private readonly EPISODE_FETCH_CONCURRENCY = 6;
 
+    private isMirrorSession(value: unknown) {
+        return String(value || '').startsWith(MIRROR_SESSION_PREFIX);
+    }
+
+    private toMirrorSlug(value: unknown) {
+        return String(value || '')
+            .replace(/^apch:/i, '')
+            .trim()
+            .toLowerCase()
+            .replace(/['’]/g, '')
+            .replace(/&/g, ' and ')
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '');
+    }
+
+    private mirrorEpisodePageUrl(slug: string, episodeNumber: number) {
+        return `${MIRROR_BASE_URL}/${slug}-episode-${episodeNumber}-english-subbed/`;
+    }
+
+    private extractMirrorEmbedUrl(html: string) {
+        const $ = cheerio.load(String(html || ''));
+        const iframeSrc = $('iframe[src*="megaplay"]').first().attr('src')?.trim();
+        if (iframeSrc) return iframeSrc;
+
+        const encoded = $('select.mirror option[value]').map((_, option) => $(option).attr('value') || '').get()
+            .find((value) => value);
+        if (!encoded) return '';
+
+        try {
+            const decoded = Buffer.from(encoded, 'base64').toString('utf8');
+            const match = decoded.match(/<iframe[^>]+src=["']([^"']+)["']/i);
+            return match?.[1]?.trim() || '';
+        } catch {
+            return '';
+        }
+    }
+
     private async waitForChallengeBypass(page: Page, timeoutMs: number = 60000) {
         const startedAt = Date.now();
 
@@ -139,10 +178,12 @@ export class AnimePaheScraper {
         }
     }
 
-    private mapSearchApiItems(items: any[]): AnimeSearchResult[] {
-        return (Array.isArray(items) ? items : [])
-            .filter((item: any) => item?.session && item?.title)
-            .map((item: any) => ({
+    async search(query: string): Promise<AnimeSearchResult[]> {
+        const searchUrl = `${API_URL}?m=search&q=${encodeURIComponent(query)}`;
+
+        const apiResponse = await this.fetchApiJson(searchUrl);
+        if (apiResponse && Array.isArray(apiResponse.data)) {
+            return apiResponse.data.map((item: any) => ({
                 id: item.id,
                 session: item.session,
                 title: item.title,
@@ -154,41 +195,22 @@ export class AnimePaheScraper {
                 year: item.year,
                 score: item.score
             }));
-    }
-
-    async search(query: string): Promise<AnimeSearchResult[]> {
-        const searchUrl = `${API_URL}?m=search&q=${encodeURIComponent(query)}`;
-
-        const apiResponse = await this.fetchApiJson(searchUrl);
-        if (apiResponse && Array.isArray(apiResponse.data)) {
-            return this.mapSearchApiItems(apiResponse.data);
         }
 
-        const browser = await this.getBrowser();
-        const page = await browser.newPage();
-        await page.setUserAgent(this.requestHeaders['User-Agent']);
+        const mirrorSlug = this.toMirrorSlug(query);
+        if (!mirrorSlug) return [];
 
-        try {
-            await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
-            await this.waitForChallengeBypass(page);
-            const browserApiResponse = await page.evaluate(async (searchQuery) => {
-                const response = await fetch(`/api?m=search&q=${encodeURIComponent(searchQuery)}`, {
-                    headers: {
-                        Accept: 'application/json, text/javascript, */*; q=0.01',
-                        'X-Requested-With': 'XMLHttpRequest',
-                    },
-                });
-                if (!response.ok) return null;
-                return await response.json();
-            }, query);
+        const mirrorProbe = await this.getEpisodes(`${MIRROR_SESSION_PREFIX}${mirrorSlug}`).catch(() => ({ episodes: [] }));
+        if (!Array.isArray(mirrorProbe.episodes) || mirrorProbe.episodes.length === 0) return [];
 
-            return this.mapSearchApiItems(browserApiResponse?.data);
-        } catch (error) {
-            console.error('AnimePahe browser search failed:', error);
-            return [];
-        } finally {
-            await page.close();
-        }
+        return [{
+            id: mirrorSlug,
+            session: `${MIRROR_SESSION_PREFIX}${mirrorSlug}`,
+            title: query,
+            url: `${MIRROR_BASE_URL}/${mirrorSlug}-episode-1-english-subbed/`,
+            type: 'TV',
+            episodes: mirrorProbe.episodes.length,
+        }];
     }
 
     private mapLatestReleaseApiItems(items: any[]): LatestRelease[] {
@@ -458,6 +480,10 @@ export class AnimePaheScraper {
     }
 
     async getEpisodes(animeSessionId: string, pageNum: number = 1): Promise<{ episodes: Episode[], lastPage: number }> {
+        if (this.isMirrorSession(animeSessionId)) {
+            return this.getMirrorEpisodes(animeSessionId);
+        }
+
         const buildEpisodesApiUrl = (page: number) =>
             `${API_URL}?m=release&id=${animeSessionId}&sort=episode_asc&page=${page}`;
         const animeUrl = `${BASE_URL}/anime/${animeSessionId}`;
@@ -888,7 +914,58 @@ export class AnimePaheScraper {
         });
     }
 
+    private async getMirrorEpisodes(animeSessionId: string): Promise<{ episodes: Episode[], lastPage: number }> {
+        const slug = this.toMirrorSlug(animeSessionId);
+        if (!slug) return { episodes: [], lastPage: 1 };
+
+        try {
+            const firstEpisodeUrl = this.mirrorEpisodePageUrl(slug, 1);
+            const response = await axios.get(firstEpisodeUrl, {
+                headers: {
+                    ...this.requestHeaders,
+                    Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+                    Referer: MIRROR_BASE_URL,
+                },
+                timeout: 12000,
+                responseType: 'text',
+            });
+
+            const $ = cheerio.load(String(response.data || ''));
+            const episodesByNumber = new Map<number, Episode>();
+            const addEpisode = (episodeNumber: number, href?: string, title?: string) => {
+                if (!Number.isFinite(episodeNumber) || episodeNumber <= 0) return;
+                const episodeSlug = `${slug}-episode-${episodeNumber}-english-subbed`;
+                episodesByNumber.set(episodeNumber, {
+                    id: episodeSlug,
+                    session: `${MIRROR_SESSION_PREFIX}${episodeSlug}`,
+                    episodeNumber,
+                    url: href || this.mirrorEpisodePageUrl(slug, episodeNumber),
+                    title: title || `Episode ${episodeNumber}`,
+                });
+            };
+
+            addEpisode(1, firstEpisodeUrl);
+            $('a[href]').each((_, element) => {
+                const href = String($(element).attr('href') || '').trim();
+                const match = href.match(new RegExp(`${slug}-episode-(\\d+(?:\\.\\d+)?)-english-subbed`, 'i'));
+                if (!match) return;
+                addEpisode(Number(match[1]), href, $(element).attr('title') || $(element).text().trim());
+            });
+
+            const episodes = [...episodesByNumber.values()]
+                .sort((a, b) => Number(a.episodeNumber) - Number(b.episodeNumber));
+
+            return { episodes, lastPage: 1 };
+        } catch {
+            return { episodes: [], lastPage: 1 };
+        }
+    }
+
     async getLinks(animeSession: string, episodeSession: string): Promise<StreamLink[]> {
+        if (this.isMirrorSession(animeSession) || this.isMirrorSession(episodeSession)) {
+            return this.getMirrorLinks(animeSession, episodeSession);
+        }
+
         const fullUrl = `${BASE_URL}/play/${animeSession}/${episodeSession}`;
 
         try {
@@ -984,6 +1061,41 @@ export class AnimePaheScraper {
             return [];
         } finally {
             await page.close();
+        }
+    }
+
+    private async getMirrorLinks(animeSession: string, episodeSession: string): Promise<StreamLink[]> {
+        const animeSlug = this.toMirrorSlug(animeSession);
+        const episodeSlug = this.toMirrorSlug(episodeSession);
+        const episodeMatch = episodeSlug.match(/-episode-(\d+(?:\.\d+)?)-english-subbed$/i);
+        const episodeNumber = Number(episodeMatch?.[1] || 1);
+        const baseSlug = episodeMatch ? episodeSlug.replace(/-episode-\d+(?:\.\d+)?-english-subbed$/i, '') : animeSlug;
+        if (!baseSlug) return [];
+
+        try {
+            const response = await axios.get(this.mirrorEpisodePageUrl(baseSlug, episodeNumber), {
+                headers: {
+                    ...this.requestHeaders,
+                    Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+                    Referer: MIRROR_BASE_URL,
+                },
+                timeout: 12000,
+                responseType: 'text',
+            });
+
+            const embedUrl = this.extractMirrorEmbedUrl(String(response.data || ''));
+            if (!embedUrl) return [];
+
+            return [{
+                quality: '720',
+                audio: 'sub',
+                provider: 'animepahe',
+                server: 'mirror-embed',
+                url: embedUrl,
+                isHls: false,
+            }];
+        } catch {
+            return [];
         }
     }
 

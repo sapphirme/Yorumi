@@ -99,7 +99,6 @@ export default function AnimeDashboard({
                     onWatchClick={onWatchClick}
                     onViewAll={() => onViewAll('latest')}
                     onMouseEnter={onAnimeHover}
-                    variant="landscape"
                 />
             )}
 

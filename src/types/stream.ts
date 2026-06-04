@@ -11,6 +11,7 @@ export interface StreamLink {
     server?: string;
     url: string;
     directUrl?: string;
+    referer?: string;
     isHls: boolean;
     subtitles?: SubtitleTrack[];
 }
