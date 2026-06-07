@@ -90,39 +90,39 @@ export default function AnimeDashboard({
                     />
                 )}
 
-            {!compactCatalogMode && (
-                <TrendingNow
-                    animeList={latestUpdates}
-                    title="Latest Updates"
-                    isLoading={latestUpdatesLoading}
-                    onAnimeClick={onAnimeClick}
-                    onWatchClick={onWatchClick}
-                    onViewAll={() => onViewAll('latest')}
-                    onMouseEnter={onAnimeHover}
-                />
-            )}
+                {!compactCatalogMode && (
+                    <TrendingNow
+                        animeList={latestUpdates}
+                        title="Latest Updates"
+                        isLoading={latestUpdatesLoading}
+                        onAnimeClick={onAnimeClick}
+                        onWatchClick={(anime) => onWatchClick(anime, 1)}
+                        onViewAll={() => onViewAll('latest')}
+                        onMouseEnter={onAnimeHover}
+                    />
+                )}
 
-            {!compactCatalogMode && (
-                <TrendingNow
-                    animeList={trendingAnime}
-                    isLoading={trendingLoading}
-                    onAnimeClick={onAnimeClick}
-                    onWatchClick={onWatchClick}
-                    onViewAll={() => onViewAll('trending')}
-                    onMouseEnter={onAnimeHover}
-                />
-            )}
+                {!compactCatalogMode && (
+                    <TrendingNow
+                        animeList={trendingAnime}
+                        isLoading={trendingLoading}
+                        onAnimeClick={onAnimeClick}
+                        onWatchClick={(anime) => onWatchClick(anime, 1)}
+                        onViewAll={() => onViewAll('trending')}
+                        onMouseEnter={onAnimeHover}
+                    />
+                )}
 
-            {!compactCatalogMode && (
-                <PopularSeason
-                    animeList={popularSeason}
-                    isLoading={popularSeasonLoading}
-                    onAnimeClick={onAnimeClick}
-                    onWatchClick={onWatchClick}
-                    onViewAll={() => onViewAll('seasonal')}
-                    onMouseEnter={onAnimeHover}
-                />
-            )}
+                {!compactCatalogMode && (
+                    <PopularSeason
+                        animeList={popularSeason}
+                        isLoading={popularSeasonLoading}
+                        onAnimeClick={onAnimeClick}
+                        onWatchClick={(anime) => onWatchClick(anime, 1)}
+                        onViewAll={() => onViewAll('seasonal')}
+                        onMouseEnter={onAnimeHover}
+                    />
+                )}
 
                 {/* All-Time Popular + Top 10 + Schedule + Genres */}
                 <div className="container mx-auto px-4 pt-4">
@@ -148,7 +148,7 @@ export default function AnimeDashboard({
                                             <AnimeCard
                                                 anime={item}
                                                 onClick={() => onAnimeClick(item)}
-                                                onWatchClick={() => onWatchClick(item)}
+                                                onWatchClick={() => onWatchClick(item, 1)}
                                                 onMouseEnter={() => onAnimeHover?.(item)}
                                             />
                                         </div>

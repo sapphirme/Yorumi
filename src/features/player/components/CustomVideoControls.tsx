@@ -9,6 +9,8 @@ interface CustomVideoControlsProps {
     onNextEpisode?: () => void;
     onPrevEpisode?: () => void;
     hasNextEpisode?: boolean;
+    autoNextEnabled?: boolean;
+    onAutoNextChange?: (enabled: boolean) => void;
     selectedAudio: 'sub' | 'dub';
     availableAudios: Array<'sub' | 'dub'>;
     onAudioChange: (audio: 'sub' | 'dub') => void;
@@ -49,6 +51,8 @@ export default function CustomVideoControls({
     onNextEpisode,
     onPrevEpisode,
     hasNextEpisode = false,
+    autoNextEnabled = true,
+    onAutoNextChange,
     selectedAudio,
     availableAudios,
     onAudioChange,
@@ -147,7 +151,7 @@ export default function CustomVideoControls({
         const updatePlayState = () => {
             const isVideoPlaying = !video.paused;
             setIsPlaying(isVideoPlaying);
-            setCenterAction({ type: isVideoPlaying ? 'play' : 'pause', id: Date.now() });
+            setCenterAction({ type: isVideoPlaying ? 'pause' : 'play', id: Date.now() });
         };
         
         const updateVolume = () => {
@@ -534,6 +538,19 @@ export default function CustomVideoControls({
                                                     </div>
                                                     <div className={`w-9 h-5 rounded-full relative shadow-inner transition-colors ${selectedAudio === 'dub' ? 'bg-white' : 'bg-white/20'}`}>
                                                         <div className={`absolute top-1 w-3 h-3 rounded-full transition-all ${selectedAudio === 'dub' ? 'bg-black left-5' : 'bg-white left-1'}`}></div>
+                                                    </div>
+                                                </button>
+                                                <button
+                                                    onClick={() => onAutoNextChange?.(!autoNextEnabled)}
+                                                    disabled={!onAutoNextChange || !hasNextEpisode}
+                                                    className="flex items-center justify-between w-full p-3 hover:bg-white/10 rounded-xl transition-colors disabled:opacity-40"
+                                                >
+                                                    <div className="flex items-center gap-3 text-white">
+                                                        <SkipForward className="w-5 h-5" />
+                                                        <span className="text-sm font-medium">Auto next</span>
+                                                    </div>
+                                                    <div className={`w-9 h-5 rounded-full relative shadow-inner transition-colors ${autoNextEnabled && hasNextEpisode ? 'bg-white' : 'bg-white/20'}`}>
+                                                        <div className={`absolute top-1 w-3 h-3 rounded-full transition-all ${autoNextEnabled && hasNextEpisode ? 'bg-black left-5' : 'bg-white left-1'}`}></div>
                                                     </div>
                                                 </button>
                                                 <button

@@ -133,7 +133,7 @@ export default function WatchListPage() {
 
     const handleWatchClick = (item: WatchListItem, animeData: ReturnType<typeof buildStoredAnimeState>, routeId: string) => {
         const title = slugify(item.title || 'anime');
-        navigate(`/anime/watch/${title}/${routeId}`, { state: { anime: animeData } });
+        navigate(`/anime/watch/${title}/${routeId}?ep=1`, { state: { anime: animeData } });
     };
 
     const visibleClassifications = WATCH_CLASSIFICATIONS.filter((classification) => classification.key !== 'all');

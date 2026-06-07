@@ -384,14 +384,7 @@ export default function AnimeDetailsPage() {
                     inFavorites={inFavorites}
                     onWatch={() => {
                         const title = slugify(selectedAnime.title || selectedAnime.title_english || 'anime');
-                        const normalizedStatus = String(selectedAnime.status || '').toUpperCase();
-                        const knownLatestEpisode = Number(selectedAnime.latestEpisode || 0);
-                        const targetEp = knownLatestEpisode > 0 && normalizedStatus !== 'FINISHED'
-                            ? knownLatestEpisode
-                            : normalizedStatus === 'RELEASING'
-                                ? 'latest'
-                                : 1;
-                        navigate(`/anime/watch/${title}/${id}?ep=${targetEp}`);
+                        navigate(`/anime/watch/${title}/${id}?ep=1`, { state: { anime: selectedAnime } });
                     }}
                     onToggleList={handleToggleList}
                     onToggleFavorite={handleToggleFavorite}

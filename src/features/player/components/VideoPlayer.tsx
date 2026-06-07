@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, type SyntheticEvent } from 'react';
 import Hls from 'hls.js';
 import { Maximize, X } from 'lucide-react';
 import LoadingSpinner from '../../../components/ui/LoadingSpinner';
@@ -6,6 +6,11 @@ import type { StreamLink, SubtitleTrack } from '../../../types/stream';
 import { API_BASE } from '../../../config/api';
 import CustomVideoControls from './CustomVideoControls';
 import type { StreamServerKey } from '../../../hooks/useStreams';
+
+const IFRAME_LOAD_TIMEOUT_MS = 18_000;
+const NATIVE_LOAD_TIMEOUT_MS = 20_000;
+const MEDIA_STALL_TIMEOUT_MS = 14_000;
+const HAVE_FUTURE_DATA = 3;
 
 export interface VideoPlayerProps {
     streamUrl?: string;
@@ -22,6 +27,8 @@ export interface VideoPlayerProps {
     onNextEpisode?: () => void;
     onPrevEpisode?: () => void;
     hasNextEpisode?: boolean;
+    autoNextEnabled?: boolean;
+    onAutoNextChange?: (enabled: boolean) => void;
     selectedAudio: 'sub' | 'dub';
     availableAudios: Array<'sub' | 'dub'>;
     onAudioChange: (audio: 'sub' | 'dub') => void;
@@ -56,6 +63,8 @@ export default function VideoPlayer(props: VideoPlayerProps) {
         onNextEpisode,
         onPrevEpisode,
         hasNextEpisode,
+        autoNextEnabled = true,
+        onAutoNextChange,
         selectedAudio,
         availableAudios,
         onAudioChange,
@@ -82,6 +91,10 @@ export default function VideoPlayer(props: VideoPlayerProps) {
     const videoRef = useRef<HTMLVideoElement | null>(null);
     const lastResolvedStreamUrlRef = useRef<string | undefined>(undefined);
     const hlsRef = useRef<Hls | null>(null);
+    const iframeLoadTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const nativeLoadTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const mediaStallTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const autoNextTriggerKeyRef = useRef('');
     const apiOrigin = API_BASE.replace(/\/+$/, '').replace(/\/api$/i, '');
 
     const resolvedStreamUrl = useMemo(() => {
@@ -116,6 +129,27 @@ export default function VideoPlayer(props: VideoPlayerProps) {
         startAtRef.current = startAtSeconds;
     }, [startAtSeconds]);
 
+    const clearIframeLoadTimeout = useCallback(() => {
+        if (iframeLoadTimeoutRef.current) {
+            clearTimeout(iframeLoadTimeoutRef.current);
+            iframeLoadTimeoutRef.current = null;
+        }
+    }, []);
+
+    const clearMediaStallTimeout = useCallback(() => {
+        if (mediaStallTimeoutRef.current) {
+            clearTimeout(mediaStallTimeoutRef.current);
+            mediaStallTimeoutRef.current = null;
+        }
+    }, []);
+
+    const clearNativeLoadTimeout = useCallback(() => {
+        if (nativeLoadTimeoutRef.current) {
+            clearTimeout(nativeLoadTimeoutRef.current);
+            nativeLoadTimeoutRef.current = null;
+        }
+    }, []);
+
     useEffect(() => {
         const video = videoRef.current;
         if (!video || !shouldUseNativeVideo) return;
@@ -134,6 +168,129 @@ export default function VideoPlayer(props: VideoPlayerProps) {
         video.addEventListener('loadedmetadata', applyStart, { once: true });
         return () => video.removeEventListener('loadedmetadata', applyStart);
     }, [resolvedStreamUrl, shouldUseNativeVideo]);
+
+    useEffect(() => {
+        clearIframeLoadTimeout();
+        if (!resolvedStreamUrl || shouldUseNativeVideo) return;
+
+        iframeLoadTimeoutRef.current = setTimeout(() => {
+            iframeLoadTimeoutRef.current = null;
+            onErrorRef.current?.();
+        }, IFRAME_LOAD_TIMEOUT_MS);
+
+        return clearIframeLoadTimeout;
+    }, [clearIframeLoadTimeout, resolvedStreamUrl, shouldUseNativeVideo]);
+
+    useEffect(() => {
+        clearNativeLoadTimeout();
+        const video = videoRef.current;
+        if (!video || !shouldUseNativeVideo || !resolvedStreamUrl) return;
+
+        const clearIfReady = () => {
+            if (video.readyState >= HAVE_FUTURE_DATA) {
+                clearNativeLoadTimeout();
+            }
+        };
+
+        nativeLoadTimeoutRef.current = setTimeout(() => {
+            nativeLoadTimeoutRef.current = null;
+            if (!video.ended && video.readyState < HAVE_FUTURE_DATA) {
+                onErrorRef.current?.();
+            }
+        }, NATIVE_LOAD_TIMEOUT_MS);
+
+        video.addEventListener('canplay', clearIfReady);
+        video.addEventListener('canplaythrough', clearIfReady);
+        video.addEventListener('playing', clearIfReady);
+        video.addEventListener('timeupdate', clearIfReady);
+        clearIfReady();
+
+        return () => {
+            video.removeEventListener('canplay', clearIfReady);
+            video.removeEventListener('canplaythrough', clearIfReady);
+            video.removeEventListener('playing', clearIfReady);
+            video.removeEventListener('timeupdate', clearIfReady);
+            clearNativeLoadTimeout();
+        };
+    }, [clearNativeLoadTimeout, resolvedStreamUrl, shouldUseNativeVideo]);
+
+    useEffect(() => {
+        clearMediaStallTimeout();
+        const video = videoRef.current;
+        if (!video || !shouldUseNativeVideo || !resolvedStreamUrl) return;
+
+        let lastAdvancedAt = Date.now();
+        let lastTime = Number.isFinite(video.currentTime) ? video.currentTime : 0;
+
+        const markAdvanced = () => {
+            const currentTime = Number.isFinite(video.currentTime) ? video.currentTime : 0;
+            if (currentTime > lastTime + 0.2 || video.readyState >= HAVE_FUTURE_DATA) {
+                lastTime = Math.max(lastTime, currentTime);
+                lastAdvancedAt = Date.now();
+            }
+            if (video.readyState >= HAVE_FUTURE_DATA || video.paused || video.ended) {
+                clearMediaStallTimeout();
+            }
+        };
+
+        const scheduleStallRetry = () => {
+            clearMediaStallTimeout();
+            if (video.paused || video.ended) return;
+
+            const stalledUrl = resolvedStreamUrl;
+            mediaStallTimeoutRef.current = setTimeout(() => {
+                mediaStallTimeoutRef.current = null;
+                if (resolvedStreamUrl !== stalledUrl || video.paused || video.ended) return;
+
+                const currentTime = Number.isFinite(video.currentTime) ? video.currentTime : 0;
+                const playbackStagnant = Math.abs(currentTime - lastTime) < 0.25;
+                const stillWaitingForData = video.readyState < HAVE_FUTURE_DATA;
+                const advancedRecently = Date.now() - lastAdvancedAt < MEDIA_STALL_TIMEOUT_MS - 1000;
+
+                if (playbackStagnant && stillWaitingForData && !advancedRecently) {
+                    onErrorRef.current?.();
+                    return;
+                }
+
+                lastTime = currentTime;
+                scheduleStallRetry();
+            }, MEDIA_STALL_TIMEOUT_MS);
+        };
+
+        const handlePotentialStall = () => {
+            lastTime = Number.isFinite(video.currentTime) ? video.currentTime : lastTime;
+            scheduleStallRetry();
+        };
+
+        video.addEventListener('waiting', handlePotentialStall);
+        video.addEventListener('stalled', handlePotentialStall);
+        video.addEventListener('seeking', handlePotentialStall);
+        video.addEventListener('playing', markAdvanced);
+        video.addEventListener('canplay', markAdvanced);
+        video.addEventListener('canplaythrough', markAdvanced);
+        video.addEventListener('timeupdate', markAdvanced);
+        video.addEventListener('seeked', markAdvanced);
+
+        if (video.autoplay && video.readyState < HAVE_FUTURE_DATA) {
+            scheduleStallRetry();
+        }
+
+        return () => {
+            video.removeEventListener('waiting', handlePotentialStall);
+            video.removeEventListener('stalled', handlePotentialStall);
+            video.removeEventListener('seeking', handlePotentialStall);
+            video.removeEventListener('playing', markAdvanced);
+            video.removeEventListener('canplay', markAdvanced);
+            video.removeEventListener('canplaythrough', markAdvanced);
+            video.removeEventListener('timeupdate', markAdvanced);
+            video.removeEventListener('seeked', markAdvanced);
+            clearMediaStallTimeout();
+        };
+    }, [clearMediaStallTimeout, resolvedStreamUrl, shouldUseNativeVideo]);
+
+    useEffect(() => {
+        autoNextTriggerKeyRef.current = '';
+    }, [episodeSession, resolvedStreamUrl]);
 
     useEffect(() => {
         const video = videoRef.current;
@@ -155,9 +312,16 @@ export default function VideoPlayer(props: VideoPlayerProps) {
             return;
         }
 
+        let hlsRecoveryAttempts = 0;
         const hls = new Hls({
             enableWorker: true,
             lowLatencyMode: false,
+            manifestLoadingTimeOut: 10_000,
+            manifestLoadingMaxRetry: 2,
+            levelLoadingTimeOut: 10_000,
+            levelLoadingMaxRetry: 2,
+            fragLoadingTimeOut: 15_000,
+            fragLoadingMaxRetry: 2,
         });
         hlsRef.current = hls;
         hls.attachMedia(video);
@@ -166,6 +330,16 @@ export default function VideoPlayer(props: VideoPlayerProps) {
         });
         hls.on(Hls.Events.ERROR, (_, data) => {
             if (data.fatal) {
+                if (hlsRecoveryAttempts < 2 && data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+                    hlsRecoveryAttempts += 1;
+                    hls.startLoad();
+                    return;
+                }
+                if (hlsRecoveryAttempts < 2 && data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+                    hlsRecoveryAttempts += 1;
+                    hls.recoverMediaError();
+                    return;
+                }
                 onErrorRef.current?.();
             }
         });
@@ -177,6 +351,25 @@ export default function VideoPlayer(props: VideoPlayerProps) {
             }
         };
     }, [isHls, resolvedStreamUrl, shouldUseNativeVideo]);
+
+    const handleNativeEnded = useCallback((event: SyntheticEvent<HTMLVideoElement>) => {
+        const video = event.currentTarget;
+        onProgressRef.current?.({
+            currentTime: video.currentTime,
+            duration: video.duration,
+            ended: true,
+        });
+
+        if (!autoNextEnabled || !hasNextEpisode || !onNextEpisode) return;
+
+        const triggerKey = `${episodeSession ?? ''}::${resolvedStreamUrl ?? ''}`;
+        if (autoNextTriggerKeyRef.current === triggerKey) return;
+        autoNextTriggerKeyRef.current = triggerKey;
+
+        window.setTimeout(() => {
+            onNextEpisode();
+        }, 650);
+    }, [autoNextEnabled, episodeSession, hasNextEpisode, onNextEpisode, resolvedStreamUrl]);
 
     return (
         <div className={`watch-player-shell w-full max-w-full h-full max-h-full relative bg-[#0b0c0f] group transition-all duration-300 overflow-hidden rounded-none shadow-none outline-none ${displayMode === 'mini' ? 'rounded-xl shadow-2xl shadow-black/70' : 'md:rounded-2xl md:shadow-2xl md:shadow-black/80'}`}>
@@ -197,7 +390,7 @@ export default function VideoPlayer(props: VideoPlayerProps) {
                                     onPause={() => onPlaybackStateChange?.({ isPlaying: false })}
                                     playsInline
                                     autoPlay
-                                    preload="metadata"
+                                    preload="auto"
                                     crossOrigin="anonymous"
                                     onCanPlay={() => onLoadRef.current?.()}
                                     onError={() => onErrorRef.current?.()}
@@ -209,14 +402,7 @@ export default function VideoPlayer(props: VideoPlayerProps) {
                                             ended: video.ended,
                                         });
                                     }}
-                                    onEnded={(event) => {
-                                        const video = event.currentTarget;
-                                        onProgressRef.current?.({
-                                            currentTime: video.currentTime,
-                                            duration: video.duration,
-                                            ended: true,
-                                        });
-                                    }}
+                                    onEnded={handleNativeEnded}
                                 />
                                 <CustomVideoControls
                                     streamKey={`${episodeSession ?? ''}::${resolvedStreamUrl ?? ''}`}
@@ -224,6 +410,8 @@ export default function VideoPlayer(props: VideoPlayerProps) {
                                     onNextEpisode={onNextEpisode}
                                     onPrevEpisode={onPrevEpisode}
                                     hasNextEpisode={hasNextEpisode}
+                                    autoNextEnabled={autoNextEnabled}
+                                    onAutoNextChange={onAutoNextChange}
                                     selectedAudio={selectedAudio}
                                     availableAudios={availableAudios}
                                     onAudioChange={onAudioChange}
@@ -254,6 +442,7 @@ export default function VideoPlayer(props: VideoPlayerProps) {
                                     referrerPolicy="no-referrer"
                                     title="Video Player"
                                     onLoad={() => {
+                                        clearIframeLoadTimeout();
                                         onLoadRef.current?.();
                                         onPlaybackStateChange?.({ isPlaying: true });
                                     }}

@@ -84,7 +84,7 @@ export default function FavoriteAnimePage() {
                                     onClick={() => navigate(`/anime/details/${item.id}`)}
                                     onWatchClick={() => {
                                         const title = slugify(item.title || 'anime');
-                                        navigate(`/anime/watch/${title}/${item.id}`);
+                                        navigate(`/anime/watch/${title}/${item.id}?ep=1`, { state: { anime: animeData } });
                                     }}
                                     inList={true}
                                     onToggleList={() => removeFavorite(item.id)}

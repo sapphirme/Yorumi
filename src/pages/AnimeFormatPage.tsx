@@ -101,13 +101,7 @@ export default function AnimeFormatPage() {
         const title = slugify(item.title || item.title_english || 'anime');
         const id = getDirectScraperRouteId(item.scraperId) || toPositiveNumber(item.id) || toPositiveNumber(item.mal_id);
         if (!id) return;
-        const latestEpisode = Number(item.latestEpisode || 0);
-        const ep = latestEpisode > 0 && item.status !== 'Finished Airing'
-            ? latestEpisode
-            : item.status === 'Currently Airing'
-                ? 'latest'
-                : 1;
-        navigate(`/anime/watch/${title}/${id}?ep=${ep}`, { state: { anime: item } });
+        navigate(`/anime/watch/${title}/${id}?ep=1`, { state: { anime: item } });
     };
 
     if (!config) {

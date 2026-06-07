@@ -5,6 +5,8 @@ import { useStreams } from '../../../hooks/useStreams';
 import type { Anime, Episode } from '../../../types/anime';
 import { storage } from '../../../utils/storage';
 
+const AUTO_NEXT_STORAGE_KEY = 'yorumi:auto-next-enabled';
+
 export function usePlayer(animeId: string | undefined, animeSlugTitle?: string) {
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
@@ -57,6 +59,13 @@ export function usePlayer(animeId: string | undefined, animeSlugTitle?: string) 
     const [episodesResolved, setEpisodesResolved] = useState(false);
     const [streamExhausted, setStreamExhausted] = useState(false);
     const [startAtOverrideSeconds, setStartAtOverrideSeconds] = useState<number | null>(null);
+    const [autoNextEnabled, setAutoNextEnabledState] = useState(() => {
+        try {
+            return localStorage.getItem(AUTO_NEXT_STORAGE_KEY) !== 'false';
+        } catch {
+            return true;
+        }
+    });
     const epNumParam = searchParams.get('ep') || '1';
     const resumeAtSeconds = (() => {
         const raw = searchParams.get('t');
@@ -113,6 +122,15 @@ export function usePlayer(animeId: string | undefined, animeSlugTitle?: string) 
         clearScheduledStreamRetry();
         streamRetryStateRef.current = { key: '', attempts: 0 };
     }, [clearScheduledStreamRetry]);
+
+    const setAutoNextEnabled = useCallback((enabled: boolean) => {
+        setAutoNextEnabledState(enabled);
+        try {
+            localStorage.setItem(AUTO_NEXT_STORAGE_KEY, enabled ? 'true' : 'false');
+        } catch {
+            // Ignore storage errors; the in-memory setting still applies for this session.
+        }
+    }, []);
 
     // --- Effects ---
 
@@ -546,6 +564,7 @@ export function usePlayer(animeId: string | undefined, animeSlugTitle?: string) 
         // UI State
         isExpanded,
         isAutoQuality,
+        autoNextEnabled,
         selectedAudio,
         selectedServer,
         serverOptions,
@@ -565,6 +584,7 @@ export function usePlayer(animeId: string | undefined, animeSlugTitle?: string) 
         setShowQualityMenu,
         handleQualityChange,
         setAutoQuality,
+        setAutoNextEnabled,
         setSelectedServer,
         setSelectedAudio,
         handlePlaybackProgress,

@@ -73,7 +73,7 @@ export default function GenrePage() {
 
     const handleWatchClick = (item: Anime) => {
         const title = slugify(item.title || item.title_english || 'anime');
-        navigate(`/anime/watch/${title}/${item.mal_id}`, { state: { anime: item } });
+        navigate(`/anime/watch/${title}/${item.mal_id}?ep=1`, { state: { anime: item } });
     };
 
     return (

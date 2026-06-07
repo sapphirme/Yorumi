@@ -245,10 +245,20 @@ export function useStreams(scraperSession: string | null, animeTitle?: string) {
 
     // Invalidate cache for a specific episode so the next loadStream call fetches fresh.
     const bustEpisodeCache = useCallback((session: string) => {
-        streamCache.current.delete(session);
+        const normalizedSession = String(session || '').trim();
+        if (!normalizedSession) return;
+
+        streamCache.current.delete(normalizedSession);
+        streamCache.current.delete(`${selectedServer}:${normalizedSession}`);
+        for (const key of streamCache.current.keys()) {
+            if (key.endsWith(`:${normalizedSession}`)) {
+                streamCache.current.delete(key);
+            }
+        }
+
         const activeSession = normalizeDirectScraperSession(scraperSession);
         if (activeSession) {
-            animeService.invalidateStreamCache(activeSession, session, selectedServer);
+            animeService.invalidateStreamCache(activeSession, normalizedSession, selectedServer);
         }
     }, [scraperSession, selectedServer]);
 

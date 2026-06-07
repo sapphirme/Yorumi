@@ -2274,7 +2274,7 @@ const AnimeWatchListCarousel = () => {
                                     onClick={() => navigate(`/anime/details/${routeId}`, { state: { anime: animeData } })}
                                     onWatchClick={() => {
                                         const title = slugify(item.title || 'anime');
-                                        navigate(`/anime/watch/${title}/${routeId}`, { state: { anime: animeData } });
+                                        navigate(`/anime/watch/${title}/${routeId}?ep=1`, { state: { anime: animeData } });
                                     }}
                                     inList={true}
                                     onToggleList={() => removeFromWatchList(item.id)}
