@@ -586,7 +586,15 @@ export class AllMangaScraper {
 
         if (/^https?:\/\//i.test(sourceUrl) && !/\/clock(?:\.json)?(?:[?#]|$)/i.test(sourceUrl)) {
             const server = String(source.sourceName || 'allmanga');
-            const isIframe = /ok\.ru|streamsb|mp4upload|embed|\/e\//i.test(sourceUrl);
+            
+            // STRICT ALLOWLIST: only accept known playable hosts for the web UI.
+            const isPlayable = 
+              /\.(mp4|webm|mkv|m3u8)(\?|$)/i.test(sourceUrl) ||
+              /wixmp\.com|fast4speed\.rsvp|youtube\.com|youtu\.be/i.test(sourceUrl);
+
+            if (!isPlayable) return [];
+
+            const isIframe = /fast4speed\.rsvp|youtube\.com|youtu\.be|ok\.ru|streamsb|mp4upload|embed|\/e\//i.test(sourceUrl);
             return [{
                 quality: '720',
                 audio,
@@ -607,19 +615,20 @@ export class AllMangaScraper {
 
         try {
             const sourceName = String(source.sourceName || 'allmanga');
+            
+            // If it's fast4speed, we CANNOT follow redirects, because the frontend cannot play googlevideo 
+            // natively due to CORS/403 blocks. We must return the fast4speed proxy URL as an iframe.
             if (/fast4speed\.rsvp/i.test(fetchUrl) || sourceName === 'Yt-mp4') {
-                const finalUrl = await this.followRedirects(fetchUrl);
-                if (!finalUrl) return [];
                 return [{
                     quality: '720',
                     audio,
                     provider: 'allmanga',
                     server: sourceName,
-                    url: finalUrl,
-                    directUrl: finalUrl,
-                    isHls: /\.m3u8(?:[?#]|$)/i.test(finalUrl),
-                    referer: /(^|\.)googlevideo\.com$/i.test(new URL(finalUrl).hostname) ? 'https://www.youtube.com' : ALLMANGA_REFERER,
-                    thumbnails: this.extractThumbnails(finalUrl),
+                    url: fetchUrl,
+                    directUrl: undefined, // undefined forces frontend to render as <iframe>
+                    isHls: false,
+                    referer: ALLMANGA_REFERER,
+                    thumbnails: undefined,
                 }];
             }
 
