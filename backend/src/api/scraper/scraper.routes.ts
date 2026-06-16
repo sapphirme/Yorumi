@@ -698,9 +698,17 @@ router.get('/streams', async (req, res) => {
                 }
 
                 if (providerName === 'allmanga' && /^https?:\/\//i.test(next.url)) {
-                    next.url = buildScraperProxyUrl(req, next.url, next.referer || 'https://allmanga.to', true);
-                    if (next.directUrl && /^https?:\/\//i.test(next.directUrl)) {
-                        next.directUrl = buildScraperProxyUrl(req, next.directUrl, next.referer || 'https://allmanga.to', true);
+                    const isMedia = next.isHls || /\.(mp4|webm|mkv|m3u8)(?:[?#]|$)/i.test(next.url) || /fast4speed\.rsvp|googlevideo\.com/i.test(next.url);
+                    if (isMedia) {
+                        next.url = buildScraperProxyUrl(req, next.url, next.referer || 'https://allmanga.to', true);
+                        if (next.directUrl && /^https?:\/\//i.test(next.directUrl)) {
+                            next.directUrl = buildScraperProxyUrl(req, next.directUrl, next.referer || 'https://allmanga.to', true);
+                        }
+                    } else {
+                        const isKwikUrl = /^https?:\/\/([^/]+\.)?kwik\./i.test(next.url);
+                        if (isKwikUrl) {
+                            next.url = buildKwikEmbedProxyUrl(req, next.url);
+                        }
                     }
                     return next;
                 }

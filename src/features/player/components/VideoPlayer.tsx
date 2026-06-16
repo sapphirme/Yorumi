@@ -564,14 +564,14 @@ export default function VideoPlayer(props: VideoPlayerProps) {
                     {isLoading && (
                         <div className="pointer-events-none absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/55">
                             <LoadingSpinner />
-                            <p className="mt-4 text-gray-300 animate-pulse">Loading Stream...</p>
+                            <p className="mt-4 text-gray-300 animate-pulse">Resolving high-quality stream...</p>
                         </div>
                     )}
                 </div>
             ) : isLoading ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/90 z-20">
                     <LoadingSpinner />
-                    <p className="mt-4 text-gray-400 animate-pulse">Loading Stream...</p>
+                    <p className="mt-4 text-gray-400 animate-pulse">Resolving high-quality stream...</p>
                 </div>
             ) : !hasPlayableSource || streamExhausted ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/90 z-20">

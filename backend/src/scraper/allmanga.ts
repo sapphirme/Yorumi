@@ -7,7 +7,7 @@ const ALLMANGA_REFERER = 'https://allmanga.to';
 const ALLANIME_ORIGIN = 'https://youtu-chan.com';
 const ANIMETSU_API_URL = 'https://animetsu.net/v2/api/anime';
 const ANIMETSU_REFERER = 'https://animetsu.net/';
-const ANIMETSU_IMAGE_PROXY = 'https://swiftstream.top/proxy';
+const ANIMETSU_IMAGE_PROXY = 'https://animetsu.net';
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0';
 const EPISODE_QUERY_HASH = 'd405d0edd690624b66baba3068e0edc3ac90f1597d898a1ec8db4e5c43c00fec';
 
@@ -586,15 +586,33 @@ export class AllMangaScraper {
 
         if (/^https?:\/\//i.test(sourceUrl) && !/\/clock(?:\.json)?(?:[?#]|$)/i.test(sourceUrl)) {
             const server = String(source.sourceName || 'allmanga');
-            const isIframe = /ok\.ru|streamsb|mp4upload|embed|\/e\//i.test(sourceUrl);
+            let finalUrl = sourceUrl;
+            let isIframe = /ok\.ru|streamsb|mp4upload|embed|\/e\//i.test(sourceUrl);
+            let isHls = /\.m3u8(?:[?#]|$)/i.test(sourceUrl);
+
+            // Attempt to extract native HLS for reliable iframes using yt-dlp
+            if (/ok\.ru|vk\.com/i.test(sourceUrl)) {
+                try {
+                    const { extractNativeHlsWithYtDlp } = require('../utils/ytdlp');
+                    const extracted = await extractNativeHlsWithYtDlp(sourceUrl);
+                    if (extracted) {
+                        finalUrl = extracted;
+                        isHls = true;
+                        isIframe = false;
+                    }
+                } catch (error) {
+                    console.warn(`[allmanga] yt-dlp extraction failed for ${sourceUrl}`);
+                }
+            }
+
             return [{
                 quality: '720',
                 audio,
                 provider: 'allmanga',
                 server,
-                url: sourceUrl,
-                directUrl: isIframe ? undefined : sourceUrl,
-                isHls: /\.m3u8(?:[?#]|$)/i.test(sourceUrl),
+                url: finalUrl,
+                directUrl: isIframe ? undefined : finalUrl,
+                isHls,
                 referer: ALLMANGA_REFERER,
                 thumbnails: this.extractThumbnails(sourceUrl),
             }];
