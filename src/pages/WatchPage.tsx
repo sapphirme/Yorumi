@@ -196,47 +196,49 @@ export default function WatchPage() {
 
     if (isPageLoading) {
         return (
-            <div className="flex-1 flex flex-col min-h-0 overflow-hidden px-0 pb-0 pt-0 gap-4 md:px-8 md:pb-8">
-                <div className="flex items-center gap-4 shrink-0 px-4 pt-4 md:px-0 md:pt-0">
-                    <button
-                        onClick={() => navigate('/')}
-                        className="p-2 -ml-2 text-gray-400 hover:text-white transition-all hover:bg-white/5 rounded-lg active:scale-95"
-                    >
-                        <Home className="w-5 h-5" />
-                    </button>
-                    <ChevronRight className="w-4 h-4 text-gray-600 shrink-0" />
-                    <div className="h-4 w-48 bg-white/10 rounded animate-pulse" />
-                </div>
-
-                <div className="flex-1 flex flex-col md:flex-row min-h-0 relative overflow-hidden gap-0 md:gap-8">
-                    <div className="flex-1 min-w-0 relative flex flex-col overflow-hidden gap-0 md:gap-4">
-                        <div className="flex-1 flex flex-col overflow-hidden bg-black/40 md:rounded-2xl border border-white/5">
-                            <div className="flex-1 flex items-center justify-center relative">
-                                <div className="absolute inset-0 bg-white/[0.02] animate-pulse" />
-                                <div className="w-20 h-20 rounded-full bg-white/5 flex items-center justify-center animate-pulse z-10">
-                                    <div className="w-8 h-8 ml-2 border-y-[12px] border-y-transparent border-l-[18px] border-l-white/10" />
-                                </div>
-                            </div>
-                            <div className="h-16 bg-white/[0.02] border-t border-white/5 flex items-center px-4 gap-4 w-full">
-                                <div className="w-8 h-8 rounded bg-white/5 animate-pulse shrink-0" />
-                                <div className="w-8 h-8 rounded bg-white/5 animate-pulse shrink-0" />
-                                <div className="flex-1 h-1.5 rounded-full bg-white/5 animate-pulse mx-2" />
-                                <div className="w-16 h-4 rounded bg-white/5 animate-pulse shrink-0" />
-                                <div className="w-8 h-8 rounded bg-white/5 animate-pulse shrink-0" />
-                                <div className="w-8 h-8 rounded bg-white/5 animate-pulse shrink-0" />
-                            </div>
-                        </div>
+            <div className="watch-viewport relative flex flex-col w-full max-w-full bg-[#0a0a0a] text-white overflow-hidden pt-14 h-screen">
+                <div className="flex-1 flex flex-col min-h-0 overflow-hidden px-0 pb-0 pt-0 gap-4 md:px-8 md:pb-8">
+                    <div className="flex items-center gap-4 shrink-0 px-4 pt-4 md:px-0 md:pt-0">
+                        <button
+                            onClick={() => navigate('/')}
+                            className="p-2 -ml-2 text-gray-400 hover:text-white transition-all hover:bg-white/5 rounded-lg active:scale-95"
+                        >
+                            <Home className="w-5 h-5" />
+                        </button>
+                        <ChevronRight className="w-4 h-4 text-gray-600 shrink-0" />
+                        <div className="h-4 w-48 bg-white/10 rounded animate-pulse" />
                     </div>
 
-                    <EpisodeList
-                        episodes={[]}
-                        currentEpNumber={'1'}
-                        watchedEpisodes={new Set<number>()}
-                        isLoading={true}
-                        onEpisodeClick={() => null}
-                        reloadPlayer={() => null}
-                        anime={null}
-                    />
+                    <div className="flex-1 flex flex-col md:flex-row min-h-0 relative overflow-hidden gap-0 md:gap-8">
+                        <div className="flex-1 min-w-0 relative flex flex-col overflow-hidden gap-0 md:gap-4">
+                            <div className="flex-1 flex flex-col overflow-hidden bg-black/40 md:rounded-2xl border border-white/5">
+                                <div className="flex-1 flex items-center justify-center relative">
+                                    <div className="absolute inset-0 bg-white/[0.02] animate-pulse" />
+                                    <div className="w-20 h-20 rounded-full bg-white/5 flex items-center justify-center animate-pulse z-10">
+                                        <div className="w-0 h-0 ml-2 border-y-[12px] border-y-transparent border-l-[18px] border-l-white/10" />
+                                    </div>
+                                </div>
+                                <div className="h-16 bg-white/[0.02] border-t border-white/5 flex items-center px-4 gap-4 w-full">
+                                    <div className="w-8 h-8 rounded bg-white/5 animate-pulse shrink-0" />
+                                    <div className="w-8 h-8 rounded bg-white/5 animate-pulse shrink-0" />
+                                    <div className="flex-1 h-1.5 rounded-full bg-white/5 animate-pulse mx-2" />
+                                    <div className="w-16 h-4 rounded bg-white/5 animate-pulse shrink-0" />
+                                    <div className="w-8 h-8 rounded bg-white/5 animate-pulse shrink-0" />
+                                    <div className="w-8 h-8 rounded bg-white/5 animate-pulse shrink-0" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <EpisodeList
+                            episodes={[]}
+                            currentEpNumber={'1'}
+                            watchedEpisodes={new Set<number>()}
+                            isLoading={true}
+                            onEpisodeClick={() => null}
+                            reloadPlayer={() => null}
+                            anime={null}
+                        />
+                    </div>
                 </div>
             </div>
         );

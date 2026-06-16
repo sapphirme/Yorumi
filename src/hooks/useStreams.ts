@@ -34,12 +34,10 @@ type StreamLookupMetadata = {
     format?: string;
 };
 
-export type StreamServerKey = 'auto' | 'allmanga' | 'gogoanime';
+export type StreamServerKey = 'auto' | 'allmanga';
 
 export const STREAM_SERVER_OPTIONS: Array<{ key: StreamServerKey; label: string }> = [
-    { key: 'auto', label: 'Default' },
-    { key: 'allmanga', label: 'AllManga' },
-    { key: 'gogoanime', label: 'GogoAnime' },
+    { key: 'auto', label: 'Default (AllManga)' },
 ];
 
 

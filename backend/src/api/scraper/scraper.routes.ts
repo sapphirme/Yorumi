@@ -705,13 +705,6 @@ router.get('/streams', async (req, res) => {
                     return next;
                 }
 
-                // GogoAnime: embed iframe URL — pass through as-is (no HLS proxy needed)
-                if (providerName === 'gogoanime' && /^https?:\/\//i.test(next.url)) {
-                    next.isHls = false;
-                    delete next.directUrl;
-                    return next;
-                }
-
 
 
                 if (next.url.includes('/api/scraper/proxy?')) {
