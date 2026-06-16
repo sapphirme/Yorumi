@@ -701,10 +701,12 @@ export class AllMangaScraper {
                     return (bDirect - aDirect) || (Number(b.priority || 0) - Number(a.priority || 0));
                 });
 
-            for (const source of orderedSources) {
-                const links = await this.resolveSource(source, audio);
+            const resolvedLinksArrays = await Promise.all(
+                orderedSources.map(source => this.resolveSource(source, audio).catch(() => []))
+            );
+            
+            for (const links of resolvedLinksArrays) {
                 allLinks.push(...links);
-                if (links.some((link) => !link.isHls)) break;
             }
         }
 
@@ -743,10 +745,12 @@ export class AllMangaScraper {
                     return (bDirect - aDirect) || (Number(b.priority || 0) - Number(a.priority || 0));
                 });
 
-            for (const source of orderedSources) {
-                const links = await this.resolveSource(source, audio);
+            const resolvedLinksArrays = await Promise.all(
+                orderedSources.map(source => this.resolveSource(source, audio).catch(() => []))
+            );
+            
+            for (const links of resolvedLinksArrays) {
                 allLinks.push(...links);
-                if (links.some((link) => !link.isHls)) break;
             }
         }
 

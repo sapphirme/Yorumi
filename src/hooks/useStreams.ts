@@ -81,9 +81,9 @@ export function useStreams(scraperSession: string | null, animeTitle?: string, a
         const isHls = Boolean(stream.isHls) || url.includes('.m3u8') || directUrl.includes('.m3u8');
         const isIframeLike = /vidsrc|vidstream|megacloud|embed|kwik/i.test(url) || !isHls;
 
-        return (isIframeLike ? 1_000_000 : 0)
-            + (hasDirectUrl ? -100_000 : 0)
-            + (isHls ? -1_000_000 : 0)
+        return (isHls ? 1_000_000 : 0)
+            + (hasDirectUrl ? 100_000 : 0)
+            - (isIframeLike ? 1_000_000 : 0)
             + quality;
     }, []);
 
