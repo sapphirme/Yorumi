@@ -34,9 +34,10 @@ type StreamLookupMetadata = {
     format?: string;
 };
 
-export type StreamServerKey = 'auto' | 'allmanga';
+export type StreamServerKey = 'auto' | 'allmanga' | 'videasy';
 
 export const STREAM_SERVER_OPTIONS: Array<{ key: StreamServerKey; label: string }> = [
+    { key: 'videasy', label: 'Videasy (Fastest)' },
     { key: 'auto', label: 'Default (AllManga)' },
 ];
 
@@ -48,12 +49,12 @@ export function useStreams(scraperSession: string | null, animeTitle?: string, a
     const [selectedStreamIndex, setSelectedStreamIndex] = useState<number>(0);
     const [isAutoQuality, setIsAutoQuality] = useState(true);
     const [selectedAudio, setSelectedAudio] = useState<'sub' | 'dub'>('sub');
-    const [selectedServer, setSelectedServer] = useState<StreamServerKey>('auto');
+    const [selectedServer, setSelectedServer] = useState<StreamServerKey>('videasy');
     const [showQualityMenu, setShowQualityMenu] = useState(false);
     const [streamLoading, setStreamLoading] = useState(false);
     const streamCache = useRef(new Map<string, Promise<StreamLink[]>>());
     const activeLoadRequestRef = useRef(0);
-    const previousServerRef = useRef<StreamServerKey>('auto');
+    const previousServerRef = useRef<StreamServerKey>('videasy');
 
     const currentStream = streams[selectedStreamIndex] || null;
     const normalizeDirectScraperSession = (value: unknown) => {
@@ -259,7 +260,7 @@ export function useStreams(scraperSession: string | null, animeTitle?: string, a
         setStreams([]);
         setSelectedStreamIndex(0);
         setSelectedAudio('sub');
-        setSelectedServer('auto');
+        setSelectedServer('videasy');
         setStreamLoading(false);
         streamCache.current.clear();
     }, []);
