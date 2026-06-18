@@ -1,6 +1,7 @@
 import axios from 'axios';
 import crypto from 'crypto';
 import type { AnimeSearchResult, Episode, StreamLink, ThumbnailInfo } from './types';
+import { tmdbService } from '../api/scraper/tmdb.service';
 
 const API_URL = 'https://api.allanime.day/api';
 const ALLMANGA_REFERER = 'https://allmanga.to';
@@ -312,6 +313,21 @@ export class AllMangaScraper {
             console.warn(`[AllManga] Failed to fetch Animetsu episode thumbnails for "${title}"`, error);
             return new Map();
         }
+    }
+
+    private async getTmdbEpisodeThumbnails(show: AllMangaShow | null | undefined, totalEpisodes: number): Promise<Map<number, string>> {
+        if (!show) return new Map();
+        const title = String(show.englishName || show.name || '').trim();
+        if (!title) return new Map();
+
+        const year = show.season?.year;
+        const target = await tmdbService.resolveMediaTarget({ title, year: year ? String(year) : undefined });
+        if (!target || target.mediaType !== 'tv') return new Map();
+
+        const match = title.match(/season\s*(\d+)|(\d+)(st|nd|rd|th)\s*season/i) || title.match(/(?:^|\s)([2-9])$/i);
+        const seasonNumber = match ? parseInt(match[1] || match[2] || match[3]) || 1 : 1;
+
+        return tmdbService.resolveTvEpisodeThumbnails(target.tmdbId, { seasonNumber, fetchAllSeasons: totalEpisodes > 100 });
     }
 
     private sanitizeTitle(value: string) {
@@ -887,6 +903,7 @@ export class AllMangaScraper {
         );
 
         const animetsuThumbnailsPromise = this.getAnimetsuEpisodeThumbnails(show);
+        const tmdbThumbnailsPromise = this.getTmdbEpisodeThumbnails(show, total);
         
         const infos: AllMangaEpisodeInfo[] = [];
         const chunkSize = 100;
@@ -911,9 +928,19 @@ export class AllMangaScraper {
             }
         }
 
-        const animetsuThumbnails = await animetsuThumbnailsPromise;
+        const [animetsuThumbnails, tmdbThumbnails] = await Promise.all([
+            animetsuThumbnailsPromise,
+            tmdbThumbnailsPromise
+        ]);
+
         const episodes = infos
-            .map((info) => this.mapEpisodeInfo(showId, info, fallbackSnapshot, animetsuThumbnails.get(Number(info.episodeIdNum || 0))))
+            .map((info) => {
+                const epNum = Number(info.episodeIdNum || 0);
+                const tmdbThumb = tmdbThumbnails.get(epNum);
+                const aniThumb = animetsuThumbnails.get(epNum);
+                const preferredThumb = tmdbThumb || aniThumb;
+                return this.mapEpisodeInfo(showId, info, fallbackSnapshot, preferredThumb);
+            })
             .filter(Boolean) as Episode[];
 
         return {

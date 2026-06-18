@@ -106,25 +106,27 @@ class TmdbService {
     }
 
     private scoreCandidate(candidate: TmdbSearchResult, titleTokens: string[], year?: string) {
-        const candidateTitles = [
+        const candidateTitles = [...new Set([
             candidate.name,
             candidate.title,
             candidate.original_name,
             candidate.original_title,
-        ].map(normalizeTitle).filter(Boolean);
+        ].map(normalizeTitle).filter(Boolean))];
         let score = Number(candidate.popularity || 0) / 100;
 
         for (const target of titleTokens) {
+            let bestTitleScore = 0;
             for (const candidateTitle of candidateTitles) {
-                if (candidateTitle === target) score += 100;
-                else if (candidateTitle.includes(target) || target.includes(candidateTitle)) score += 55;
+                if (candidateTitle === target) bestTitleScore = Math.max(bestTitleScore, 100);
+                else if (candidateTitle.includes(target) || target.includes(candidateTitle)) bestTitleScore = Math.max(bestTitleScore, 55);
             }
+            score += bestTitleScore;
         }
 
         const candidateYear = getYear(candidate.first_air_date || candidate.release_date);
         if (year && candidateYear === year) score += 25;
         if (candidate.backdrop_path) score += 15;
-        if (candidate.origin_country?.includes('JP') || candidate.original_language === 'ja') score += 10;
+        if (candidate.origin_country?.includes('JP') || candidate.original_language === 'ja') score += 1000;
 
         return score;
     }
@@ -211,7 +213,7 @@ class TmdbService {
         if (titleTokens.length === 0 || !this.isConfigured()) return null;
 
         const year = getYear(input.year);
-        const cacheKey = `tmdb:media-target:v1:${titleTokens.join('|')}:${year}:${String(input.format || '').toUpperCase()}`;
+        const cacheKey = `tmdb:media-target:v2:${titleTokens.join('|')}:${year}:${String(input.format || '').toUpperCase()}`;
         const now = Date.now();
         const mem = this.memoryCache.get(cacheKey);
         if (mem && mem.expiresAt > now) return (mem.value as TmdbMediaTarget | null) || null;
@@ -309,6 +311,86 @@ class TmdbService {
         cacheSet(cacheKey, resolved, 24 * 60 * 60).catch(() => undefined);
 
         return resolved;
+    }
+
+    async resolveTvEpisodeThumbnails(tmdbId: number, options?: { seasonNumber?: number, fetchAllSeasons?: boolean }): Promise<Map<number, string>> {
+        const fetchAll = options?.fetchAllSeasons;
+        const seasonNumber = options?.seasonNumber || 1;
+        const cacheKey = `tmdb:episode-thumbnails:v3:${tmdbId}:${fetchAll ? 'all' : seasonNumber}`;
+        const now = Date.now();
+        const mem = this.memoryCache.get(cacheKey);
+        
+        if (mem && mem.expiresAt > now) {
+            const cachedMap = mem.value as Record<number, string>;
+            return new Map(Object.entries(cachedMap).map(([k, v]) => [Number(k), v]));
+        }
+
+        const redisCached = await cacheGet<Record<number, string>>(cacheKey).catch(() => null);
+        if (redisCached) {
+            this.memoryCache.set(cacheKey, { expiresAt: now + 24 * 60 * 60 * 1000, value: redisCached });
+            return new Map(Object.entries(redisCached).map(([k, v]) => [Number(k), v]));
+        }
+
+        let episodesData: Array<{ episode_number: number, still_path: string | null }> = [];
+
+        if (fetchAll) {
+            const tvPayload = await this.get<{ number_of_seasons?: number }>(`/tv/${tmdbId}`, {}).catch(() => null);
+            const numSeasons = tvPayload?.number_of_seasons || 1;
+            const seasonPromises = [];
+            const maxSeasons = Math.min(numSeasons, 30);
+            for (let i = 1; i <= maxSeasons; i++) {
+                seasonPromises.push(
+                    this.get<{ episodes?: Array<{ episode_number: number, still_path: string | null }> }>(
+                        `/tv/${tmdbId}/season/${i}`, {}
+                    ).catch(() => null)
+                );
+            }
+            const results = await Promise.all(seasonPromises);
+            for (const res of results) {
+                if (Array.isArray(res?.episodes)) {
+                    episodesData.push(...res.episodes);
+                }
+            }
+        } else {
+            const payload = await this.get<{ episodes?: Array<{ episode_number: number, still_path: string | null }> }>(
+                `/tv/${tmdbId}/season/${seasonNumber}`,
+                {}
+            ).catch(() => null);
+            if (Array.isArray(payload?.episodes)) {
+                episodesData = payload.episodes;
+            }
+        }
+
+        const thumbnailMap = new Map<number, string>();
+        const toCache: Record<number, string> = {};
+
+        let absoluteCounter = 1;
+        episodesData.forEach((ep) => {
+            if (ep.episode_number && ep.still_path) {
+                const url = this.buildImageUrl(ep.still_path, 'w780');
+                if (url) {
+                    if (!thumbnailMap.has(ep.episode_number)) {
+                        thumbnailMap.set(ep.episode_number, url);
+                        toCache[ep.episode_number] = url;
+                    }
+                    
+                    if (!thumbnailMap.has(absoluteCounter)) {
+                        thumbnailMap.set(absoluteCounter, url);
+                        toCache[absoluteCounter] = url;
+                    }
+                    absoluteCounter++;
+                }
+            }
+        });
+
+        if (thumbnailMap.size > 0) {
+            this.memoryCache.set(cacheKey, { expiresAt: now + 24 * 60 * 60 * 1000, value: toCache });
+            cacheSet(cacheKey, toCache, 24 * 60 * 60).catch(() => undefined);
+        } else {
+            this.memoryCache.set(cacheKey, { expiresAt: now + 6 * 60 * 60 * 1000, value: {} });
+        }
+
+        return thumbnailMap;
     }
 }
 
