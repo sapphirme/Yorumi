@@ -1,4 +1,5 @@
 import { AllMangaScraper } from '../../scraper/allmanga';
+import { tmdbService } from './tmdb.service';
 
 import { acquireLock, cacheGet, cacheSet, releaseLock } from '../../utils/redis-cache';
 
@@ -443,7 +444,7 @@ export class ScraperService {
                 return true;
             };
             return this.getOrLoad(
-                `episodes:allmanga:v3:${session}`,
+                `episodes:allmanga:v4:${session}`,
                 60 * 60 * 1000,
                 async () => this.allMangaScraper.getEpisodes(session),
                 {
@@ -473,11 +474,11 @@ export class ScraperService {
             }
             return null;
         };
-        const fullCacheKey = `episodes:full:v3:${session}`;
+        const fullCacheKey = `episodes:full:v4:${session}`;
         const lockKey = `lock:episodes:${session}`;
         const fullTtlMs = 24 * 60 * 60 * 1000;
         const shortTtlMs = 60 * 60 * 1000;
-        const shortCacheKey = `episodes:v9:${session}`;
+        const shortCacheKey = `episodes:v10:${session}`;
 
         const fullCached = await cacheGet<any>(fullCacheKey);
         if (fullCached && isCompleteEpisodePayload(fullCached)) {
@@ -522,8 +523,36 @@ export class ScraperService {
         const provider = String(options?.provider || 'auto').trim().toLowerCase() || 'auto';
 
 
+        // ── Videasy provider ──────────────────────────────────────────────
+        if (provider === 'videasy') {
+            const title = String(options?.title || this.queryFromSessionSlug(animeSession)).trim();
+            const episodeNumber = Number(options?.episodeNumber || this.parseEpisodeNumber(epSession)) || 1;
+            const year = options?.year;
+            const format = options?.format;
+            const titles = options?.titles;
+
+            const tmdbTarget = await tmdbService.resolveMediaTarget({ title, titles, year, format });
+            
+            if (tmdbTarget) {
+                const url = tmdbTarget.mediaType === 'movie' 
+                    ? `https://player.videasy.to/movie/${tmdbTarget.tmdbId}`
+                    : `https://player.videasy.to/tv/${tmdbTarget.tmdbId}/1/${episodeNumber}`;
+                
+                return [{
+                    quality: 'auto',
+                    audio: 'sub',
+                    provider: 'videasy',
+                    server: 'Videasy',
+                    url: url,
+                    isHls: false,
+                    referer: 'https://player.videasy.to/'
+                }];
+            }
+            // Fall back to allmanga below if TMDB match fails
+        }
+
         // ── AllManga provider ──────────────────────────────────────────────
-        if (provider === 'allmanga' || provider === 'auto' || this.isAllMangaSession(animeSession)) {
+        if (provider === 'allmanga' || provider === 'auto' || provider === 'videasy' || this.isAllMangaSession(animeSession)) {
             const title = String(options?.title || this.queryFromSessionSlug(animeSession)).trim();
             const episodeNumber = Number(options?.episodeNumber || this.parseEpisodeNumber(epSession));
             const showId = AllMangaScraper.fromSession(animeSession);

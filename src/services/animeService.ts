@@ -1038,7 +1038,7 @@ export const animeService = {
     // Get episodes from scraper. Backend/Redis is the primary cache layer.
     async getEpisodes(session: string, options?: { expectedEpisodes?: number }) {
         const expectedEpisodes = Number(options?.expectedEpisodes || 0);
-        const cacheKey = `episodes:v8:${session}:${expectedEpisodes > 0 ? `min-${expectedEpisodes}` : 'any'}`;
+        const cacheKey = `episodes:v10:${session}:${expectedEpisodes > 0 ? `min-${expectedEpisodes}` : 'any'}`;
         const hasEnoughEpisodes = (payload: any) => {
             const episodes = Array.isArray(payload?.episodes) ? payload.episodes : [];
             if (episodes.length === 0) return false;
@@ -1051,7 +1051,7 @@ export const animeService = {
             return inFlightRequests.get(cacheKey);
         }
 
-        const CACHE_COLLECTION = "anime_episodes_v6";
+        const CACHE_COLLECTION = "anime_episodes_v7";
         const docRef = db ? doc(db, CACHE_COLLECTION, session) : null;
 
         const readFirebaseEpisodes = async (timeoutMs: number): Promise<{ episodes: any[] } | null> => {
