@@ -69,7 +69,7 @@ export default function EpisodeList({
         return metadata.find((item) => {
             const match = item.title?.match(/Episode\s+(\d+)/i);
             return match && parseFloat(match[1]) === episodeNumber;
-        }) || metadata[episodeNumber - 1] || null;
+        }) || null;
     };
 
     const [isScrolling, setIsScrolling] = useState(false);
