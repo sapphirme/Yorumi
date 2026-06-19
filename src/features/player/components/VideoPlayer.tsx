@@ -549,6 +549,7 @@ export default function VideoPlayer(props: VideoPlayerProps) {
                                     className="w-full h-full border-0 bg-black"
                                     loading="eager"
                                     allowFullScreen
+                                    sandbox={selectedServer === 'auto' ? "allow-scripts allow-same-origin allow-presentation allow-forms" : undefined}
                                     allow="autoplay; encrypted-media"
                                     referrerPolicy="no-referrer"
                                     title="Video Player"
