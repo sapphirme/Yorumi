@@ -10,7 +10,8 @@ const isMostlyLatin = (value: string): boolean => {
     return latinChars / normalized.length >= 0.6;
 };
 
-export const getDisplayTitle = (item: Record<string, unknown>, language: TitleLanguage): string => {
+export const getDisplayTitle = (item: Record<string, unknown> | null | undefined, language: TitleLanguage): string => {
+    if (!item) return 'Unknown';
     const synonyms = Array.isArray(item.synonyms) ? item.synonyms.filter(isNonEmptyString) : [];
     const latinSynonyms = synonyms.filter((value) => isMostlyLatin(value));
     const fallbackSynonyms = synonyms.filter((value) => !latinSynonyms.includes(value));
@@ -34,7 +35,8 @@ export const getDisplayTitle = (item: Record<string, unknown>, language: TitleLa
     return 'Unknown';
 };
 
-export const getSecondaryTitle = (item: Record<string, unknown>, language: TitleLanguage): string => {
+export const getSecondaryTitle = (item: Record<string, unknown> | null | undefined, language: TitleLanguage): string => {
+    if (!item) return '';
     const primary = getDisplayTitle(item, language);
     const alternateLanguage: TitleLanguage = language === 'eng' ? 'jpy' : 'eng';
     const secondary = getDisplayTitle(item, alternateLanguage);

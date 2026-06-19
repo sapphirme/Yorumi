@@ -428,9 +428,7 @@ const refreshHomeFastCache = async () => {
     homeFastRefreshPromise = (async () => {
         try {
             const payload = await buildHomeFastPayload();
-            if (!Array.isArray(payload.spotlight) || payload.spotlight.length === 0) {
-                throw new Error('Home fast payload missing spotlight');
-            }
+            // Allow partial payloads if spotlight times out to maintain resilience.
             homeFastMemoryCache = { data: payload, timestamp: Date.now() };
             await redis.set(HOME_FAST_CACHE_KEY, payload, { ex: HOME_FAST_TTL_SECONDS });
             return payload;
