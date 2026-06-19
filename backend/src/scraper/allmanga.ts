@@ -324,8 +324,21 @@ export class AllMangaScraper {
         const target = await tmdbService.resolveMediaTarget({ title, year: year ? String(year) : undefined });
         if (!target || target.mediaType !== 'tv') return new Map();
 
-        const match = title.match(/season\s*(\d+)|(\d+)(st|nd|rd|th)\s*season/i) || title.match(/(?:^|\s)([2-9])$/i);
-        const seasonNumber = match ? parseInt(match[1] || match[2] || match[3]) || 1 : 1;
+        let searchTitle = title;
+        try {
+            const { anilistService } = require('../api/scraper/anilist.service');
+            const anilistMatch = await anilistService.resolveSeasonTitle(title, 1);
+            if (anilistMatch?.title) {
+                searchTitle = anilistMatch.title.english || anilistMatch.title.romaji || title;
+            }
+        } catch {}
+
+        let seasonNumber = await tmdbService.resolveSeasonByTitle(target.tmdbId, searchTitle);
+        
+        if (!seasonNumber) {
+            const match = searchTitle.match(/season\s*(\d+)|(\d+)(st|nd|rd|th)\s*season/i) || searchTitle.match(/(?:^|\s)([2-9])$/i);
+            seasonNumber = match ? parseInt(match[1] || match[2] || match[3]) || 1 : 1;
+        }
 
         return tmdbService.resolveTvEpisodeThumbnails(target.tmdbId, { seasonNumber, fetchAllSeasons: totalEpisodes > 100 });
     }
@@ -613,7 +626,7 @@ export class AllMangaScraper {
                     const extracted = await extractNativeHlsWithYtDlp(sourceUrl);
                     if (extracted) {
                         finalUrl = extracted;
-                        isHls = true;
+                        isHls = /\.m3u8(?:[?#]|$)/i.test(extracted);
                         isIframe = false;
                     }
                 } catch (error) {

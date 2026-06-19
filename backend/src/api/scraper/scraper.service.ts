@@ -1,5 +1,6 @@
 import { AllMangaScraper } from '../../scraper/allmanga';
 import { tmdbService } from './tmdb.service';
+import { anilistService } from './anilist.service';
 
 import { acquireLock, cacheGet, cacheSet, releaseLock } from '../../utils/redis-cache';
 
@@ -534,9 +535,19 @@ export class ScraperService {
             const tmdbTarget = await tmdbService.resolveMediaTarget({ title, titles, year, format });
             
             if (tmdbTarget) {
+                let seasonNumber = 1;
+                let relEpisode = episodeNumber;
+
+                if (tmdbTarget.mediaType === 'tv') {
+                    const resolvedSeason = await tmdbService.resolveSeasonByTitle(tmdbTarget.tmdbId, title);
+                    if (resolvedSeason) {
+                        seasonNumber = resolvedSeason;
+                    }
+                }
+
                 const url = tmdbTarget.mediaType === 'movie' 
                     ? `https://player.videasy.to/movie/${tmdbTarget.tmdbId}`
-                    : `https://player.videasy.to/tv/${tmdbTarget.tmdbId}/1/${episodeNumber}`;
+                    : `https://player.videasy.to/tv/${tmdbTarget.tmdbId}/${seasonNumber}/${relEpisode}`;
                 
                 return [{
                     quality: 'auto',
@@ -553,9 +564,28 @@ export class ScraperService {
 
         // ── AllManga provider ──────────────────────────────────────────────
         if (provider === 'allmanga' || provider === 'auto' || provider === 'videasy' || this.isAllMangaSession(animeSession)) {
-            const title = String(options?.title || this.queryFromSessionSlug(animeSession)).trim();
-            const episodeNumber = Number(options?.episodeNumber || this.parseEpisodeNumber(epSession));
-            const showId = AllMangaScraper.fromSession(animeSession);
+            let title = String(options?.title || this.queryFromSessionSlug(animeSession)).trim();
+            let episodeNumber = Number(options?.episodeNumber || this.parseEpisodeNumber(epSession));
+            let showId = AllMangaScraper.fromSession(animeSession);
+            const year = options?.year;
+            const format = options?.format;
+            const titles = options?.titles;
+
+            // Resolve exact AniList season title to fix AllManga's strict season separation
+            // We use seasonNumber = 1 because the `title` from Yorumi is ALREADY the specific season's title
+            const anilistResult = await anilistService.resolveSeasonTitle(title, 1);
+            
+            const baseTitle = anilistResult.romaji || anilistResult.title || title;
+            const searchTitle = baseTitle;
+            
+            // Re-assign title to the romaji version for AllManga search
+            title = searchTitle;
+            
+            // If the romaji title is drastically different from the query, the showId might be invalid
+            if (searchTitle !== baseTitle) {
+                showId = '';
+            }
+
             const key = `streams:allmanga:v2:${showId || title.toLowerCase()}:${episodeNumber || epSession}`;
             const links = await this.getOrLoad(
                 key,

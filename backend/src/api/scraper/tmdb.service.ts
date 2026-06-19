@@ -392,6 +392,94 @@ class TmdbService {
 
         return thumbnailMap;
     }
+
+    async resolveAbsoluteEpisode(tmdbId: number, absoluteEpisode: number): Promise<{ seasonNumber: number; relativeEpisode: number } | null> {
+        const cacheKey = `tmdb:absolute-episode:v2:${tmdbId}:${absoluteEpisode}`;
+        const now = Date.now();
+        const mem = this.memoryCache.get(cacheKey);
+        
+        if (mem && mem.expiresAt > now) {
+            return (mem.value as { seasonNumber: number; relativeEpisode: number } | null);
+        }
+
+        const redisCached = await cacheGet<{ seasonNumber: number; relativeEpisode: number } | null>(cacheKey).catch(() => null);
+        if (redisCached !== null) {
+            this.memoryCache.set(cacheKey, { expiresAt: now + 24 * 60 * 60 * 1000, value: redisCached });
+            return redisCached;
+        }
+
+        const tvPayload = await this.get<{ seasons?: Array<{ season_number: number; episode_count: number }> }>(`/tv/${tmdbId}`, {}).catch(() => null);
+        
+        let resolved: { seasonNumber: number; relativeEpisode: number } | null = null;
+        let remainingEpisodes = absoluteEpisode;
+
+        if (Array.isArray(tvPayload?.seasons)) {
+            const validSeasons = tvPayload.seasons
+                .filter(s => s.season_number > 0)
+                .sort((a, b) => a.season_number - b.season_number);
+                
+            for (const season of validSeasons) {
+                if (remainingEpisodes <= season.episode_count) {
+                    resolved = { seasonNumber: season.season_number, relativeEpisode: remainingEpisodes };
+                    break;
+                }
+                remainingEpisodes -= season.episode_count;
+            }
+        }
+
+        if (!resolved && absoluteEpisode > 0) {
+            resolved = { seasonNumber: 1, relativeEpisode: absoluteEpisode };
+        }
+
+        this.memoryCache.set(cacheKey, { expiresAt: now + 24 * 60 * 60 * 1000, value: resolved });
+        cacheSet(cacheKey, resolved, 24 * 60 * 60).catch(() => undefined);
+
+        return resolved;
+    }
+
+    async resolveSeasonByTitle(tmdbId: number, searchTitle: string): Promise<number | null> {
+        if (!searchTitle) return null;
+
+        const cacheKey = `tmdb:season-by-title:v1:${tmdbId}:${normalizeTitle(searchTitle)}`;
+        const now = Date.now();
+        const mem = this.memoryCache.get(cacheKey);
+        if (mem && mem.expiresAt > now) return (mem.value as number | null) || null;
+
+        const redisCached = await cacheGet<number | null>(cacheKey).catch(() => null);
+        if (redisCached !== null) {
+            this.memoryCache.set(cacheKey, { expiresAt: now + 24 * 60 * 60 * 1000, value: redisCached });
+            return redisCached || null;
+        }
+
+        const tvPayload = await this.get<{ seasons?: Array<{ season_number: number; name: string }> }>(`/tv/${tmdbId}`, {}).catch(() => null);
+        let resolvedSeason: number | null = null;
+
+        if (Array.isArray(tvPayload?.seasons)) {
+            const normalizedSearch = searchTitle.toLowerCase().replace(/[^a-z0-9]/g, '');
+            for (const season of tvPayload.seasons) {
+                if (season.season_number === 0) continue;
+                const normalizedSeasonName = (season.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+                if (normalizedSeasonName.length > 3 && normalizedSearch.includes(normalizedSeasonName)) {
+                    resolvedSeason = season.season_number;
+                    break;
+                }
+            }
+        }
+        
+        if (!resolvedSeason) {
+            // Try fallback regex for "Season X"
+            const match = searchTitle.match(/season\s*(\d+)|(\d+)(st|nd|rd|th)\s*season/i) || searchTitle.match(/(?:^|\s)([2-9])$/i);
+            if (match) {
+                const parsed = parseInt(match[1] || match[2] || match[3]);
+                if (!isNaN(parsed) && parsed > 0) resolvedSeason = parsed;
+            }
+        }
+
+        this.memoryCache.set(cacheKey, { expiresAt: now + 24 * 60 * 60 * 1000, value: resolvedSeason });
+        cacheSet(cacheKey, resolvedSeason, 24 * 60 * 60).catch(() => undefined);
+
+        return resolvedSeason;
+    }
 }
 
 export const tmdbService = new TmdbService();
