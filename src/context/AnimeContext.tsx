@@ -811,7 +811,8 @@ export function AnimeProvider({ children }: { children: ReactNode }) {
                 }
             } catch (err) {
                 console.error("Failed to fetch top anime page", currentPage, err);
-                setError('Failed to fetch anime.');
+                // Intentionally NOT setting global error here.
+                // A failure in fetching background top anime should not crash the player/details pages.
             } finally {
                 setLoading(false);
             }
