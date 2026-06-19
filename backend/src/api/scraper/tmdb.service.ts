@@ -154,11 +154,8 @@ class TmdbService {
                     query: title,
                     include_adult: false,
                     language: 'en-US',
-                    ...(year
-                        ? mediaType === 'movie'
-                            ? { primary_release_year: year }
-                            : { first_air_date_year: year }
-                        : {}),
+                    // Intentionally NOT passing 'year' directly to TMDB API because long-running TV shows
+                    // have a first_air_date from Season 1, which will cause 0 results if we pass a newer season's year.
                 }).catch(() => null);
 
                 if (Array.isArray(payload?.results)) {
@@ -194,7 +191,7 @@ class TmdbService {
         if (titleTokens.length === 0 || !this.isConfigured()) return undefined;
 
         const year = getYear(input.year);
-        const cacheKey = `tmdb:backdrop:v1:${titleTokens.join('|')}:${year}:${String(input.format || '').toUpperCase()}`;
+        const cacheKey = `tmdb:backdrop:v2:${titleTokens.join('|')}:${year}:${String(input.format || '').toUpperCase()}`;
         const now = Date.now();
         const mem = this.memoryCache.get(cacheKey);
         if (mem && mem.expiresAt > now) return (mem.value as string | null) || undefined;
@@ -223,7 +220,7 @@ class TmdbService {
         if (titleTokens.length === 0 || !this.isConfigured()) return null;
 
         const year = getYear(input.year);
-        const cacheKey = `tmdb:media-target:v3:${titleTokens.join('|')}:${year}:${String(input.format || '').toUpperCase()}`;
+        const cacheKey = `tmdb:media-target:v4:${titleTokens.join('|')}:${year}:${String(input.format || '').toUpperCase()}`;
         const now = Date.now();
         const mem = this.memoryCache.get(cacheKey);
         if (mem && mem.expiresAt > now) return (mem.value as TmdbMediaTarget | null) || null;
@@ -263,7 +260,7 @@ class TmdbService {
         if (titleTokens.length === 0 || !this.isConfigured()) return null;
 
         const country = String(input.country || 'US').trim().toUpperCase().replace(/[^A-Z]/g, '').slice(0, 2) || 'US';
-        const cacheKey = `tmdb:watch-providers:v1:${titleTokens.join('|')}:${getYear(input.year)}:${String(input.format || '').toUpperCase()}:${country}`;
+        const cacheKey = `tmdb:watch-providers:v2:${titleTokens.join('|')}:${getYear(input.year)}:${String(input.format || '').toUpperCase()}:${country}`;
         const now = Date.now();
         const mem = this.memoryCache.get(cacheKey);
         if (mem && mem.expiresAt > now) return (mem.value as WatchProviderResult | null) || null;
