@@ -167,10 +167,20 @@ class TmdbService {
             }
         }
 
+        // Determine the preferred media type from the input format.
+        // When format is explicitly 'TV' (or any TV variant), strongly prefer TV results
+        // to prevent movies from the same franchise outscoring the TV series via popularity.
+        const upperFormat = String(input.format || '').toUpperCase();
+        const preferredMediaType: TmdbMediaType | null =
+            upperFormat === 'MOVIE' ? 'movie' :
+            (upperFormat === 'TV' || upperFormat === 'TV_SHORT' || upperFormat === 'ONA' || upperFormat === 'OVA' || upperFormat === 'SPECIAL')
+                ? 'tv' : null;
+
         return candidates
             .map((entry) => ({
                 ...entry,
-                score: this.scoreCandidate(entry.candidate, titleTokens, year),
+                score: this.scoreCandidate(entry.candidate, titleTokens, year)
+                    + (preferredMediaType && entry.mediaType === preferredMediaType ? 500 : 0),
             }))
             .sort((a, b) => b.score - a.score)[0] || null;
     }
@@ -213,7 +223,7 @@ class TmdbService {
         if (titleTokens.length === 0 || !this.isConfigured()) return null;
 
         const year = getYear(input.year);
-        const cacheKey = `tmdb:media-target:v2:${titleTokens.join('|')}:${year}:${String(input.format || '').toUpperCase()}`;
+        const cacheKey = `tmdb:media-target:v3:${titleTokens.join('|')}:${year}:${String(input.format || '').toUpperCase()}`;
         const now = Date.now();
         const mem = this.memoryCache.get(cacheKey);
         if (mem && mem.expiresAt > now) return (mem.value as TmdbMediaTarget | null) || null;
