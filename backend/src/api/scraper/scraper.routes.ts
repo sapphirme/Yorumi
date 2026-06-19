@@ -355,6 +355,13 @@ const patchEmbedHtml = (req: any, html: string, origin: string, embedReferer: st
   patchAttr(HTMLIFrameElement.prototype, 'src');
   patchAttr(HTMLMediaElement.prototype, 'src');
   patchAttr(HTMLSourceElement.prototype, 'src');
+
+  // Block pointer lock to prevent cursor capture by third-party players
+  Element.prototype.requestPointerLock = function() {
+    console.warn("Pointer lock blocked by Yorumi proxy script.");
+    return Promise.resolve();
+  };
+  document.exitPointerLock = function() {};
 })();
 </script>`;
 
