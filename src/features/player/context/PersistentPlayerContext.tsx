@@ -117,14 +117,17 @@ export function PersistentPlayerProvider({ children }: { children: ReactNode }) 
                 props.streamUrl &&
                 currentProps.streamUrl === props.streamUrl
             );
-            const isSameServer = currentProps?.selectedServer === props.selectedServer;
             const previousPath = previousWatchUrl.split('?')[0];
             const nextPath = nextWatchUrl.split('?')[0];
             
+            // Preserve the active stream when returning to the same watch page.
+            // We intentionally do NOT check isSameServer here because useStreams
+            // always re-initializes selectedServer to 'videasy' on mount, so
+            // the incoming props will mismatch if the user was on AllManga.
+            // Intentional server switches go through loadStream, not registerPlayer.
             const shouldPreserveActiveStream = Boolean(
                 currentProps?.streamUrl &&
                 previousPath === nextPath &&
-                isSameServer &&
                 (!props.streamUrl || props.isLoading || isSameIncomingStream)
             );
 
@@ -138,6 +141,7 @@ export function PersistentPlayerProvider({ children }: { children: ReactNode }) 
                 episodeSession: currentProps.episodeSession,
                 isHls: currentProps.isHls,
                 subtitles: currentProps.subtitles,
+                selectedServer: currentProps.selectedServer,
                 isLoading: false,
                 hasPlayableSource: currentProps.hasPlayableSource,
                 streamExhausted: false,
