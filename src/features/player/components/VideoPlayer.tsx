@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, type SyntheticEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type SyntheticEvent } from 'react';
 import Hls from 'hls.js';
-import { Maximize, X } from 'lucide-react';
+import { Maximize, X, Globe, CheckCircle2, Circle } from 'lucide-react';
 import LoadingSpinner from '../../../components/ui/LoadingSpinner';
 import type { StreamLink, SubtitleTrack } from '../../../types/stream';
 import { API_BASE } from '../../../config/api';
@@ -106,12 +106,33 @@ export default function VideoPlayer(props: VideoPlayerProps) {
     const autoSkipPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const autoNextTriggerKeyRef = useRef('');
     const apiOrigin = API_BASE.replace(/\/+$/, '').replace(/\/api$/i, '');
+    const [showServerMenu, setShowServerMenu] = useState(false);
+    const [isFullscreen, setIsFullscreen] = useState(false);
+
+    useEffect(() => {
+        const handleFullscreenChange = () => {
+            setIsFullscreen(!!document.fullscreenElement);
+        };
+        document.addEventListener('fullscreenchange', handleFullscreenChange);
+        return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    }, []);
+    const getServerDisplayName = (key: string) => {
+        if (key === 'videasy') return 'Videasy';
+        if (key === 'auto') return 'AllManga';
+        return key;
+    };
 
     const resolvedStreamUrl = useMemo(() => {
         if (!streamUrl) return streamUrl;
-        if (streamUrl.includes('/api/scraper/embed')) return streamUrl;
-        if (!/^https?:\/\/([^/]+\.)?kwik\./i.test(streamUrl)) return streamUrl;
-        return `${apiOrigin}/api/scraper/embed?url=${encodeURIComponent(streamUrl)}`;
+        let url = streamUrl;
+        if (!streamUrl.includes('/api/scraper/embed') && /^https?:\/\/([^/]+\.)?kwik\./i.test(streamUrl)) {
+            url = `${apiOrigin}/api/scraper/embed?url=${encodeURIComponent(streamUrl)}`;
+        }
+        if (url.includes('videasy.to') && !url.includes('autoplay=')) {
+            const separator = url.includes('?') ? '&' : '?';
+            url = `${url}${separator}autoplay=1`;
+        }
+        return url;
     }, [apiOrigin, streamUrl]);
 
     const shouldUseNativeVideo = useMemo(() => {
@@ -179,6 +200,9 @@ export default function VideoPlayer(props: VideoPlayerProps) {
             if (start > 0 && Number.isFinite(video.duration) && start < video.duration - 1) {
                 video.currentTime = start;
             }
+            video.play().catch((err) => {
+                console.warn('Autoplay failed or was blocked:', err);
+            });
         };
 
         if (video.readyState >= 1) applyStart();
@@ -561,6 +585,56 @@ export default function VideoPlayer(props: VideoPlayerProps) {
                             </>
                         )}
                     </div>
+                    {displayMode !== 'mini' && !isFullscreen && (
+                        <div 
+                            className={`absolute top-0 left-0 p-4 sm:p-6 transition-opacity duration-300 z-[2147483647] ${showServerMenu ? 'opacity-100 pointer-events-auto' : 'opacity-0 group-hover:opacity-100 pointer-events-none'}`}
+                        >
+                            <div className="pointer-events-auto relative">
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setShowServerMenu(!showServerMenu);
+                                    }}
+                                    className="flex items-center gap-2 rounded-full watch-control-glass px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white shadow-[0_8px_28px_rgba(0,0,0,0.28)] transition-all hover:bg-white/20 active:scale-95 border border-white/10"
+                                >
+                                    <Globe className="h-3.5 w-3.5 text-white/90" />
+                                    <span>{getServerDisplayName(selectedServer)}</span>
+                                </button>
+                                
+                                {showServerMenu && (
+                                    <>
+                                        <div className="fixed inset-0 z-40" onClick={() => setShowServerMenu(false)} />
+                                        <div className="absolute left-0 mt-3 w-56 rounded-2xl bg-[#1A1A1A]/95 p-2 shadow-2xl backdrop-blur-xl border border-white/10 flex flex-col gap-1 z-50">
+                                            {serverOptions.map((server) => {
+                                                const isSelected = selectedServer === server.key;
+                                                const name = getServerDisplayName(server.key);
+                                                return (
+                                                    <button
+                                                        key={server.key}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            onServerChange(server.key);
+                                                            onSetAutoQuality();
+                                                            setShowServerMenu(false);
+                                                        }}
+                                                        className={`flex w-full items-center justify-between rounded-xl p-3 text-left transition-colors ${isSelected ? 'bg-white/10 text-white' : 'text-white/80 hover:bg-white/10'}`}
+                                                    >
+                                                        <div className="flex items-center gap-2">
+                                                            <span className={`text-sm ${isSelected ? 'font-semibold' : 'font-medium'}`}>{name}</span>
+                                                            {server.key === 'auto' && (
+                                                                <span className="rounded bg-purple-500/20 px-1.5 py-0.5 text-[9px] font-bold text-purple-400 tracking-wider">ANIME</span>
+                                                            )}
+                                                        </div>
+                                                        {isSelected ? <CheckCircle2 className="h-4 w-4 text-white" /> : <Circle className="h-4 w-4 text-white/35" />}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    )}
                     {isLoading && (
                         <div className="pointer-events-none absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/55">
                             <LoadingSpinner />

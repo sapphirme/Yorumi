@@ -514,6 +514,8 @@ export default function CustomVideoControls({
                 </div>
             )}
 
+            {/* Top Bar - Server Selection */}
+
             <div 
                 className={`absolute bottom-0 left-0 right-0 p-2 sm:p-6 transition-opacity duration-300 z-[2147483647] pointer-events-none ${showControls || !isPlaying ? 'opacity-100' : 'opacity-0'}`}
             >

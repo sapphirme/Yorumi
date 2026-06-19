@@ -118,9 +118,12 @@ export function PersistentPlayerProvider({ children }: { children: ReactNode }) 
                 currentProps.streamUrl === props.streamUrl
             );
             const isSameServer = currentProps?.selectedServer === props.selectedServer;
+            const previousPath = previousWatchUrl.split('?')[0];
+            const nextPath = nextWatchUrl.split('?')[0];
+            
             const shouldPreserveActiveStream = Boolean(
                 currentProps?.streamUrl &&
-                previousWatchUrl === nextWatchUrl &&
+                previousPath === nextPath &&
                 isSameServer &&
                 (!props.streamUrl || props.isLoading || isSameIncomingStream)
             );
