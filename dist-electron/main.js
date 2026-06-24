@@ -2,7 +2,6 @@ import { createRequire } from "node:module";
 import { BrowserWindow, app, ipcMain, session, shell, webContents } from "electron";
 import * as path from "path";
 import * as fs from "fs";
-import * as dotenv from "dotenv";
 import { fileURLToPath } from "url";
 import { createRequire as createRequire$1 } from "module";
 var __create = Object.create;
@@ -2317,7 +2316,15 @@ if (!fs.existsSync(envPath)) {
 	if (fs.existsSync(bundledEnvPath)) fs.copyFileSync(bundledEnvPath, envPath);
 	else fs.writeFileSync(envPath, "# Yorumi User Configuration\n\n# TMDB_API_KEY=\n");
 }
-dotenv.config({ path: envPath });
+try {
+	const envContent = fs.readFileSync(envPath, 'utf8');
+	envContent.split(/\r?\n/).forEach(line => {
+		const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
+		if (match) {
+			process.env[match[1]] = match[2].replace(/^['"]|['"]$/g, '').trim();
+		}
+	});
+} catch (e) {}
 var mainWindow = null;
 var getMainWindow = () => mainWindow;
 var playerWcIds = /* @__PURE__ */ new Set();
