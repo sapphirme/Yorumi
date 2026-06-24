@@ -13,8 +13,6 @@ import DetailsHero from '../features/anime/components/details/DetailsHero';
 import DetailsInfo from '../features/anime/components/details/DetailsInfo';
 import DetailsEpisodeGrid, { type SeasonChip } from '../features/anime/components/details/DetailsEpisodeGrid';
 import DetailsVideoPlayer from '../features/anime/components/details/DetailsVideoPlayer';
-import DetailsCharacters from '../features/anime/components/details/DetailsCharacters';
-import DetailsTrailers from '../features/anime/components/details/DetailsTrailers';
 
 const EpisodesSkeleton = ({ count = 10 }: { count?: number }) => (
     <div className="py-6 border-t border-white/10 mt-6">
@@ -870,19 +868,7 @@ export default function AnimeDetailsPage() {
                                 )
                             )}
 
-                            {/* Characters Section */}
-                            {detailsLoading && !hasCharacters ? (
-                                <CharactersSkeleton />
-                            ) : (
-                                <DetailsCharacters characters={selectedAnime.characters} />
-                            )}
 
-                            {/* Trailers Section */}
-                            {detailsLoading && !hasTrailers ? (
-                                <TrailersSkeleton />
-                            ) : (
-                                <DetailsTrailers trailer={selectedAnime.trailer} />
-                            )}
                 </DetailsInfo>
             </div>
         </div>
