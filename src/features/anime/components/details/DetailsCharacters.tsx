@@ -9,8 +9,11 @@ export default function DetailsCharacters({ characters, title = "Characters & Vo
     if (!characters || characters.edges.length === 0) return null;
 
     return (
-        <div className="py-6 border-t border-white/10 mt-6">
-            <h3 className="text-xl font-bold text-white mb-4">{title}</h3>
+        <div className="py-6 mt-6">
+            <div className="flex items-center gap-4 mb-6">
+                <h3 className="text-xl font-black text-white uppercase tracking-wider whitespace-nowrap">{title}</h3>
+                <div className="flex-1 h-px bg-white/10" />
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {characters.edges.slice(0, 9).map((char, idx) => {
                     const va = char.voiceActors?.find(v => v.languageV2 === 'Japanese') || char.voiceActors?.[0];
