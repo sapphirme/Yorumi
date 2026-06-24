@@ -13,6 +13,11 @@ const NATIVE_LOAD_TIMEOUT_MS = 20_000;
 const MEDIA_STALL_TIMEOUT_MS = 14_000;
 const HAVE_FUTURE_DATA = 3;
 
+type ThemedWebViewElement = HTMLWebViewElement & {
+    insertCSS: (css: string) => Promise<string>;
+    executeJavaScript: <T = unknown>(code: string) => Promise<T>;
+};
+
 export interface VideoPlayerProps {
     streamUrl?: string;
     episodeSession?: string;
@@ -98,6 +103,7 @@ export default function VideoPlayer(props: VideoPlayerProps) {
     const onProgressRef = useRef(onProgress);
     const startAtRef = useRef(startAtSeconds);
     const videoRef = useRef<HTMLVideoElement | null>(null);
+    const webviewRef = useRef<ThemedWebViewElement | null>(null);
     const lastResolvedStreamUrlRef = useRef<string | undefined>(undefined);
     const hlsRef = useRef<Hls | null>(null);
     const iframeLoadTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -127,10 +133,6 @@ export default function VideoPlayer(props: VideoPlayerProps) {
         let url = streamUrl;
         if (!streamUrl.includes('/api/scraper/embed') && /^https?:\/\/([^/]+\.)?kwik\./i.test(streamUrl)) {
             url = `${apiOrigin}/api/scraper/embed?url=${encodeURIComponent(streamUrl)}`;
-        }
-        if (url.includes('videasy.to') && !url.includes('autoplay=')) {
-            const separator = url.includes('?') ? '&' : '?';
-            url = `${url}${separator}autoplay=1`;
         }
         return url;
     }, [apiOrigin, streamUrl]);
@@ -254,6 +256,156 @@ export default function VideoPlayer(props: VideoPlayerProps) {
             clearNativeLoadTimeout();
         };
     }, [clearNativeLoadTimeout, resolvedStreamUrl, shouldUseNativeVideo]);
+
+    useEffect(() => {
+        const webview = webviewRef.current;
+        if (!webview || shouldUseNativeVideo) return;
+
+        const handleLoad = () => {
+            clearIframeLoadTimeout();
+            onLoadRef.current?.();
+            onPlaybackStateChange?.({ isPlaying: true });
+
+            try {
+                // Advanced CSS overrides for modern Tailwind players
+                webview.insertCSS(`
+                    :root {
+                        --primary: #3DB4F2 !important;
+                        --primary-color: #3DB4F2 !important;
+                        --theme-color: #3DB4F2 !important;
+                        --accent: #3DB4F2 !important;
+                        --accent-color: #3DB4F2 !important;
+                        --red: #3DB4F2 !important;
+                        --destructive: #3DB4F2 !important;
+                        --plyr-color-main: #3DB4F2 !important;
+                    }
+                    /* Override Tailwind arbitrary color classes preserving opacity */
+                    [class*="bg-\\[\\#e50914\\]"], [class*="bg-\\[\\#E50914\\]"], [class*="bg-\\[\\#ef4444\\]"], [class*="bg-\\[\\#dc2626\\]"], [class*="bg-\\[\\#b91c1c\\]"], [class*="bg-\\[\\#ff0000\\]"], [class*="bg-red-"] {
+                        background-color: rgb(61 180 242 / var(--tw-bg-opacity, 1)) !important;
+                    }
+                    [class*="text-\\[\\#e50914\\]"], [class*="text-\\[\\#E50914\\]"], [class*="text-\\[\\#ef4444\\]"], [class*="text-\\[\\#dc2626\\]"], [class*="text-\\[\\#b91c1c\\]"], [class*="text-\\[\\#ff0000\\]"], [class*="text-red-"] {
+                        color: rgb(61 180 242 / var(--tw-text-opacity, 1)) !important;
+                    }
+                    [class*="border-\\[\\#e50914\\]"], [class*="border-\\[\\#E50914\\]"], [class*="border-\\[\\#ef4444\\]"], [class*="border-\\[\\#dc2626\\]"], [class*="border-\\[\\#b91c1c\\]"], [class*="border-\\[\\#ff0000\\]"], [class*="border-red-"] {
+                        border-color: rgb(61 180 242 / var(--tw-border-opacity, 1)) !important;
+                    }
+                    [class*="ring-\\[\\#e50914\\]"], [class*="ring-\\[\\#E50914\\]"], [class*="ring-\\[\\#ef4444\\]"], [class*="ring-\\[\\#dc2626\\]"], [class*="ring-red-"] {
+                        --tw-ring-color: rgb(61 180 242 / var(--tw-ring-opacity, 1)) !important;
+                    }
+                    /* Also handle SVG strokes and fills */
+                    [class*="stroke-\\[\\#e50914\\]"], [class*="stroke-\\[\\#ef4444\\]"], [class*="stroke-red-"] { stroke: #3DB4F2 !important; }
+                    [class*="fill-\\[\\#e50914\\]"], [class*="fill-\\[\\#ef4444\\]"], [class*="fill-red-"] { fill: #3DB4F2 !important; }
+                `);
+
+                // Deep JS mutation observer to forcefully recolor any dynamic or inline styles that are Netflix Red
+                webview.executeJavaScript(`
+                    (function() {
+                        const style = document.createElement('style');
+                        style.textContent = \`
+                            :root {
+                                --primary: #3DB4F2 !important;
+                                --primary-color: #3DB4F2 !important;
+                                --theme-color: #3DB4F2 !important;
+                                --accent: #3DB4F2 !important;
+                                --accent-color: #3DB4F2 !important;
+                                --red: #3DB4F2 !important;
+                                --destructive: #3DB4F2 !important;
+                                --plyr-color-main: #3DB4F2 !important;
+                            }
+                            .text-\\\\[\\\\#e50914\\\\], .text-\\\\[\\\\#E50914\\\\], .text-\\\\[\\\\#ff0000\\\\], .text-primary {
+                                color: rgb(61 180 242 / var(--tw-text-opacity, 1)) !important;
+                            }
+                            .bg-\\\\[\\\\#e50914\\\\], .bg-\\\\[\\\\#E50914\\\\], .bg-\\\\[\\\\#ff0000\\\\], .bg-primary, .plyr__progress__buffer, .vjs-play-progress {
+                                background-color: rgb(61 180 242 / var(--tw-bg-opacity, 1)) !important;
+                            }
+                            .border-\\\\[\\\\#e50914\\\\], .border-\\\\[\\\\#E50914\\\\], .border-\\\\[\\\\#ff0000\\\\], .border-primary {
+                                border-color: rgb(61 180 242 / var(--tw-border-opacity, 1)) !important;
+                            }
+                            [class*="text-red-"], [class*="text-rose-"] {
+                                color: rgb(61 180 242 / var(--tw-text-opacity, 1)) !important;
+                            }
+                            [class*="bg-red-"], [class*="bg-rose-"] {
+                                background-color: rgb(61 180 242 / var(--tw-bg-opacity, 1)) !important;
+                            }
+                            [class*="border-red-"], [class*="border-rose-"] {
+                                border-color: rgb(61 180 242 / var(--tw-border-opacity, 1)) !important;
+                            }
+                            [class*="ring-red-"], [class*="ring-rose-"] {
+                                --tw-ring-color: rgb(61 180 242 / var(--tw-ring-opacity, 1)) !important;
+                            }
+                            /* Hardcoded CSS rule overrides */
+                            [style*="color: rgb(229, 9, 20)"], [style*="color: rgb(239, 68, 68)"], [style*="color: rgb(220, 38, 38)"], [style*="color: #e50914"], [style*="color: #E50914"], [style*="color: #ef4444"], [style*="color: #dc2626"], [style*="color: #ff0000"] {
+                                color: #3DB4F2 !important;
+                            }
+                            [style*="background-color: rgb(229, 9, 20)"], [style*="background-color: rgb(239, 68, 68)"], [style*="background-color: rgb(220, 38, 38)"], [style*="background-color: #e50914"], [style*="background-color: #E50914"], [style*="background-color: #ef4444"], [style*="background-color: #dc2626"], [style*="background-color: #ff0000"] {
+                                background-color: #3DB4F2 !important;
+                            }
+                            [style*="border-color: rgb(229, 9, 20)"], [style*="border-color: rgb(239, 68, 68)"], [style*="border-color: rgb(220, 38, 38)"], [style*="border-color: #e50914"], [style*="border-color: #E50914"], [style*="border-color: #ef4444"], [style*="border-color: #dc2626"], [style*="border-color: #ff0000"] {
+                                border-color: #3DB4F2 !important;
+                            }
+                        \`;
+                        document.head.appendChild(style);
+                        
+                        const isRed = (str) => str && (str.includes('229, 9, 20') || str.includes('229 9 20') || str.includes('239, 68, 68') || str.includes('239 68 68') || str.includes('220, 38, 38') || str.includes('220 38 38') || str.includes('185, 28, 28') || str.includes('185 28 28') || str.includes('#e50914') || str.includes('#E50914') || str.includes('#ef4444') || str.includes('#dc2626') || str.includes('#b91c1c'));
+                        const toBlue = (str) => {
+                            if (!str) return str;
+                            return str.replace(/229,\\s*9,\\s*20/g, '61, 180, 242')
+                                      .replace(/229\\s+9\\s+20/g, '61 180 242')
+                                      .replace(/239,\\s*68,\\s*68/g, '61, 180, 242')
+                                      .replace(/239\\s+68\\s+68/g, '61 180 242')
+                                      .replace(/220,\\s*38,\\s*38/g, '61, 180, 242')
+                                      .replace(/220\\s+38\\s+38/g, '61 180 242')
+                                      .replace(/185,\\s*28,\\s*28/g, '61, 180, 242')
+                                      .replace(/185\\s+28\\s+28/g, '61 180 242')
+                                      .replace(/#e50914|#ef4444|#dc2626|#b91c1c/gi, '#3DB4F2');
+                        };
+
+                        // Force update all current inline styles globally and gracefully handle opacities
+                        const walk = (node) => {
+                            if (node.style) {
+                                if (isRed(node.style.color)) node.style.setProperty('color', toBlue(node.style.color), 'important');
+                                if (isRed(node.style.backgroundColor)) node.style.setProperty('background-color', toBlue(node.style.backgroundColor), 'important');
+                                if (isRed(node.style.borderColor)) node.style.setProperty('border-color', toBlue(node.style.borderColor), 'important');
+                                if (isRed(node.style.outlineColor)) node.style.setProperty('outline-color', toBlue(node.style.outlineColor), 'important');
+                                if (isRed(node.style.boxShadow)) node.style.setProperty('box-shadow', toBlue(node.style.boxShadow), 'important');
+                            }
+                            if (node.childNodes && node.childNodes.length > 0) {
+                                for (let i = 0; i < node.childNodes.length; i++) {
+                                    walk(node.childNodes[i]);
+                                }
+                            }
+                        };
+                        
+                        const performPass = () => walk(document.body);
+                        performPass();
+                        
+                        // Use mutation observer for high performance instead of setInterval if possible
+                        const observer = new MutationObserver((mutations) => {
+                            let shouldWalk = false;
+                            for (const m of mutations) {
+                                if (m.addedNodes.length > 0 || m.attributeName === 'style' || m.attributeName === 'class') {
+                                    shouldWalk = true;
+                                    break;
+                                }
+                            }
+                            if (shouldWalk) performPass();
+                        });
+                        observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'class'] });
+                        
+                        // Failsafe
+                        setInterval(performPass, 1000);
+                    })();
+                `);
+            } catch (e) {
+                console.error("Failed to inject theme CSS into webview", e);
+            }
+        };
+
+        webview.addEventListener('did-finish-load', handleLoad);
+        return () => {
+            webview.removeEventListener('did-finish-load', handleLoad);
+        };
+    }, [clearIframeLoadTimeout, resolvedStreamUrl, shouldUseNativeVideo, onPlaybackStateChange]);
 
     useEffect(() => {
         clearMediaStallTimeout();
@@ -543,20 +695,14 @@ export default function VideoPlayer(props: VideoPlayerProps) {
                             </>
                         ) : (
                             <>
-                                <iframe
+                                <webview
+                                    ref={webviewRef}
                                     key={`${episodeSession ?? ''}::${resolvedStreamUrl ?? ''}`}
                                     src={resolvedStreamUrl}
+                                    partition="persist:player"
                                     className="w-full h-full border-0 bg-black"
-                                    loading="eager"
-                                    allowFullScreen
-                                    allow="autoplay; encrypted-media"
-                                    referrerPolicy="no-referrer"
+                                    allowpopups={false}
                                     title="Video Player"
-                                    onLoad={() => {
-                                        clearIframeLoadTimeout();
-                                        onLoadRef.current?.();
-                                        onPlaybackStateChange?.({ isPlaying: true });
-                                    }}
                                 />
                                 {displayMode === 'mini' && (
                                     <div className="absolute inset-x-0 top-0 z-20 flex items-start justify-between p-2 bg-gradient-to-b from-black/55 to-transparent opacity-0 transition-opacity duration-200 group-hover:opacity-100">
