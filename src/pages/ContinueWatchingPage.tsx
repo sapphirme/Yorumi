@@ -26,7 +26,7 @@ export default function ContinueWatchingPage() {
                             : anime.mal_id;
                         if (!targetId) return;
                         const resume = Number.isFinite(startSeconds) ? Math.max(0, Math.floor(startSeconds || 0)) : 0;
-                        navigate(`/anime/watch/${title}/${targetId}?ep=${episodeNumber}${resume > 0 ? `&t=${resume}` : ''}`);
+                        navigate(`/anime/details/${targetId}?ep=${episodeNumber}${resume > 0 ? `&t=${resume}` : ''}`);
                     }}
                 />
             </div>
