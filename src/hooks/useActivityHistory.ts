@@ -1,85 +1,65 @@
-import { useState, useEffect, useCallback } from 'react';
-import { doc, onSnapshot, runTransaction } from 'firebase/firestore';
-import { db, isFirebaseEnabled } from '../services/firebase';
-import { useAuth } from '../context/AuthContext';
+import { useCallback, useEffect, useState } from 'react';
 
 export interface ActivityData {
-    [dateString: string]: number; // "YYYY-MM-DD": count
+    [dateString: string]: number;
 }
 
+const ACTIVITY_KEY = 'yorumi_activity_history';
+const ACTIVITY_SEEN_KEY = 'yorumi_activity_seen';
+const STORAGE_EVENT = 'yorumi-storage-updated';
+
+const readJson = <T,>(key: string, fallback: T): T => {
+    try {
+        const raw = localStorage.getItem(key);
+        return raw ? JSON.parse(raw) as T : fallback;
+    } catch {
+        return fallback;
+    }
+};
+
+const writeJson = (key: string, value: unknown) => {
+    localStorage.setItem(key, JSON.stringify(value));
+    window.dispatchEvent(new CustomEvent(STORAGE_EVENT));
+};
+
 export function useActivityHistory() {
-    const { user } = useAuth();
-    const [activityData, setActivityData] = useState<ActivityData>({});
-    const [loading, setLoading] = useState(true);
+    const [activityData, setActivityData] = useState<ActivityData>(() => readJson<ActivityData>(ACTIVITY_KEY, {}));
+    const [loading] = useState(false);
+
+    const reload = useCallback(() => {
+        setActivityData(readJson<ActivityData>(ACTIVITY_KEY, {}));
+    }, []);
 
     useEffect(() => {
-        if (!user || !isFirebaseEnabled || !db) {
-            setActivityData({});
-            setLoading(false);
-            return;
-        }
-
-        // We store activity in: users/{uid}/activity/history
-        const activityRef = doc(db, 'users', user.uid, 'activity', 'history');
-
-        const unsubscribe = onSnapshot(activityRef, (doc) => {
-            if (doc.exists()) {
-                setActivityData(doc.data() as ActivityData);
-            } else {
-                setActivityData({});
-            }
-            setLoading(false);
-        }, (error) => {
-            console.error("Failed to subscribe to activity history:", error);
-            setLoading(false);
-        });
-
-        return () => unsubscribe();
-    }, [user]);
+        window.addEventListener(STORAGE_EVENT, reload);
+        return () => window.removeEventListener(STORAGE_EVENT, reload);
+    }, [reload]);
 
     const recordActivity = useCallback(async (activityKey?: string) => {
-        if (!user || !db) return;
-
         const date = new Date();
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        const dateString = `${year}-${month}-${day}`;
+        const dateString = [
+            date.getFullYear(),
+            String(date.getMonth() + 1).padStart(2, '0'),
+            String(date.getDate()).padStart(2, '0')
+        ].join('-');
 
-        const activityRef = doc(db, 'users', user.uid, 'activity', 'history');
         const normalizedKey = activityKey?.replace(/\//g, '_');
-        const activitySeenRef = normalizedKey
-            ? doc(db, 'users', user.uid, 'activitySeen', normalizedKey)
-            : null;
+        const seen = readJson<Record<string, string>>(ACTIVITY_SEEN_KEY, {});
+        if (normalizedKey && seen[normalizedKey]) return;
 
-        try {
-            await runTransaction(db, async (tx) => {
-                // Count unique chapter/episode only once when a dedupe key is provided.
-                if (activitySeenRef) {
-                    const seenSnap = await tx.get(activitySeenRef);
-                    if (seenSnap.exists()) return;
-                }
+        const history = readJson<ActivityData>(ACTIVITY_KEY, {});
+        writeJson(ACTIVITY_KEY, {
+            ...history,
+            [dateString]: Number(history[dateString] || 0) + 1
+        });
 
-                const historySnap = await tx.get(activityRef);
-                const currentCount = historySnap.exists()
-                    ? Number((historySnap.data() as ActivityData)[dateString] || 0)
-                    : 0;
-
-                tx.set(activityRef, {
-                    [dateString]: currentCount + 1
-                }, { merge: true });
-
-                if (activitySeenRef) {
-                    tx.set(activitySeenRef, {
-                        createdAt: Date.now(),
-                        date: dateString
-                    });
-                }
+        if (normalizedKey) {
+            writeJson(ACTIVITY_SEEN_KEY, {
+                ...seen,
+                [normalizedKey]: dateString
             });
-        } catch (error) {
-            console.error("Failed to record activity:", error);
         }
-    }, [user]);
+    }, []);
 
     return {
         activityData,
