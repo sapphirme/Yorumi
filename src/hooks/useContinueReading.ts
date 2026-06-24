@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useAuth } from '../context/AuthContext';
 import { storage, type ReadProgress } from '../utils/storage';
 import { useActivityHistory } from './useActivityHistory';
 
 interface Manga {
+    id?: number | string;
     mal_id: number | string;
+    scraper_id?: string;
     title: string;
     status?: string;
     chapters?: number | null;
@@ -23,9 +24,8 @@ interface Chapter {
 }
 
 export function useContinueReading() {
-    const { user } = useAuth();
     const { recordActivity } = useActivityHistory();
-    const [continueReadingList, setContinueReadingList] = useState<ReadProgress[]>([]);
+    const [continueReadingList, setContinueReadingList] = useState<ReadProgress[]>(() => storage.getContinueReading());
 
     const reload = useCallback(() => {
         setContinueReadingList(storage.getContinueReading());
@@ -33,24 +33,15 @@ export function useContinueReading() {
 
     // Subscribe to local storage updates
     useEffect(() => {
-        if (!user) {
-            setContinueReadingList([]);
-            return;
-        }
-
-        // Initial load
-        reload();
-
-        // Re-render whenever storage mutates
         window.addEventListener('yorumi-storage-updated', reload);
         return () => window.removeEventListener('yorumi-storage-updated', reload);
-    }, [user, reload]);
+    }, [reload]);
 
     const saveProgress = useCallback(async (manga: Manga, chapter: Chapter) => {
-        if (!user) return; // Only save if logged in
+        const mangaId = String(manga.scraper_id || manga.id || manga.mal_id);
 
         const progress: ReadProgress = {
-            mangaId: manga.mal_id.toString(),
+            mangaId,
             chapterId: chapter.id,
             chapterNumber: chapter.chapter,
             timestamp: Date.now(),
@@ -65,16 +56,15 @@ export function useContinueReading() {
         storage.saveReadingProgress(progress);
 
         try {
-            await recordActivity(`manga:${manga.mal_id}:ch:${progress.chapterNumber}`);
+            await recordActivity(`manga:${mangaId}:ch:${progress.chapterNumber}`);
         } catch (error) {
             console.error("Failed to record read activity:", error);
         }
-    }, [user, recordActivity]);
+    }, [recordActivity]);
 
     const removeFromHistory = useCallback(async (mangaId: string) => {
-        if (!user) return;
         storage.removeFromContinueReading(mangaId.toString());
-    }, [user]);
+    }, []);
 
     return {
         continueReadingList,
