@@ -5,10 +5,10 @@ interface CarouselProps {
     title?: string;
     children: React.ReactNode;
     variant?: 'portrait' | 'landscape';
-    onViewAll?: () => void;
+
 }
 
-const Carousel: React.FC<CarouselProps> = ({ title, children, variant = 'portrait', onViewAll }) => {
+const Carousel: React.FC<CarouselProps> = ({ title, children, variant = 'portrait' }) => {
     const [emblaRef, emblaApi] = useEmblaCarousel({
         loop: false,
         align: 'center',
@@ -31,18 +31,11 @@ const Carousel: React.FC<CarouselProps> = ({ title, children, variant = 'portrai
         <div className="mb-12 group/carousel relative">
             {/* Header */}
             {title && (
-                <div className="flex justify-between items-end mb-4 px-2">
-                    <h2 className="text-xl font-bold text-white tracking-wide border-l-4 border-yorumi-accent pl-3">
+                <div className="flex items-center gap-4 mb-6">
+                    <h2 className="text-xl md:text-2xl font-black text-white tracking-wide uppercase whitespace-nowrap">
                         {title}
                     </h2>
-                    {showControls && onViewAll && (
-                        <span
-                            onClick={onViewAll}
-                            className="text-xs font-semibold text-gray-400 hover:text-yorumi-accent cursor-pointer transition-colors tracking-wider"
-                        >
-                            View All
-                        </span>
-                    )}
+                    <div className="flex-1 h-px bg-white/10" />
                 </div>
             )}
 
@@ -68,13 +61,13 @@ const Carousel: React.FC<CarouselProps> = ({ title, children, variant = 'portrai
             )}
 
             {/* Carousel Viewport */}
-            <div className="overflow-hidden px-4" ref={emblaRef}>
+            <div className="overflow-hidden" ref={emblaRef}>
                 <div className="flex gap-4 touch-pan-y">
                     {/* Slides need to be wrapped to maintain gap */}
                     {React.Children.map(children, (child) => (
                         <div className={`${variant === 'landscape'
-                            ? 'flex-[0_0_70%] sm:flex-[0_0_50%] md:flex-[0_0_40%] lg:flex-[0_0_30%] xl:flex-[0_0_25%]'
-                            : 'flex-[0_0_45%] sm:flex-[0_0_30%] md:flex-[0_0_24%] lg:flex-[0_0_18%] xl:flex-[0_0_16%]'} min-w-0`}>
+                            ? 'flex-[0_0_60%] sm:flex-[0_0_45%] md:flex-[0_0_35%] lg:flex-[0_0_25%] xl:flex-[0_0_20%]'
+                            : 'flex-[0_0_40%] sm:flex-[0_0_25%] md:flex-[0_0_20%] lg:flex-[0_0_15%] xl:flex-[0_0_13%]'} min-w-0`}>
                             {child}
                         </div>
                     ))}
