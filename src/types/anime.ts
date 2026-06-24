@@ -94,4 +94,5 @@ export interface Episode {
     duration?: string;
     title?: string;
     snapshot?: string;
+    _tmdbAbsolute?: number;
 }
