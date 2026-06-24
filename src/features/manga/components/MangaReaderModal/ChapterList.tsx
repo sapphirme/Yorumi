@@ -41,11 +41,11 @@ export default function ChapterList({
 
     return (
         <aside className={`
-            absolute md:static inset-y-0 left-0 z-40
-            w-[280px] md:w-[320px] shrink-0 flex flex-col h-full 
-            bg-[#111] md:bg-black/20 border-r border-white/10 
-            transition-all duration-300 ease-in-out
-            ${showChapters ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+            absolute inset-y-0 left-0 z-[60]
+            w-[320px] shrink-0 flex flex-col h-full 
+            bg-[#111]/95 backdrop-blur-xl border-r border-white/10 
+            transition-transform duration-300 ease-in-out
+            ${showChapters ? 'translate-x-0' : '-translate-x-full'}
             ${isHeaderVisible ? 'pt-14' : 'pt-0'}
         `}>
             <div className="p-4 border-b border-white/5">
