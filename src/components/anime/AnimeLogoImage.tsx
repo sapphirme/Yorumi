@@ -130,6 +130,7 @@ export default function AnimeLogoImage({ anilistId, title, year, episodes, forma
     };
 
     useEffect(() => {
+        return; // Temporarily disabled: user requested text titles only for now
         let isMounted = true;
         setLogoUrl(null);
         setHasError(false);
@@ -144,9 +145,10 @@ export default function AnimeLogoImage({ anilistId, title, year, episodes, forma
         }
 
         const fetchLogo = async () => {
+            const key = cacheKey as string;
             // Check cache first
-            if (logoCache.has(cacheKey)) {
-                const cached = logoCache.get(cacheKey);
+            if (logoCache.has(key)) {
+                const cached = logoCache.get(key);
                 if (isMounted) {
                     if (cached) {
                         setLogoUrl(cached);
@@ -159,8 +161,8 @@ export default function AnimeLogoImage({ anilistId, title, year, episodes, forma
             }
 
             // Check if there's already a pending request for this ID
-            if (pendingRequests.has(cacheKey)) {
-                const result = await pendingRequests.get(cacheKey);
+            if (pendingRequests.has(key)) {
+                const result = await pendingRequests.get(key);
                 if (isMounted) {
                     if (result) {
                         setLogoUrl(result);
@@ -192,28 +194,28 @@ export default function AnimeLogoImage({ anilistId, title, year, episodes, forma
                     const data = await response.json();
 
                     if (data.logo && data.source === 'fanart') {
-                        logoCache.set(cacheKey, data.logo);
+                        logoCache.set(key, data.logo);
                         if (data.anilistId) {
                             logoCache.set(`id:${data.anilistId}`, data.logo);
                         }
                         persistCache();
                         return data.logo;
                     } else {
-                        logoCache.set(cacheKey, null);
+                        logoCache.set(key, null);
                         persistCache();
                         return null;
                     }
                 } catch (error) {
                     console.warn('[AnimeLogoImage] Failed to fetch logo:', error);
-                    logoCache.set(cacheKey, null);
+                    logoCache.set(key, null);
                     persistCache();
                     return null;
                 } finally {
-                    pendingRequests.delete(cacheKey);
+                    pendingRequests.delete(key);
                 }
             })();
 
-            pendingRequests.set(cacheKey, fetchPromise);
+            pendingRequests.set(key, fetchPromise);
             const result = await fetchPromise;
 
             if (isMounted) {
@@ -234,10 +236,10 @@ export default function AnimeLogoImage({ anilistId, title, year, episodes, forma
     }, [anilistId, title, year, episodes, format]);
 
     // If logo is available and no error, show the logo
-    if (logoUrl && !hasError) {
+    if (false && logoUrl && !hasError) {
         return (
             <img
-                src={logoUrl}
+                src={logoUrl || undefined}
                 alt={title}
                 className={`max-w-full h-auto object-contain fade-in ${className}`}
                 style={{
@@ -257,7 +259,7 @@ export default function AnimeLogoImage({ anilistId, title, year, episodes, forma
     // Default: Show text title immediately while logo is resolving.
     // This provides instant content - user sees title immediately
     return (
-        <h1 className={`text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black text-white leading-tight ${className}`}>
+        <h1 className={`text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black text-white leading-tight line-clamp-3 ${className}`}>
             {title}
         </h1>
     );
