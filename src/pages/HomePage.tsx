@@ -8,8 +8,6 @@ import { animeService } from '../services/animeService';
 
 // Feature Components
 import AnimeDashboard from '../features/anime/components/AnimeDashboard';
-import AnimeGridPage from '../features/anime/components/AnimeGridPage';
-import ContinueWatching from '../features/anime/components/ContinueWatching';
 
 export default function HomePage() {
     const navigate = useNavigate();
@@ -155,7 +153,7 @@ export default function HomePage() {
         }
 
         const resume = Number.isFinite(startSeconds) ? Math.max(0, Math.floor(startSeconds || 0)) : 0;
-        const url = `/anime/watch/${title}/${id}?ep=${targetEp}${resume > 0 ? `&t=${resume}` : ''}`;
+        const url = `/anime/details/${id}?ep=${targetEp}${resume > 0 ? `&t=${resume}` : ''}`;
         navigate(url, { state: { anime: resolved.anime } });
     };
 
@@ -186,7 +184,6 @@ export default function HomePage() {
                 <AnimeDashboard
                     spotlightAnime={[]}
                     spotlightLoading={true}
-                    continueWatchingList={[]}
                     latestUpdates={[]}
                     latestUpdatesLoading={true}
                     trendingAnime={[]}
@@ -201,12 +198,10 @@ export default function HomePage() {
                     topAnimeLoading={true}
                     allTimeTitle={allTimeTitle}
                     compactCatalogMode={isCatalogFilterView}
-                    showEstimatedSchedule={!isCatalogFilterView}
-                    showGenres={!isCatalogFilterView}
+
+
                     onAnimeClick={handleAnimeClick}
                     onWatchClick={handleWatchClick}
-                    onViewAll={anime.openViewAll}
-                    onRemoveFromHistory={anime.removeFromHistory}
                     onAnimeHover={handleAnimeHover}
                 />
             </div>
@@ -227,82 +222,7 @@ export default function HomePage() {
         );
     }
 
-    // View Switching
-    if (anime.viewMode === 'continue_watching') {
-        return (
-            <div className="container mx-auto px-4 pt-24 pb-12 z-10 relative">
-                <ContinueWatching
-                    items={anime.continueWatchingList}
-                    variant="page"
-                    onWatchClick={handleWatchClick}
-                    onRemove={anime.removeFromHistory}
-                    onBack={anime.closeViewAll}
-                />
-            </div>
-        );
-    }
 
-    if (anime.viewMode === 'trending') {
-        return (
-            <AnimeGridPage
-                title="Trending Now"
-                animeList={anime.viewAllAnime}
-                isLoading={anime.viewAllLoading}
-                pagination={anime.viewAllPagination}
-                onPageChange={anime.changeViewAllPage}
-                onBack={anime.closeViewAll}
-                onAnimeClick={(item) => handleAnimeClick(item, 'Trending')}
-                onAnimeHover={handleAnimeHover}
-            />
-        );
-    }
-
-    if (anime.viewMode === 'latest') {
-        return (
-            <AnimeGridPage
-                title="Latest Updates"
-                animeList={anime.viewAllAnime}
-                isLoading={anime.viewAllLoading}
-                pagination={anime.viewAllPagination}
-                onPageChange={anime.changeViewAllPage}
-                onBack={anime.closeViewAll}
-                onAnimeClick={(item) => handleAnimeClick(item, 'Latest Updates')}
-                onAnimeHover={handleAnimeHover}
-                infiniteScroll
-                onLoadMore={anime.loadMoreViewAll}
-            />
-        );
-    }
-
-    if (anime.viewMode === 'seasonal') {
-        return (
-            <AnimeGridPage
-                title="Popular This Season"
-                animeList={anime.viewAllAnime}
-                isLoading={anime.viewAllLoading}
-                pagination={anime.viewAllPagination}
-                onPageChange={anime.changeViewAllPage}
-                onBack={anime.closeViewAll}
-                onAnimeClick={(item) => handleAnimeClick(item, 'Popular This Season')}
-                onAnimeHover={handleAnimeHover}
-            />
-        );
-    }
-
-    if (anime.viewMode === 'popular') {
-        return (
-            <AnimeGridPage
-                title="All-Time Popular"
-                animeList={anime.viewAllAnime}
-                isLoading={anime.viewAllLoading}
-                pagination={anime.viewAllPagination}
-                onPageChange={anime.changeViewAllPage}
-                onBack={anime.closeViewAll}
-                onAnimeClick={(item) => handleAnimeClick(item, 'All-Time Popular')}
-                onAnimeHover={handleAnimeHover}
-            />
-        );
-    }
 
     // Default Dashboard
     return (
@@ -310,7 +230,6 @@ export default function HomePage() {
             <AnimeDashboard
                 spotlightAnime={anime.spotlightAnime}
                 spotlightLoading={anime.spotlightLoading}
-                continueWatchingList={anime.continueWatchingList}
                 latestUpdates={anime.latestUpdates}
                 latestUpdatesLoading={anime.latestUpdatesLoading}
                 trendingAnime={anime.trendingAnime}
@@ -325,12 +244,10 @@ export default function HomePage() {
                 topAnimeLoading={anime.loading}
                 allTimeTitle={allTimeTitle}
                 compactCatalogMode={isCatalogFilterView}
-                showEstimatedSchedule={!isCatalogFilterView}
-                showGenres={!isCatalogFilterView}
+
+
                 onAnimeClick={handleAnimeClick}
                 onWatchClick={handleWatchClick}
-                onViewAll={anime.openViewAll}
-                onRemoveFromHistory={anime.removeFromHistory}
                 onAnimeHover={handleAnimeHover}
             />
         </div>
