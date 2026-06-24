@@ -8,7 +8,7 @@
   "type": "module",
   "scripts": {
     "dev": "concurrently \"npm run dev --prefix backend\" \"vite\" \"wait-on tcp:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .\"",
-    "build": "tsc -b tsconfig.app.json tsconfig.node.json && vite build",
+    "build": "npm run build --prefix backend && tsc -b tsconfig.app.json tsconfig.node.json && vite build",
     "build:electron": "npm run build && electron-builder",
     "start": "concurrently \"npm run dev --prefix backend\" \"electron .\"",
     "lint": "eslint .",
@@ -76,7 +76,7 @@
     },
     "files": [
       "dist/**/*",
-      "dist-electron/**/*"
+      "dist-electron/**/*", "backend/dist/**/*", "backend/package.json", "backend/node_modules/**/*"
     ],
     "win": {
       "target": "nsis",
