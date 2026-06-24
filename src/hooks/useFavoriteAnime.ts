@@ -1,7 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
-import { collection, deleteDoc, doc, onSnapshot, orderBy, query, setDoc } from 'firebase/firestore';
-import { db, isFirebaseEnabled } from '../services/firebase';
-import { useAuth } from '../context/AuthContext';
+import { useCallback, useEffect, useState } from 'react';
 
 export interface FavoriteAnimeItem {
     id: string;
@@ -11,46 +8,46 @@ export interface FavoriteAnimeItem {
     addedAt: number;
 }
 
+const FAVORITE_ANIME_KEY = 'yorumi_favorite_anime';
+const STORAGE_EVENT = 'yorumi-storage-updated';
+
+const readFavorites = (): FavoriteAnimeItem[] => {
+    try {
+        const raw = localStorage.getItem(FAVORITE_ANIME_KEY);
+        const parsed = raw ? JSON.parse(raw) : [];
+        return Array.isArray(parsed) ? parsed : [];
+    } catch {
+        return [];
+    }
+};
+
+const writeFavorites = (items: FavoriteAnimeItem[]) => {
+    localStorage.setItem(FAVORITE_ANIME_KEY, JSON.stringify(items));
+    window.dispatchEvent(new CustomEvent(STORAGE_EVENT));
+};
+
 export function useFavoriteAnime() {
-    const { user } = useAuth();
-    const [favorites, setFavorites] = useState<FavoriteAnimeItem[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [favorites, setFavorites] = useState<FavoriteAnimeItem[]>(() => readFavorites());
+    const [loading] = useState(false);
+
+    const reload = useCallback(() => {
+        setFavorites(readFavorites());
+    }, []);
 
     useEffect(() => {
-        if (!user || !isFirebaseEnabled || !db) {
-            setFavorites([]);
-            setLoading(false);
-            return;
-        }
-
-        const q = query(
-            collection(db, 'users', user.uid, 'favoriteAnime'),
-            orderBy('addedAt', 'desc')
-        );
-
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const data = snapshot.docs.map((entry) => entry.data() as FavoriteAnimeItem);
-            setFavorites(data);
-            setLoading(false);
-        }, () => {
-            setLoading(false);
-        });
-
-        return () => unsubscribe();
-    }, [user]);
+        window.addEventListener(STORAGE_EVENT, reload);
+        return () => window.removeEventListener(STORAGE_EVENT, reload);
+    }, [reload]);
 
     const addFavorite = useCallback(async (item: Omit<FavoriteAnimeItem, 'addedAt'>) => {
-        if (!user || !db) return;
-        await setDoc(doc(db, 'users', user.uid, 'favoriteAnime', item.id), {
-            ...item,
-            addedAt: Date.now()
-        });
-    }, [user]);
+        const current = readFavorites();
+        if (current.some((entry) => entry.id === item.id)) return;
+        writeFavorites([{ ...item, addedAt: Date.now() }, ...current]);
+    }, []);
 
     const removeFavorite = useCallback(async (id: string) => {
-        if (!user || !db) return;
-        await deleteDoc(doc(db, 'users', user.uid, 'favoriteAnime', id));
-    }, [user]);
+        writeFavorites(readFavorites().filter((entry) => entry.id !== id));
+    }, []);
 
     const isFavorite = useCallback((id: string) => favorites.some((entry) => entry.id === id), [favorites]);
 
