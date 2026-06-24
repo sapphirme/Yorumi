@@ -4,6 +4,7 @@ import { ArrowLeft, Search, Tv, BookOpen, Library, LogOut } from 'lucide-react';
 import SearchModal from '../shared/SearchModal';
 import { useWatchList } from '../../hooks/useWatchList';
 import { useReadList } from '../../hooks/useReadList';
+import yorumiIcon from '../../../public/yorumi-icon.png';
 
 export default function Sidebar() {
     const navigate = useNavigate();
@@ -30,7 +31,7 @@ export default function Sidebar() {
                     className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer mb-4 hover:opacity-80 transition-opacity"
                     title="Home"
                 >
-                    <img src="/yorumi-icon.png" alt="Yorumi" className="w-8 h-8 object-contain" />
+                    <img src={yorumiIcon} alt="Yorumi" className="w-8 h-8 object-contain" />
                 </div>
                 
                 <SidebarIcon 
