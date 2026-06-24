@@ -540,8 +540,22 @@ export class ScraperService {
 
                 if (tmdbTarget.mediaType === 'tv') {
                     const resolvedSeason = await tmdbService.resolveSeasonByTitle(tmdbTarget.tmdbId, title);
+                    const absoluteMatch = await tmdbService.resolveAbsoluteEpisode(tmdbTarget.tmdbId, episodeNumber);
+                    
                     if (resolvedSeason) {
                         seasonNumber = resolvedSeason;
+                        // If the absolute episode matcher resolved to the SAME season, it means the episode number is absolute
+                        // AND we should use the relative episode from the matcher.
+                        if (absoluteMatch && absoluteMatch.seasonNumber === resolvedSeason) {
+                            relEpisode = absoluteMatch.relativeEpisode;
+                        } 
+                        // If the absolute matcher thinks it's a DIFFERENT season (e.g. episodeNumber=1 -> season 1), 
+                        // but the title clearly says Season 2, then episodeNumber=1 is already relative!
+                        // So relEpisode = episodeNumber.
+                    } else if (absoluteMatch) {
+                        // Fallback: if we couldn't resolve season by title, trust the absolute episode matcher
+                        seasonNumber = absoluteMatch.seasonNumber;
+                        relEpisode = absoluteMatch.relativeEpisode;
                     }
                 }
 
