@@ -119,6 +119,7 @@ interface AniListManga {
     synonyms?: string[];
     characters?: any;
     relations?: any;
+    staff?: any;
 }
 
 const mapAnilistToManga = (item: AniListManga) => ({
@@ -142,7 +143,7 @@ const mapAnilistToManga = (item: AniListManga) => ({
     score: item.averageScore ? item.averageScore / 10 : 0,
     status: item.status,
     genres: item.genres?.map((g: string) => ({ name: g, mal_id: 0 })) || [],
-    authors: [],
+    authors: item.staff?.edges?.map((edge: any) => ({ name: edge.node?.name?.full || 'Unknown', role: edge.role || 'Story & Art', mal_id: 0 })) || [],
     published: {
         from: item.startDate ? `${item.startDate.year}-${item.startDate.month}-${item.startDate.day}` : undefined,
         to: item.endDate ? `${item.endDate.year}-${item.endDate.month}-${item.endDate.day}` : undefined,
