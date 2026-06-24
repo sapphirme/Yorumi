@@ -360,7 +360,7 @@ const RecentActivity = () => {
                                 const resume = Number.isFinite((item as any).positionSeconds)
                                     ? Math.max(0, Math.floor((item as any).positionSeconds))
                                     : 0;
-                                navigate(`/anime/watch/${title}/${item.animeId}?ep=${item.episodeNumber}${resume > 0 ? `&t=${resume}` : ''}`);
+                                navigate(`/anime/details/${item.animeId}?ep=${item.episodeNumber}${resume > 0 ? `&t=${resume}` : ''}`);
                                 return;
                             }
 
@@ -1587,7 +1587,7 @@ const MangaFavoriteBoard = () => {
     );
 };
 
-const MangaReadListCarousel = () => {
+export const MangaReadListCarousel = () => {
     const { readList, loading, removeFromReadList } = useReadList();
     const navigate = useNavigate();
     const [emblaRef, emblaApi] = useEmblaCarousel({
@@ -1632,11 +1632,14 @@ const MangaReadListCarousel = () => {
                     </button>
                 </div>
             </div>
-            <div className="overflow-hidden" ref={emblaRef}>
+            <div className="overflow-hidden" ref={emblaRef}> 
                 <div className="flex gap-5">
                     {(loading ? [] : previewList).map((item) => {
+                        const isNumericMangaId = /^\d+$/.test(item.id);
                         const mangaData: any = {
-                            mal_id: parseInt(item.id),
+                            id: item.id,
+                            mal_id: isNumericMangaId ? parseInt(item.id, 10) : item.id,
+                            scraper_id: isNumericMangaId ? undefined : item.id,
                             title: item.title,
                             images: { jpg: { large_image_url: item.image, image_url: item.image } },
                             score: item.score || 0,
@@ -1653,7 +1656,7 @@ const MangaReadListCarousel = () => {
                                 <MangaCard
                                     manga={mangaData}
                                     onClick={() => navigate(`/manga/details/${item.id}`, { state: { manga: mangaData } })}
-                                    onReadClick={() => navigate(`/manga/details/${item.id}`, { state: { manga: mangaData } })}
+
                                     inList={true}
                                     onToggleList={() => removeFromReadList(item.id)}
                                     disableTilt
@@ -1932,7 +1935,7 @@ const OverallGenreOverview = ({ theme }: { theme: 'anime' | 'manga' | 'both' }) 
     );
 };
 
-const MangaContinueReadingHighlights = ({ showSeeAll = false }: { showSeeAll?: boolean }) => {
+export const MangaContinueReadingHighlights = ({ showSeeAll = false }: { showSeeAll?: boolean }) => {
     const { continueReadingList: history } = useContinueReading();
     const navigate = useNavigate();
     // Deduplicate by title (keep first/most-recent occurrence per title)
@@ -2216,7 +2219,7 @@ const FavoriteAnimeBoard = () => {
     );
 };
 
-const AnimeWatchListCarousel = () => {
+export const AnimeWatchListCarousel = () => {
     const { watchList, loading, removeFromWatchList } = useWatchList();
     const navigate = useNavigate();
     const [emblaRef, emblaApi] = useEmblaCarousel({
@@ -2274,7 +2277,7 @@ const AnimeWatchListCarousel = () => {
                                     onClick={() => navigate(`/anime/details/${routeId}`, { state: { anime: animeData } })}
                                     onWatchClick={() => {
                                         const title = slugify(item.title || 'anime');
-                                        navigate(`/anime/watch/${title}/${routeId}?ep=1`, { state: { anime: animeData } });
+                                        navigate(`/anime/details/${routeId}?ep=1`, { state: { anime: animeData } });
                                     }}
                                     inList={true}
                                     onToggleList={() => removeFromWatchList(item.id)}
@@ -2294,7 +2297,7 @@ const AnimeWatchListCarousel = () => {
     );
 };
 
-const AnimeContinueWatchingHighlights = ({ showSeeAll = false }: { showSeeAll?: boolean }) => {
+export const AnimeContinueWatchingHighlights = ({ showSeeAll = false }: { showSeeAll?: boolean }) => {
     const { continueWatchingList: history } = useContinueWatching();
     const navigate = useNavigate();
     const formatClock = (seconds?: number) => {
@@ -2359,7 +2362,7 @@ const AnimeContinueWatchingHighlights = ({ showSeeAll = false }: { showSeeAll?: 
                             const resume = Number.isFinite((item as any).positionSeconds)
                                 ? Math.max(0, Math.floor((item as any).positionSeconds))
                                 : 0;
-                            navigate(`/anime/watch/${title}/${item.animeId}?ep=${item.episodeNumber}${resume > 0 ? `&t=${resume}` : ''}`);
+                            navigate(`/anime/details/${item.animeId}?ep=${item.episodeNumber}${resume > 0 ? `&t=${resume}` : ''}`);
                         }}
                         className="relative flex rounded-xl overflow-hidden h-24 md:h-28 cursor-pointer"
                         style={{
