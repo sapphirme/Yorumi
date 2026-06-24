@@ -29,8 +29,9 @@ export default function TopTenSidebar({ today, week, month, isLoading = false, o
 
     return (
         <div className="bg-transparent p-0 shadow-none border-0">
-            <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xl font-extrabold text-white tracking-wide">Top Trending</h3>
+            <div className="flex items-center gap-4 mb-4">
+                <h3 className="text-xl font-extrabold text-white tracking-wide whitespace-nowrap">Top Trending</h3>
+                <div className="flex-1 h-px bg-white/10" />
                 <div className="flex items-center gap-0 bg-[#222831] rounded-md p-0 shadow-[0_8px_20px_rgba(0,0,0,0.45)] overflow-hidden">
                     <button
                         onClick={() => setRange('today')}

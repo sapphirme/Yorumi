@@ -3,11 +3,10 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Search, X, Menu, ChevronLeft, Plus, Users, Sparkles } from 'lucide-react';
 import { animeService } from '../../../services/animeService';
 import { mangaService } from '../../../services/mangaService';
-import { useAuth } from '../../../context/AuthContext';
+
 import SearchBar from './SearchBar';
 import NavToggle from './NavToggle';
 import TitleLanguageToggle from './TitleLanguageToggle';
-import UserMenu from './UserMenu';
 import RandomButton from './RandomButton';
 import NotificationsBell from './NotificationsBell';
 
@@ -48,7 +47,8 @@ export default function Navbar({
     const searchInputRef = useRef<HTMLInputElement>(null);
     const navigate = useNavigate();
     const location = useLocation();
-    const { login, logout, user, avatar } = useAuth();
+    
+    const user = null; // Removed auth
 
     const [isScrolled, setIsScrolled] = useState(false);
     const [isLoadingRandom, setIsLoadingRandom] = useState(false);
@@ -310,13 +310,6 @@ export default function Navbar({
 
                     <NotificationsBell visible={Boolean(user)} theme={activeTab} />
 
-                    <UserMenu
-                        user={user}
-                        avatar={avatar}
-                        activeTab={activeTab}
-                        onLogin={login}
-                        onLogout={logout}
-                    />
                 </div>
             </div>
 

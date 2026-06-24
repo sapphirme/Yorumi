@@ -2,10 +2,18 @@ import fs from 'fs';
 import path from 'path';
 import { AppError } from '../../core/errors/app-error';
 
-const avatarsDir = path.join(__dirname, '../../../avatars');
+const isElectron = !!process.env.ELECTRON_RUN_AS_NODE;
+const avatarsDir = isElectron 
+    ? path.join(process.resourcesPath, 'avatars')
+    : path.join(__dirname, '../../../avatars');
 
+if (isElectron && !fs.existsSync(avatarsDir)) {
+    try { fs.mkdirSync(avatarsDir, { recursive: true }); } catch (e) {}
+}
 const getFilesRecursively = (dir: string): string[] => {
     let results: string[] = [];
+    if (!fs.existsSync(dir)) return results;
+    
     const list = fs.readdirSync(dir);
 
     for (const file of list) {

@@ -33,3 +33,6 @@ backend/.env
 
 # Separate repository
 yorumi-cli/
+
+dist-app/
+nul

@@ -648,12 +648,18 @@ async function enrichAndCache(mangaList: any[]) {
  * This runs in the background so the server starts immediately
  */
 export async function warmSpotlightCache() {
-    console.log('[Cache] Pre-warming spotlight cache...');
+    console.log('[Cache] Pre-warming manga caches (spotlight, top, popular, manhwa, oneshot)...');
     try {
-        await getEnrichedSpotlight();
-        console.log('[Cache] Spotlight cache warmed successfully');
+        await Promise.all([
+            getEnrichedSpotlight(),
+            anilistService.getTopManga(1, 24).catch(() => null),
+            anilistService.getPopularManga(1, 24).catch(() => null),
+            anilistService.getPopularManhwa(1, 24).catch(() => null),
+            anilistService.getOneShotManga(1, 24).catch(() => null)
+        ]);
+        console.log('[Cache] Manga caches warmed successfully');
     } catch (error) {
-        console.error('[Cache] Failed to warm spotlight cache:', error);
+        console.error('[Cache] Failed to warm manga caches:', error);
     }
 }
 

@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import animeRoutes from '../api/anime/anime.routes';
 import anilistRoutes from '../api/anilist/anilist.routes';
 import yumiChatRoutes from '../api/chat/yumi.routes';
 import imageRoutes from '../api/image/image.routes';
@@ -26,6 +27,7 @@ router.get('/', (_req, res) => {
 });
 
 router.use('/anilist', anilistRoutes);
+router.use('/anime', animeRoutes);
 router.use('/chat', yumiChatRoutes);
 router.use('/scraper', legacyScraperRoutes);
 router.use('/manga', legacyMangaRoutes);

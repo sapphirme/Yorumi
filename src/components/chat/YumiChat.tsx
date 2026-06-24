@@ -129,7 +129,7 @@ export default function YumiChat({ isLauncherHidden = false, onOpenChange }: Yum
         const id = getAnimeWatchRouteId(item) || getAnimeDetailsRouteId(item);
         if (id) {
             const title = slugify(item.title || card.title || 'anime');
-            navigate(`/anime/watch/${title}/${id}?ep=1`, { state: { anime: item } });
+            navigate(`/anime/details/${id}?ep=1`, { state: { anime: item } });
             setIsOpen(false);
         }
     };

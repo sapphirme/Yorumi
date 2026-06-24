@@ -288,7 +288,7 @@ export function usePlayer(animeId: string | undefined, animeSlugTitle?: string) 
 
         if (!scraperSession) return;
 
-        if (episodes.length > 0 && !currentStream && !streamLoading && animeMatch) {
+        if (episodes.length > 0 && animeMatch) {
             let targetEp: Episode | undefined;
             const parsedTargetEpisode = parseEpisodeNumber(epNumParam);
 
@@ -310,6 +310,9 @@ export function usePlayer(animeId: string | undefined, animeSlugTitle?: string) 
             }
 
             if (targetEp) {
+                const isAlreadyCurrent = currentEpisode && String(currentEpisode.episodeNumber) === String(targetEp.episodeNumber);
+                if (isAlreadyCurrent && currentStream) return;
+
                 const attemptKey = `${String(animeId || '')}:${String(targetEp.session || targetEp.episodeNumber || '')}`;
                 if (autoLoadAttemptKeyRef.current === attemptKey) {
                     return;

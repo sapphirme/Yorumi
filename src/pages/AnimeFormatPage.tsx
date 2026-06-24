@@ -101,7 +101,7 @@ export default function AnimeFormatPage() {
         const title = slugify(item.title || item.title_english || 'anime');
         const id = getDirectScraperRouteId(item.scraperId) || toPositiveNumber(item.id) || toPositiveNumber(item.mal_id);
         if (!id) return;
-        navigate(`/anime/watch/${title}/${id}?ep=1`, { state: { anime: item } });
+        navigate(`/anime/details/${id}?ep=1`, { state: { anime: item } });
     };
 
     if (!config) {

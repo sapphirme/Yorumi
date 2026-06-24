@@ -48,7 +48,7 @@ export default function FavoriteMangaPage() {
                                     key={item.id}
                                     manga={mangaData}
                                     onClick={() => navigate(`/manga/details/${item.id}`, { state: { manga: mangaData } })}
-                                    onReadClick={() => navigate(`/manga/details/${item.id}`, { state: { manga: mangaData } })}
+
                                     inList={true}
                                     onToggleList={() => removeFavorite(item.id)}
                                     disableTilt

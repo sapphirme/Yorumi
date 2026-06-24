@@ -1,3 +1,5 @@
+import { useState, useRef } from 'react';
+import { ChevronUp } from 'lucide-react';
 import type { MangaPage, MangaChapter } from '../../../../types/manga';
 
 interface PageViewerProps {
@@ -31,6 +33,9 @@ export default function PageViewer({
     onLoadChapter,
     onPageChange,
 }: PageViewerProps) {
+    const [showScrollTop, setShowScrollTop] = useState(false);
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
+
     const handleNextPage = () => {
         if (pageIndex < pages.length - 1) {
             onPageChange(pageIndex + 1);
@@ -50,16 +55,26 @@ export default function PageViewer({
     const handlePageClick = (e: React.MouseEvent<HTMLDivElement>) => {
         const width = e.currentTarget.offsetWidth;
         const clickX = e.nativeEvent.offsetX;
-        // RTL: Left = Next, Right = Prev
         if (clickX < width / 3) handleNextPage();
         else if (clickX > (width * 2 / 3)) handlePrevPage();
+        else onContentClick();
+    };
+
+    const handleScrollInternal = (e: React.UIEvent<HTMLDivElement>) => {
+        onScroll(e);
+        setShowScrollTop(e.currentTarget.scrollTop > 500);
+    };
+
+    const scrollToTop = () => {
+        scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     return (
-        <div className={`flex-1 min-w-0 bg-[#050505] relative flex flex-col border-r border-white/5 transition-all duration-300 ${isHeaderVisible ? 'pt-14' : 'pt-0'}`}>
+        <div className="flex-1 min-w-0 bg-[#050505] relative flex flex-col border-r border-white/5">
             <div
+                ref={scrollContainerRef}
                 className="flex-1 overflow-y-auto relative h-full [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']"
-                onScroll={onScroll}
+                onScroll={handleScrollInternal}
             >
                 {isLoading ? (
                     <div className="absolute inset-0 p-6 animate-pulse">
@@ -171,6 +186,18 @@ export default function PageViewer({
                     </div>
                 )}
             </div>
+
+            {/* Scroll to Top Button */}
+            <button
+                onClick={scrollToTop}
+                className={`absolute right-6 z-40 w-12 h-12 rounded-full bg-yorumi-manga text-white shadow-lg flex items-center justify-center transition-all duration-300 hover:bg-yorumi-manga/90 hover:scale-110 active:scale-95 ${
+                    showScrollTop ? 'opacity-100 pointer-events-auto translate-y-0' : 'opacity-0 pointer-events-none translate-y-4'
+                }`}
+                style={{ bottom: isHeaderVisible ? '6rem' : '1.5rem' }}
+                title="Scroll to Top"
+            >
+                <ChevronUp className="w-6 h-6" strokeWidth={2.5} />
+            </button>
         </div>
     );
 }

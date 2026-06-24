@@ -18,7 +18,7 @@ interface ContinueWatchingProps {
     variant?: 'dashboard' | 'page';
     onWatchClick: (anime: Anime, episodeNumber: number, startSeconds?: number) => void;
     onRemove: (animeId: string | number) => void;
-    onViewAll?: () => void;
+    title?: string;
     onBack?: () => void;
 }
 
@@ -27,7 +27,7 @@ export default function ContinueWatching({
     variant = 'dashboard',
     onWatchClick,
     onRemove,
-    onViewAll,
+    title,
     onBack
 }: ContinueWatchingProps) {
     if (items.length === 0) return null;
@@ -135,14 +135,14 @@ export default function ContinueWatching({
     // Dashboard (Carousel) Variant
     return (
         <Carousel
-            title="Continue Watching"
+            title={title || "Continue Watching"}
             variant="landscape"
-            onViewAll={onViewAll}
+
         >
             {items.map((item) => (
                 <div
                     key={item.animeId}
-                    className="relative group h-full flex-[0_0_240px] sm:flex-[0_0_280px] md:flex-[0_0_320px]"
+                    className="relative group h-full flex-[0_0_200px] sm:flex-[0_0_240px] md:flex-[0_0_280px]"
                     onClick={() => {
                         const isHybrid = isAnimePaheSessionRoute(item.animeId);
                         onWatchClick({

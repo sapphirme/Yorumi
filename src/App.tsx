@@ -1,24 +1,22 @@
 import { useEffect, useState } from 'react';
 import { LazyMotion, MotionConfig, domAnimation } from 'framer-motion';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { AppRoutes } from './app/AppRoutes';
-import Navbar from './components/layout/Navbar';
-import Footer from './components/layout/Footer';
-import YumiChat from './components/chat/YumiChat';
+import Sidebar from './components/layout/Sidebar';
+
 import ScrollToTop from './components/ui/ScrollToTop';
+import TmdbSetupScreen from './components/setup/TmdbSetupScreen';
 import { useTitleLanguage } from './context/TitleLanguageContext';
 import { useNavbarSearch } from './features/search/hooks/useNavbarSearch';
 import { PersistentPlayerProvider } from './features/player/context/PersistentPlayerContext';
-import { useAnime } from './hooks/useAnime';
 import { gentleTransition } from './utils/motion';
+import { tmdbService } from './services/tmdbService';
 
 function App() {
-    const navigate = useNavigate();
     const location = useLocation();
-    const { closeViewAll } = useAnime();
     const { language } = useTitleLanguage();
     const [showScrollToTop, setShowScrollToTop] = useState(false);
-    const [isYumiOpen, setIsYumiOpen] = useState(false);
+    const [hasTmdbToken, setHasTmdbToken] = useState(() => tmdbService.hasToken());
 
     const queryParams = new URLSearchParams(location.search);
     const activeTab = location.pathname.startsWith('/manga')
@@ -29,7 +27,7 @@ function App() {
         ? 'manga'
         : 'anime';
 
-    const { searchQuery, setSearchQuery, searchResults, setSearchResults, isSearching } = useNavbarSearch({
+    const { setSearchQuery, setSearchResults } = useNavbarSearch({
         activeTab,
         language,
     });
@@ -54,40 +52,10 @@ function App() {
         };
     }, []);
 
-    const handleTabChange = (tab: 'anime' | 'manga') => {
-        if (tab === 'anime') {
-            closeViewAll();
-            navigate('/');
-            return;
-        }
 
-        navigate('/manga');
-    };
-
-    const handleSearchSubmit = (e: React.FormEvent, queryOverride?: string) => {
-        e.preventDefault();
-        const queryToUse = (queryOverride ?? searchQuery).trim();
-        if (!queryToUse) return;
-
-        navigate(`/search?q=${encodeURIComponent(queryToUse)}&type=${activeTab}`);
-        setSearchQuery('');
-        setSearchResults([]);
-    };
-
-    const handleLogoClick = () => {
-        closeViewAll();
-        navigate(activeTab === 'manga' ? '/manga' : '/');
-    };
-
-    const handleClearSearch = () => {
-        setSearchQuery('');
-        if (location.pathname === '/search') {
-            navigate(activeTab === 'manga' ? '/manga' : '/');
-        }
-    };
-    const isImmersivePage = location.pathname.includes('/watch/')
-        || location.pathname.includes('/read/')
-        || location.pathname === '/yumi';
+    if (!hasTmdbToken) {
+        return <TmdbSetupScreen onReady={() => setHasTmdbToken(true)} />;
+    }
 
     return (
         <LazyMotion features={domAnimation}>
@@ -98,28 +66,15 @@ function App() {
                         <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-yorumi-main/5 rounded-full blur-[120px]" />
                     </div>
 
-                    <Navbar
-                        activeTab={activeTab}
-                        searchQuery={searchQuery}
-                        onTabChange={handleTabChange}
-                        onSearchChange={setSearchQuery}
-                        onSearchSubmit={handleSearchSubmit}
-                        onClearSearch={handleClearSearch}
-                        onLogoClick={handleLogoClick}
-                        searchResults={searchResults}
-                        isSearching={isSearching}
-                    />
+                    <Sidebar />
 
-                    <PersistentPlayerProvider>
-                        <AppRoutes />
-                    </PersistentPlayerProvider>
+                    <div className="ml-[70px] flex-1 flex flex-col w-[calc(100%-70px)] relative min-h-screen">
+                        <PersistentPlayerProvider>
+                            <AppRoutes />
+                        </PersistentPlayerProvider>
 
-                    <ScrollToTop activeTab={activeTab as 'anime' | 'manga'} isVisible={showScrollToTop && !isYumiOpen} />
-
-                    {!isImmersivePage && <Footer />}
-                    {!isImmersivePage && (
-                        <YumiChat isLauncherHidden={showScrollToTop} onOpenChange={setIsYumiOpen} />
-                    )}
+                        <ScrollToTop activeTab={activeTab as 'anime' | 'manga'} isVisible={showScrollToTop} />
+                    </div>
                 </div>
             </MotionConfig>
         </LazyMotion>

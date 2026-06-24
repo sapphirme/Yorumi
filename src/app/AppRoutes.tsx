@@ -15,13 +15,22 @@ import MangaPage from '../pages/MangaPage';
 import MangaReaderPage from '../pages/MangaReaderPage';
 import MangaReadListPage from '../pages/MangaReadListPage';
 import ProfilePage from '../pages/ProfilePage';
-import SearchPage from '../pages/SearchPage';
+import LibraryPage from '../pages/LibraryPage';
 import UserProfilePage from '../pages/UserProfilePage';
 import UserSearchPage from '../pages/UserSearchPage';
 import WatchListPage from '../pages/WatchListPage';
-import WatchPage from '../pages/WatchPage';
 import YumiPage from '../pages/YumiPage';
 import { pageTransitionVariants } from '../utils/motion';
+
+const getTransitionKey = (pathname: string) => {
+    if (pathname.startsWith('/anime/details/')) {
+        return '/anime/details';
+    }
+    if (pathname.startsWith('/manga/details/')) {
+        return '/manga/details';
+    }
+    return pathname;
+};
 
 export function AppRoutes() {
     const location = useLocation();
@@ -29,7 +38,7 @@ export function AppRoutes() {
     return (
         <AnimatePresence mode="wait">
             <m.main
-                key={location.pathname}
+                key={getTransitionKey(location.pathname)}
                 variants={pageTransitionVariants}
                 initial="initial"
                 animate="animate"
@@ -45,8 +54,8 @@ export function AppRoutes() {
                     <Route path="/anime/ona" element={<AnimeFormatPage />} />
                     <Route path="/anime/specials" element={<AnimeFormatPage />} />
                     <Route path="/anime/details/:id" element={<AnimeDetailsPage />} />
-                    <Route path="/anime/watch/:title/:id" element={<WatchPage />} />
-                    <Route path="/search" element={<SearchPage />} />
+
+
                     <Route path="/manga" element={<MangaPage />} />
                     <Route path="/manga/details/:id" element={<MangaDetailsPage />} />
                     <Route path="/manga/read/:title/:id/:chapter" element={<MangaReaderPage />} />
@@ -58,6 +67,10 @@ export function AppRoutes() {
                     <Route path="/manga/new" element={<MangaFormatPage />} />
                     <Route path="/manga/manhwa" element={<MangaFormatPage />} />
                     <Route path="/manga/one-shot" element={<MangaFormatPage />} />
+                    <Route path="/manga/specials" element={<MangaFormatPage />} />
+
+                    <Route path="/library" element={<LibraryPage />} />
+
                     <Route path="/profile" element={<ProfilePage />} />
                     <Route path="/users" element={<UserSearchPage />} />
                     <Route path="/yumi" element={<YumiPage />} />

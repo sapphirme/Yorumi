@@ -8,19 +8,19 @@ import { cardItemVariants, pressMotion } from '../../../utils/motion';
 interface MangaCardProps {
     manga: Manga;
     onClick: (manga: Manga) => void;
-    onReadClick?: (manga: Manga) => void;
     onMouseEnter?: (manga: Manga) => void;
     inList?: boolean;
     onToggleList?: (manga: Manga) => void;
     disableTilt?: boolean;
 }
 
-const MangaCard: React.FC<MangaCardProps> = ({ manga, onClick, onReadClick, onMouseEnter, inList, onToggleList, disableTilt = false }) => {
+const MangaCard: React.FC<MangaCardProps> = ({ manga, onClick, onMouseEnter, inList, onToggleList, disableTilt = false }) => {
     const { language } = useTitleLanguage();
     const cardRef = React.useRef<HTMLDivElement>(null);
     const [rotation, setRotation] = React.useState({ x: 0, y: 0 });
     const [glare, setGlare] = React.useState({ x: 50, y: 50, opacity: 0 });
     const [isHovered, setIsHovered] = React.useState(false);
+    const [popupSide, setPopupSide] = React.useState<'left' | 'right'>('right');
     const normalizedStatus = String(manga.status || '').toUpperCase();
     const isOngoing = normalizedStatus === 'RELEASING' || normalizedStatus === 'PUBLISHING' || normalizedStatus === 'ONGOING';
     const displayTitle = getDisplayTitle(manga as unknown as Record<string, unknown>, language);
@@ -31,6 +31,35 @@ const MangaCard: React.FC<MangaCardProps> = ({ manga, onClick, onReadClick, onMo
         : manga.volumes
             ? `${manga.volumes} vol`
             : null;
+
+    const updatePopupSide = React.useCallback(() => {
+        if (typeof window === 'undefined' || !cardRef.current) {
+            setPopupSide('right');
+            return;
+        }
+
+        const rect = cardRef.current.getBoundingClientRect();
+        const boundary = cardRef.current.closest('[data-hover-boundary]');
+        const boundaryRect = boundary instanceof HTMLElement
+            ? boundary.getBoundingClientRect()
+            : { right: window.innerWidth - 16 };
+        const availableRight = Math.min(window.innerWidth - 16, boundaryRect.right);
+        const popupWidth = 260;
+        const gap = 16;
+
+        setPopupSide(rect.right + gap + popupWidth > availableRight ? 'left' : 'right');
+    }, []);
+
+    React.useEffect(() => {
+        if (!isHovered) return;
+
+        updatePopupSide();
+        window.addEventListener('resize', updatePopupSide);
+
+        return () => {
+            window.removeEventListener('resize', updatePopupSide);
+        };
+    }, [isHovered, updatePopupSide]);
 
     const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
         if (disableTilt) {
@@ -75,11 +104,12 @@ const MangaCard: React.FC<MangaCardProps> = ({ manga, onClick, onReadClick, onMo
             initial="initial"
             animate="animate"
             whileTap={pressMotion}
-            className="select-none cursor-pointer group relative"
+            className="select-none cursor-pointer group relative z-0 hover:z-50"
             style={{ perspective: '1000px' }}
             onClick={() => onClick(manga)}
             onMouseEnter={(e) => {
                 setIsHovered(true);
+                updatePopupSide();
                 handleMouseMove(e);
             }}
             onMouseLeave={handleMouseLeave}
@@ -117,7 +147,7 @@ const MangaCard: React.FC<MangaCardProps> = ({ manga, onClick, onReadClick, onMo
                 {/* Default Badges - Always Visible */}
                 {/* Top Right: Star Rating */}
                 {manga.score !== undefined && manga.score > 0 && (
-                    <div className="absolute top-2 right-2 group-hover:opacity-0 transition-opacity duration-300 z-10">
+                    <div className="absolute top-2 right-2 z-10">
                         <span className="bg-[#facc15] text-black px-2 py-1 rounded text-xs font-bold flex items-center gap-1">
                             <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" /></svg>
                             {manga.score.toFixed(1)}
@@ -126,7 +156,7 @@ const MangaCard: React.FC<MangaCardProps> = ({ manga, onClick, onReadClick, onMo
                 )}
 
                 {/* Bottom Left: Type + Count - Always Visible */}
-                <div className="absolute bottom-2 left-2 flex gap-1.5 group-hover:opacity-0 transition-opacity duration-300 z-10">
+                <div className="absolute bottom-2 left-2 flex gap-1.5 z-10">
                     <span className="bg-white/20 backdrop-blur-sm text-white px-2 py-1 rounded text-xs font-bold uppercase">
                         {manga.countryOfOrigin === 'KR' ? 'Manhwa' : manga.countryOfOrigin === 'CN' ? 'Manhua' : (manga.type || 'Manga')}
                     </span>
@@ -143,96 +173,68 @@ const MangaCard: React.FC<MangaCardProps> = ({ manga, onClick, onReadClick, onMo
                     )}
                 </div>
 
-                {/* Hover Overlay - Full Info Card */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black via-black/90 to-black/70 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-3 z-20">
-                    {/* HD/Status Badge - Top Right on Hover */}
-                    <div className="absolute top-2 right-2 translate-z-10">
-                        <span className={`px-2 py-1 rounded text-xs font-bold ${isOngoing ? 'bg-green-500 text-black' : 'bg-gray-600 text-white'}`}>
-                            {isOngoing ? 'ONGOING' : 'FINISHED'}
-                        </span>
-                    </div>
-
-                    {/* Title */}
-                    <h3 className="text-sm font-bold text-white mb-1 line-clamp-2 leading-tight translate-z-10">
-                        {displayTitle}
-                    </h3>
-
-                    {/* Rating + Info Row */}
-                    <div className="flex items-center gap-1.5 mb-2 flex-wrap translate-z-10">
-                        {manga.score !== undefined && manga.score > 0 && (
-                            <span className="text-[#facc15] text-xs font-bold flex items-center gap-0.5">
-                                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" /></svg>
-                                {manga.score.toFixed(1)}
-                            </span>
+                {onToggleList && (
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onToggleList(manga);
+                        }}
+                        className={`absolute bottom-2 right-2 z-10 flex h-10 w-10 items-center justify-center rounded-full transition-colors ${inList ? 'bg-yorumi-manga text-white hover:bg-yorumi-manga/80' : 'bg-[#1c2433]/90 text-white hover:bg-[#2b364a]'}`}
+                        title={inList ? 'Remove from List' : 'Add to List'}
+                    >
+                        {inList ? (
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                        ) : (
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                            </svg>
                         )}
-                        {countDisplay && (
-                            <span className="text-gray-300 text-[10px] font-medium">{countDisplay}</span>
+                    </button>
+                )}
+
+            </div>
+
+            {isHovered && (
+                <div className={`pointer-events-none absolute top-2 z-[60] hidden w-[260px] rounded-2xl bg-[#1a1a2e] p-4 text-white shadow-[0_18px_40px_rgba(0,0,0,0.45)] lg:block ${popupSide === 'left' ? 'right-[calc(100%+16px)]' : 'left-[calc(100%+16px)]'}`}>
+                    <div
+                        className="absolute top-7 h-3 w-3 bg-[#1a1a2e]"
+                        style={popupSide === 'left'
+                            ? { right: -8, clipPath: 'polygon(0 0, 100% 50%, 0 100%)' }
+                            : { left: -8, clipPath: 'polygon(100% 0, 0 50%, 100% 100%)' }}
+                    />
+
+                    <div className="space-y-3">
+                        {/* Line 1: Year / Status */}
+                        <p className="text-sm font-extrabold tracking-wide text-[#e8dbff]">
+                            {manga.published?.from ? manga.published.from.substring(0, 4) : (isOngoing ? 'Ongoing' : (manga.status || 'Unknown Status'))}
+                        </p>
+
+                        {/* Line 2: Author */}
+                        {manga.authors && manga.authors.length > 0 && (
+                            <p className="text-sm font-bold text-[#d886ff]">
+                                {manga.authors[0].name}
+                            </p>
                         )}
-                        <span className="text-gray-400 text-[10px]">{manga.type || 'Manga'}</span>
-                    </div>
 
-                    {/* Synopsis */}
-                    <p className="text-gray-400 text-[10px] line-clamp-2 mb-2 leading-relaxed translate-z-10">
-                        {manga.synopsis || 'No description available.'}
-                    </p>
+                        {/* Line 3: Type • Chapters */}
+                        <p className="text-sm font-semibold text-[#b4a8d4]">
+                            {manga.countryOfOrigin === 'KR' ? 'Manhwa' : manga.countryOfOrigin === 'CN' ? 'Manhua' : (manga.type || 'Manga')} {countDisplay ? ` • ${countDisplay}` : ''}
+                        </p>
 
-                    {/* Genres */}
-                    {manga.genres && manga.genres.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mb-3 translate-z-10">
-                            {manga.genres.slice(0, 3).map((genre, idx) => (
-                                <span key={idx} className="border border-gray-600 text-gray-300 px-1.5 py-0.5 rounded text-[9px]">
-                                    {genre.name}
-                                </span>
-                            ))}
-                        </div>
-                    )}
-
-                    {/* Buttons - Read, Detail */}
-                    <div className="flex gap-2 translate-z-20">
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                if (onReadClick) {
-                                    onReadClick(manga);
-                                } else {
-                                    onClick(manga);
-                                }
-                            }}
-                            className="flex-1 flex items-center justify-center gap-1 bg-yorumi-manga hover:bg-yorumi-manga/90 text-white py-1.5 rounded text-[9px] font-bold transition-colors shadow-lg"
-                        >
-                            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
-                            READ
-                        </button>
-                        <button
-                            onClick={(e) => { e.stopPropagation(); onClick(manga); }}
-                            className="flex-1 flex items-center justify-center gap-1 bg-white/10 hover:bg-white/20 text-white py-1.5 rounded text-[9px] font-medium transition-colors border border-white/20"
-                        >
-                            <span className="w-2 h-2 bg-white rounded-full"></span>
-                            DETAIL
-                        </button>
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                if (onToggleList) {
-                                    onToggleList(manga);
-                                }
-                            }}
-                            className={`flex items-center justify-center p-1.5 rounded transition-colors ${inList ? 'bg-yorumi-manga text-white hover:bg-yorumi-manga/80' : 'bg-white/10 hover:bg-white/20 text-white'}`}
-                            title={inList ? "Remove from List" : "Add to List"}
-                        >
-                            {inList ? (
-                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                </svg>
-                            ) : (
-                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                                </svg>
-                            )}
-                        </button>
+                        {manga.genres && manga.genres.length > 0 && (
+                            <div className="flex flex-wrap gap-2 pt-1">
+                                {manga.genres.slice(0, 2).map((genre) => (
+                                    <span key={genre.mal_id} className="rounded-full bg-[#d886ff] px-3 py-1 text-[11px] font-extrabold lowercase tracking-wide text-[#2e0a3d]">
+                                        {genre.name}
+                                    </span>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </div>
-            </div>
+            )}
 
             {/* Title Below Card */}
             <h3 className="text-sm font-semibold text-gray-100 line-clamp-2 leading-tight group-hover:text-yorumi-manga transition-colors">

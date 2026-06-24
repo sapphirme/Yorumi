@@ -7,7 +7,7 @@ interface MangaContinueReadingProps {
     variant?: 'dashboard' | 'page';
     onReadClick: (mangaId: string, mangaTitle: string, chapterNumber: string) => void;
     onRemove: (mangaId: string) => void;
-    onViewAll?: () => void;
+    title?: string;
     onBack?: () => void;
 }
 
@@ -16,7 +16,7 @@ export default function MangaContinueReading({
     variant = 'dashboard',
     onReadClick,
     onRemove,
-    onViewAll,
+    title,
     onBack
 }: MangaContinueReadingProps) {
     if (items.length === 0) return null;
@@ -81,9 +81,9 @@ export default function MangaContinueReading({
     // Dashboard (Carousel) Variant
     return (
         <Carousel
-            title="Continue Reading"
+            title={title || "Continue Reading"}
             variant="portrait"
-            onViewAll={onViewAll}
+
         >
             {dedupedItems.map((item) => (
                 <div

@@ -14,7 +14,7 @@ interface TrendingNowProps {
     isLoading?: boolean;
     onAnimeClick: (anime: Anime) => void;
     onWatchClick?: (anime: Anime) => void;
-    onViewAll?: () => void;
+
     onMouseEnter?: (anime: Anime) => void;
     variant?: 'portrait' | 'landscape';
 }
@@ -25,7 +25,7 @@ const TrendingNow: React.FC<TrendingNowProps> = ({
     isLoading = false,
     onAnimeClick,
     onWatchClick,
-    onViewAll,
+
     onMouseEnter,
     variant = 'portrait'
 }) => {
@@ -59,7 +59,7 @@ const TrendingNow: React.FC<TrendingNowProps> = ({
                             key={`trending-skeleton-${index}`}
                             className={variant === 'landscape'
                                 ? 'flex-none w-[240px] sm:w-[280px] md:w-[320px]'
-                                : 'flex-[0_0_160px] md:flex-[0_0_210px] lg:flex-[0_0_230px]'}
+                                : 'flex-[0_0_140px] md:flex-[0_0_180px] lg:flex-[0_0_200px]'}
                         >
                             {variant === 'landscape' ? (
                                 <>
@@ -80,8 +80,9 @@ const TrendingNow: React.FC<TrendingNowProps> = ({
 
     return (
         <section className="relative z-20 mt-4 mb-12">
-            <div className="flex items-center justify-between mb-4">
-                <h2 className="text-2xl font-black text-white tracking-wide uppercase">{title}</h2>
+            <div className="flex items-center gap-4 mb-6">
+                <h2 className="text-xl md:text-2xl font-black text-white tracking-wide uppercase whitespace-nowrap">{title}</h2>
+                <div className="flex-1 h-px bg-white/10" />
 
                 <div className="flex items-center gap-4">
                     <div className="flex gap-2">
@@ -101,14 +102,7 @@ const TrendingNow: React.FC<TrendingNowProps> = ({
                         </button>
                     </div>
 
-                    {onViewAll && (
-                        <button
-                            onClick={onViewAll}
-                            className="text-xs font-semibold text-gray-400 hover:text-yorumi-accent transition-colors tracking-wider"
-                        >
-                            View All
-                        </button>
-                    )}
+
                 </div>
             </div>
 
@@ -132,7 +126,7 @@ const TrendingNow: React.FC<TrendingNowProps> = ({
                                     key={`${anime.scraperId || anime.id || anime.mal_id || anime.title}-${anime.latestEpisode || anime.episodes || 0}`}
                                     className={variant === 'landscape'
                                         ? 'flex-none w-[240px] sm:w-[280px] md:w-[320px]'
-                                        : 'flex-[0_0_160px] md:flex-[0_0_210px] lg:flex-[0_0_230px]'}
+                                        : 'flex-[0_0_140px] md:flex-[0_0_180px] lg:flex-[0_0_200px]'}
                                 >
                                     {variant === 'landscape' ? (
                                         <div

@@ -246,7 +246,7 @@ async function rateLimitedRequest(
     }
 
     const requestPromise = (async () => {
-        const maxAttempts = 2;
+        const maxAttempts = 5;
 
         for (let attempt = 0; attempt < maxAttempts; attempt++) {
             try {
@@ -992,7 +992,7 @@ export const anilistService = {
         `;
 
         try {
-            const response = await rateLimitedRequest(query, { page, perPage });
+            const response = await rateLimitedRequest(query, { page, perPage }, { cacheTtlSeconds: 3600 });
             const result = response.data.Page;
             setCache(cacheKey, result, CACHE_TTL.top);
             return result;
@@ -1024,7 +1024,7 @@ export const anilistService = {
         `;
 
         try {
-            const response = await rateLimitedRequest(query, { page, perPage });
+            const response = await rateLimitedRequest(query, { page, perPage }, { cacheTtlSeconds: 3600 });
             const result = response.data.Page;
             setCache(cacheKey, result, CACHE_TTL.popular);
             return result;
@@ -1056,7 +1056,7 @@ export const anilistService = {
         `;
 
         try {
-            const response = await rateLimitedRequest(query, { page, perPage });
+            const response = await rateLimitedRequest(query, { page, perPage }, { cacheTtlSeconds: 3600 });
             const result = response.data.Page;
             setCache(cacheKey, result, CACHE_TTL.trending);
             return result;
@@ -1112,7 +1112,7 @@ export const anilistService = {
         `;
 
         try {
-            const response = await rateLimitedRequest(query, { page, perPage });
+            const response = await rateLimitedRequest(query, { page, perPage }, { cacheTtlSeconds: 3600 });
             const result = response.data.Page;
             setCache(cacheKey, result, CACHE_TTL.popular);
             return result;
@@ -1144,7 +1144,7 @@ export const anilistService = {
         `;
 
         try {
-            const response = await rateLimitedRequest(query, { page, perPage });
+            const response = await rateLimitedRequest(query, { page, perPage }, { cacheTtlSeconds: 3600 });
             const result = response.data.Page;
             setCache(cacheKey, result, CACHE_TTL.popular);
             return result;
@@ -1343,10 +1343,19 @@ export const anilistService = {
                             relationType
                             node {
                                 id
-                                title { romaji english }
+                                title { romaji english native }
                                 coverImage { large }
                                 format
                                 isAdult
+                                status
+                                episodes
+                                seasonYear
+                                season
+                                startDate {
+                                    year
+                                    month
+                                    day
+                                }
                             }
                         }
                     }
@@ -1393,10 +1402,19 @@ export const anilistService = {
                             relationType
                             node {
                                 id
-                                title { romaji english }
+                                title { romaji english native }
                                 coverImage { large }
                                 format
                                 isAdult
+                                status
+                                episodes
+                                seasonYear
+                                season
+                                startDate {
+                                    year
+                                    month
+                                    day
+                                }
                             }
                         }
                     }
@@ -1436,19 +1454,28 @@ export const anilistService = {
         `;
 
         try {
-            const response = await rateLimitedRequest(queryById, { id }, { cacheTtlSeconds: 3600 });
-            let media = response.data.Media;
+            let media = null;
+            try {
+                const response = await rateLimitedRequest(queryById, { id }, { cacheTtlSeconds: 3600 });
+                media = response.data?.Media;
+            } catch (innerError: any) {
+                // If it's a 404, it might be a MAL ID instead of an AniList ID.
+                if (innerError?.response?.status === 404) {
+                    const byMal = await rateLimitedRequest(queryByMalId, { idMal: id }, { cacheTtlSeconds: 3600 });
+                    media = byMal.data?.Media;
+                } else {
+                    throw innerError;
+                }
+            }
+            
             if (!media) {
-                const byMal = await rateLimitedRequest(queryByMalId, { idMal: id }, { cacheTtlSeconds: 3600 });
-                media = byMal.data.Media;
+                return null;
             }
-            if (media && media.recommendations && media.recommendations.nodes) {
+            
+            if (media.recommendations && media.recommendations.nodes) {
                 media.recommendations.nodes = media.recommendations.nodes.filter((node: any) => !node.mediaRecommendation?.isAdult);
             }
-            if (media && media.recommendations && media.recommendations.nodes) {
-                media.recommendations.nodes = media.recommendations.nodes.filter((node: any) => !node.mediaRecommendation?.isAdult);
-            }
-            if (media && media.relations && media.relations.edges) {
+            if (media.relations && media.relations.edges) {
                 media.relations.edges = media.relations.edges.filter((edge: any) => !edge.node?.isAdult);
             }
             return media;

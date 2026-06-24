@@ -73,9 +73,15 @@ export interface Anime {
             relationType: string;
             node: {
                 id: number;
+                type?: string;
                 title: { romaji: string; english?: string; native?: string };
                 coverImage: { large: string };
                 format: string;
+                episodes?: number | null;
+                status?: string;
+                season?: string;
+                seasonYear?: number;
+                startDate?: { year?: number; month?: number; day?: number };
             };
         }[];
     };
@@ -88,4 +94,5 @@ export interface Episode {
     duration?: string;
     title?: string;
     snapshot?: string;
+    _tmdbAbsolute?: number;
 }

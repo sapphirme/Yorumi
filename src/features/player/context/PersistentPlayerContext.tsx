@@ -1,5 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from 'react-router-dom';
 import VideoPlayer, { type VideoPlayerProps } from '../components/VideoPlayer';
 
@@ -51,7 +52,9 @@ export function PersistentPlayerProvider({ children }: { children: ReactNode }) 
         height: number;
     } | null>(null);
 
-    const isWatchRoute = location.pathname.startsWith('/anime/watch/');
+    const searchParams = new URLSearchParams(location.search);
+    const isWatchRoute = location.pathname.startsWith('/anime/details/') || 
+                         (location.pathname.startsWith('/anime/details/') && searchParams.has('ep'));
     const shouldShowMiniPlayer = Boolean(playerProps && !isClosed && hasStartedPlayback && (!isWatchRoute || !inlineRect));
     const shouldShowInlinePlayer = Boolean(playerProps && !isClosed && isWatchRoute && inlineRect);
     const shouldRenderPlayer = shouldShowMiniPlayer || shouldShowInlinePlayer;
@@ -61,7 +64,14 @@ export function PersistentPlayerProvider({ children }: { children: ReactNode }) 
             setInlineRect(null);
             return;
         }
-        setInlineRect(inlineElement.getBoundingClientRect());
+        const rect = inlineElement.getBoundingClientRect();
+        setInlineRect({
+            ...rect.toJSON(),
+            top: rect.top + window.scrollY,
+            left: rect.left + window.scrollX,
+            width: rect.width,
+            height: rect.height,
+        } as DOMRect);
     }, [inlineElement]);
 
     useEffect(() => {
@@ -233,13 +243,13 @@ export function PersistentPlayerProvider({ children }: { children: ReactNode }) 
     return (
         <PersistentPlayerContext.Provider value={contextValue}>
             {children}
-            {shouldRenderPlayer && playerProps && layerStyle && (
+            {shouldRenderPlayer && playerProps && layerStyle && createPortal(
                 <div
-                    className={`fixed overflow-hidden bg-black transition-[left,top,right,bottom,width,height,opacity,transform] duration-300 ease-out ${
+                    className={`${
                         shouldShowMiniPlayer
-                            ? 'z-[2147483646] cursor-grab rounded-xl shadow-2xl shadow-black/70 active:cursor-grabbing'
-                            : 'z-20 rounded-none md:rounded-2xl'
-                    }`}
+                            ? 'fixed z-[2147483646] cursor-grab rounded-xl shadow-2xl shadow-black/70 active:cursor-grabbing'
+                            : 'absolute z-20 rounded-none md:rounded-2xl'
+                    } overflow-hidden bg-black transition-[left,top,right,bottom,width,height,opacity,transform] duration-300 ease-out`}
                     style={layerStyle}
                     onPointerDown={handleMiniPointerDown}
                     onPointerMove={handleMiniPointerMove}
@@ -253,7 +263,8 @@ export function PersistentPlayerProvider({ children }: { children: ReactNode }) 
                         onMiniExpand={handleMiniExpand}
                         onPlaybackStateChange={handlePlaybackStateChange}
                     />
-                </div>
+                </div>,
+                document.body
             )}
         </PersistentPlayerContext.Provider>
     );

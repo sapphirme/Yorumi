@@ -3,9 +3,8 @@ import react from '@vitejs/plugin-react'
 
 // https://vite.dev/config/
 export default defineConfig({
-  base: '/',
+  base: './',
   envDir: './backend',
-  plugins: [react()],
   server: {
     proxy: {
       '/avatars': {
@@ -17,5 +16,8 @@ export default defineConfig({
         changeOrigin: true,
       }
     }
-  }
+  },
+  plugins: [
+    react()
+  ]
 })

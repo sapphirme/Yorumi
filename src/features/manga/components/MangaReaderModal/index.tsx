@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useContinueReading } from '../../../../hooks/useContinueReading';
 import type { Manga, MangaChapter, MangaPage } from '../../../../types/manga';
 import ReaderHeader from './ReaderHeader';
+import ReaderFooter from './ReaderFooter';
 import ChapterList from './ChapterList';
 import PageViewer from './PageViewer';
 import MangaInfoSidebar from './MangaInfoSidebar';
@@ -56,7 +57,7 @@ export default function MangaReaderModal({
     const [showChapters, setShowChapters] = useState(false);
     const [readingMode, setReadingMode] = useState<'longstrip' | 'page'>('longstrip');
     const [pageIndex, setPageIndex] = useState(0);
-    const [isHeaderVisible, setIsHeaderVisible] = useState(true);
+    const [isHeaderVisible, setIsHeaderVisible] = useState(false);
 
     const lastScrollY = useRef(0);
     const readerRootRef = useRef<HTMLDivElement>(null);
@@ -132,20 +133,18 @@ export default function MangaReaderModal({
     const nextChapter = currentChapterIndex !== -1 && currentChapterIndex > 0
         ? chapters[currentChapterIndex - 1] : null;
 
-    const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-        const currentScrollY = e.currentTarget.scrollTop;
-        const diff = currentScrollY - lastScrollY.current;
-        if (Math.abs(diff) < 10) return;
-        if (diff > 0 && currentScrollY > 60 && isHeaderVisible) {
-            setIsHeaderVisible(false);
-        } else if (diff < 0 && !isHeaderVisible) {
-            setIsHeaderVisible(true);
-        }
-        lastScrollY.current = currentScrollY;
+    const handleScroll = () => {
+        // Disabled: Headers only show/hide on click now
     };
 
     const handleContentClick = () => {
-        if (!isHeaderVisible) setIsHeaderVisible(true);
+        setIsHeaderVisible(prev => {
+            if (prev) {
+                // When hiding the UI, ensure dropdowns are reset
+                closeSidebars();
+            }
+            return !prev;
+        });
     };
 
     const requestMobileFullscreen = () => {
@@ -173,27 +172,19 @@ export default function MangaReaderModal({
     return (
         <div
             ref={readerRootRef}
-            className="fixed inset-0 z-[130] md:z-[90] flex items-center justify-center bg-black/95 backdrop-blur-md transition-all duration-300 pt-0 md:pt-[60px]"
+            className="fixed inset-0 md:left-[70px] z-[130] md:z-[90] flex items-center justify-center bg-black/95 backdrop-blur-md transition-all duration-300"
             onPointerDown={requestMobileFullscreen}
         >
-            <div className="w-full h-full flex flex-col bg-[#0a0a0a] relative">
+            <div className="w-full h-full flex flex-col bg-[#0a0a0a] relative overflow-hidden">
                 {/* Header */}
                 <ReaderHeader
                     mangaTitle={getDisplayTitle(manga as unknown as Record<string, unknown>, language)}
+                    mangaImage={manga.images.jpg.large_image_url}
                     currentChapter={currentChapter}
-                    prevChapter={prevChapter}
-                    nextChapter={nextChapter}
-                    readingMode={readingMode}
                     zoomLevel={zoomLevel}
-                    showDetails={showDetails}
                     isVisible={isHeaderVisible}
-                    onClose={onClose}
-                    onLoadChapter={onLoadChapter}
-                    onToggleReadingMode={() => setReadingMode(m => m === 'longstrip' ? 'page' : 'longstrip')}
                     onZoomIn={onZoomIn}
                     onZoomOut={onZoomOut}
-                    onToggleDetails={() => setShowDetails(!showDetails)}
-                    onToggleChapters={() => setShowChapters(!showChapters)}
                 />
 
                 {/* Main Layout */}
@@ -206,22 +197,7 @@ export default function MangaReaderModal({
                         />
                     )}
 
-                    {/* Chapter List */}
-                    <ChapterList
-                        chapters={chapters}
-                        currentChapter={currentChapter}
-                        searchQuery={chapterSearchQuery}
-                        isLoading={chaptersLoading}
-                        viewMode={viewMode}
-                        readChapters={readChapters}
-                        isHeaderVisible={isHeaderVisible}
-                        showChapters={showChapters}
-                        onSearchChange={onChapterSearchChange}
-                        onLoadChapter={onLoadChapter}
-                        onPrefetchChapter={onPrefetchChapter}
-                        onViewModeChange={setViewMode}
-                        onClose={() => setShowChapters(false)}
-                    />
+                    {/* ChapterList has been replaced by the dropdown in ReaderFooter */}
 
                     {/* Page Viewer */}
                     <PageViewer
@@ -248,6 +224,18 @@ export default function MangaReaderModal({
                         onClose={onClose}
                     />
                 </div>
+                {/* Footer Overlay */}
+                <ReaderFooter
+                    chapters={chapters}
+                    currentChapter={currentChapter}
+                    prevChapter={prevChapter}
+                    nextChapter={nextChapter}
+                    isVisible={isHeaderVisible}
+                    showChapters={showChapters}
+                    readChapters={readChapters}
+                    onLoadChapter={onLoadChapter}
+                    onToggleChapters={() => setShowChapters(!showChapters)}
+                />
             </div>
         </div>
     );

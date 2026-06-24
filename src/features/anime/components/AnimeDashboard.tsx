@@ -1,20 +1,16 @@
-import { useNavigate } from 'react-router-dom';
+
 import type { Anime } from '../../../types/anime';
-import type { WatchProgress } from '../../../utils/storage';
 import SpotlightHero from './SpotlightHero';
-import ContinueWatching from './ContinueWatching';
 import TrendingNow from './TrendingNow';
 import PopularSeason from './PopularSeason';
 import AnimeCard from './AnimeCard';
 import AnimeCardSkeleton from './AnimeCardSkeleton';
-import EstimatedSchedule from './EstimatedSchedule';
-import Genres from './Genres';
+
 import TopTenSidebar from './TopTenSidebar';
 
 interface AnimeDashboardProps {
     spotlightAnime: Anime[];
     spotlightLoading?: boolean;
-    continueWatchingList: WatchProgress[];
     latestUpdates: Anime[];
     latestUpdatesLoading: boolean;
     trendingAnime: Anime[];
@@ -29,19 +25,16 @@ interface AnimeDashboardProps {
     topAnimeLoading?: boolean;
     allTimeTitle?: string;
     compactCatalogMode?: boolean;
-    showEstimatedSchedule?: boolean;
-    showGenres?: boolean;
+
+
     onAnimeClick: (anime: Anime) => void;
     onWatchClick: (anime: Anime, episodeNumber?: number, startSeconds?: number) => void;
-    onViewAll: (type: 'latest' | 'trending' | 'seasonal' | 'continue_watching' | 'popular') => void;
-    onRemoveFromHistory: (animeId: number | string) => void;
     onAnimeHover?: (anime: Anime) => void;
 }
 
 export default function AnimeDashboard({
     spotlightAnime,
     spotlightLoading = false,
-    continueWatchingList,
     latestUpdates,
     latestUpdatesLoading,
     trendingAnime,
@@ -56,15 +49,13 @@ export default function AnimeDashboard({
     topAnimeLoading = false,
     allTimeTitle = 'All-Time Popular',
     compactCatalogMode = false,
-    showEstimatedSchedule = true,
-    showGenres = true,
+
+
     onAnimeClick,
     onWatchClick,
-    onViewAll,
-    onRemoveFromHistory,
     onAnimeHover
 }: AnimeDashboardProps) {
-    const navigate = useNavigate();
+
 
     return (
         <>
@@ -78,17 +69,7 @@ export default function AnimeDashboard({
                 />
             )}
 
-            <div className={`container mx-auto px-4 z-10 relative ${compactCatalogMode ? '' : 'mt-8'}`}>
-                {/* Continue Watching Carousel */}
-                {!compactCatalogMode && continueWatchingList.length > 0 && (
-                    <ContinueWatching
-                        items={continueWatchingList}
-                        variant="dashboard"
-                        onWatchClick={onWatchClick}
-                        onRemove={onRemoveFromHistory}
-                        onViewAll={() => onViewAll('continue_watching')}
-                    />
-                )}
+            <div className={`w-full max-w-7xl mx-auto px-8 md:px-14 z-10 relative ${compactCatalogMode ? '' : 'mt-8'}`}>
 
                 {!compactCatalogMode && (
                     <TrendingNow
@@ -97,7 +78,7 @@ export default function AnimeDashboard({
                         isLoading={latestUpdatesLoading}
                         onAnimeClick={onAnimeClick}
                         onWatchClick={(anime) => onWatchClick(anime, 1)}
-                        onViewAll={() => onViewAll('latest')}
+
                         onMouseEnter={onAnimeHover}
                     />
                 )}
@@ -108,7 +89,7 @@ export default function AnimeDashboard({
                         isLoading={trendingLoading}
                         onAnimeClick={onAnimeClick}
                         onWatchClick={(anime) => onWatchClick(anime, 1)}
-                        onViewAll={() => onViewAll('trending')}
+
                         onMouseEnter={onAnimeHover}
                     />
                 )}
@@ -119,20 +100,21 @@ export default function AnimeDashboard({
                         isLoading={popularSeasonLoading}
                         onAnimeClick={onAnimeClick}
                         onWatchClick={(anime) => onWatchClick(anime, 1)}
-                        onViewAll={() => onViewAll('seasonal')}
+
                         onMouseEnter={onAnimeHover}
                     />
                 )}
 
                 {/* All-Time Popular + Top 10 + Schedule + Genres */}
-                <div className="container mx-auto px-4 pt-4">
+                <div className="w-full pt-4">
                     <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-6 items-start">
                         <div data-hover-boundary>
-                            <div className="flex items-center justify-between mb-6">
-                                <h2 className="text-xl font-bold border-l-4 border-yorumi-accent pl-3 text-white">{allTimeTitle}</h2>
+                            <div className="flex items-center gap-4 mb-6">
+                                <h2 className="text-xl md:text-2xl font-black text-white tracking-wide uppercase whitespace-nowrap">{allTimeTitle}</h2>
+                                <div className="flex-1 h-px bg-white/10" />
                             </div>
 
-                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+                            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-5 xl:grid-cols-5 gap-4 md:gap-6">
                                 {topAnimeLoading ? (
                                     Array.from({ length: 15 }).map((_, i) => (
                                         <div key={i} className={i >= 10 ? 'hidden sm:block' : ''}>
@@ -155,14 +137,9 @@ export default function AnimeDashboard({
                                     ))
                                 )}
                             </div>
-                            {showEstimatedSchedule && (
-                                <div className="mt-4">
-                                    <EstimatedSchedule onAnimeClick={(id) => navigate(`/anime/${id}`)} />
-                                </div>
-                            )}
                         </div>
 
-                        <div className={showGenres ? 'space-y-6' : ''}>
+                        <div className="space-y-6">
                             <TopTenSidebar
                                 today={topTenToday}
                                 week={topTenWeek}
@@ -170,7 +147,6 @@ export default function AnimeDashboard({
                                 isLoading={topTenLoading}
                                 onAnimeClick={onAnimeClick}
                             />
-                            {showGenres && <Genres onGenreClick={(genre) => navigate(`/genre/${encodeURIComponent(genre)}`)} />}
                         </div>
                     </div>
                 </div>

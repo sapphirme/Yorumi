@@ -25,7 +25,9 @@ const normalizeReadStatus = (status?: string): ReadListItem['status'] => {
 };
 
 const buildStoredMangaState = (item: ReadListItem) => ({
-    mal_id: parseInt(item.id),
+    id: item.id,
+    mal_id: /^\d+$/.test(item.id) ? parseInt(item.id, 10) : item.id,
+    scraper_id: /^\d+$/.test(item.id) ? undefined : item.id,
     title: item.title,
     images: { jpg: { large_image_url: item.image, image_url: item.image } },
     score: item.score || 0,
@@ -69,7 +71,7 @@ const MangaReadListSection = ({
                             key={item.id}
                             manga={mangaData}
                             onClick={() => onOpen(item, mangaData)}
-                            onReadClick={() => onOpen(item, mangaData)}
+
                             inList={true}
                             onToggleList={() => onRemove(item.id)}
                             disableTilt

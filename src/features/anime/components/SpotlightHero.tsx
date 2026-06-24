@@ -5,6 +5,7 @@ import AnimeLogoImage from '../../../components/anime/AnimeLogoImage';
 import SpotlightSkeleton from './SpotlightSkeleton';
 import { useTitleLanguage } from '../../../context/TitleLanguageContext';
 import { getDisplayTitle } from '../../../utils/titleLanguage';
+import { AnimatePresence, m } from 'framer-motion';
 
 interface SpotlightHeroProps {
     animeList: Anime[];
@@ -177,147 +178,190 @@ const SpotlightHero: React.FC<SpotlightHeroProps> = ({ animeList, isLoading = fa
     }
 
     return (
-        <div className="relative w-full h-[55vh] md:h-[75vh] min-h-[500px] md:min-h-[600px] group bg-[#0a0a0a] overflow-hidden mb-8">
-            {/* Embla Viewport */}
-            <div className="absolute inset-0 overflow-hidden" ref={emblaRef}>
-                <div className="flex h-full touch-pan-y">
-                    {animeList.map((anime, index) => {
-                        const displayTitle = getDisplayTitle(anime as unknown as Record<string, unknown>, language);
+        <div className="relative w-full h-[50vh] md:h-[60vh] min-h-[400px] md:min-h-[480px] group bg-[#0a0a0a] overflow-hidden mb-8">
+            {/* Background Crossfade */}
+            <div className="absolute inset-0 z-0 select-none overflow-hidden">
+                <AnimatePresence>
+                    {animeList[selectedIndex] && (() => {
+                        const anime = animeList[selectedIndex];
                         const coverImage = getAnimeCoverImage(anime);
                         const backgroundCover = getAnimeBackgroundCover(anime, coverImage);
-
                         return (
-                            <div
-                                key={`${anime.scraperId || anime.id || anime.mal_id || anime.title}-${index}`}
-                                className="relative min-w-full h-full flex-[0_0_100%]"
-                            >
-                                {/* Background Image */}
-                                <div className="absolute inset-0 z-0 select-none overflow-hidden">
-                                    <div
-                                        className="absolute inset-0 bg-no-repeat bg-cover bg-center opacity-70"
-                                        style={{
-                                            backgroundImage: backgroundCover ? `url(${backgroundCover})` : 'none',
-                                        }}
-                                    />
-                                    <div className="absolute inset-0 bg-black/60 md:bg-black/40" />
-                                    <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#0a0a0a]/60 to-[#0a0a0a]" />
-                                    <div className="absolute inset-0 bg-gradient-to-r from-[#0a0a0a] via-[#0a0a0a]/80 to-transparent pointer-events-none" />
-                                </div>
-
-                                {/* Content */}
-                                <div className="absolute inset-0 flex items-center px-8 md:px-14 z-10 pointer-events-none">
-                                    <div className="flex flex-col md:flex-row gap-12 items-center w-full max-w-7xl mx-auto mt-12">
-
-                                        {/* Text Info (Left) */}
-                                        <div className="flex-1 pointer-events-auto max-w-2xl">
-                                            <div className="text-yorumi-accent font-bold tracking-wider text-base mb-3 uppercase select-none flex items-center gap-3">
-                                                {coverImage && (
-                                                    <div className="md:hidden h-24 w-16 rounded-md overflow-hidden shadow-lg shadow-black/50 border border-white/10 flex-shrink-0 relative">
-                                                        <img
-                                                            src={coverImage}
-                                                            alt={displayTitle}
-                                                            className="w-full h-full object-cover"
-                                                        />
-                                                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                                                    </div>
-                                                )}
-                                                <span>#{index + 1} Trending</span>
-                                            </div>
-
-                                            <div className={`${displayTitle.length > 50 ? 'max-h-12 md:max-h-16' :
-                                                displayTitle.length > 30 ? 'max-h-16 md:max-h-20' :
-                                                    'max-h-20 md:max-h-24'
-                                                } mb-8 md:mb-12 flex items-start overflow-visible`}>
-                                                <AnimeLogoImage
-                                                    anilistId={anime.id || anime.mal_id}
-                                                    title={displayTitle}
-                                                    year={anime.year}
-                                                    episodes={anime.latestEpisode || anime.episodes}
-                                                    format={anime.type}
-                                                    className="drop-shadow-2xl max-h-full origin-left object-contain"
-                                                    size="medium"
-                                                />
-                                            </div>
-
-                                            <div className="flex items-center flex-wrap gap-4 text-sm text-white mb-4 md:mb-6 font-medium select-none">
-                                                {anime.score > 0 && (
-                                                    <span className="flex items-center gap-1.5 bg-white/10 px-3 py-1.5 rounded-lg backdrop-blur-sm">
-                                                        <svg className="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" /></svg>
-                                                        {anime.score.toFixed(1)}
-                                                    </span>
-                                                )}
-                                                {(anime.latestEpisode || anime.episodes) ? (
-                                                    <span className="bg-[#22c55e] text-white px-2.5 py-1 rounded text-xs font-bold flex items-center gap-1">
-                                                        <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M19 4H5a2 2 0 00-2 2v12a2 2 0 002 2h14a2 2 0 002-2V6a2 2 0 00-2-2zm-8 7H9.5v-.5h-2v3h2V13H11v2H6V9h5v2zm7 0h-1.5v-.5h-2v3h2V13H18v2h-5V9h5v2z" /></svg>
-                                                        {anime.latestEpisode || anime.episodes}
-                                                    </span>
-                                                ) : (
-                                                    <span className="flex items-center gap-1.5 bg-white/10 px-3 py-1.5 rounded-lg backdrop-blur-sm">
-                                                        <span className={`w-2 h-2 rounded-full ${String(anime.status || '').toUpperCase() === 'RELEASING' || String(anime.status || '').toLowerCase() === 'airing' ? 'bg-green-500' : 'bg-gray-500'}`}></span>
-                                                        {anime.status || 'Unknown'}
-                                                    </span>
-                                                )}
-                                                <span className="bg-yorumi-accent/20 text-yorumi-accent px-3 py-1.5 rounded-lg text-xs font-bold border border-yorumi-accent/50 uppercase">
-                                                    {anime.type || 'Anime'}
-                                                </span>
-                                            </div>
-
-                                            <p className="text-gray-300 text-sm md:text-base line-clamp-3 mb-8 max-w-xl leading-relaxed">
-                                                {anime.synopsis || "No synopsis available."}
-                                            </p>
-
-                                            <div className="flex gap-4">
-                                                <button
-                                                    onMouseEnter={() => onAnimeHover?.(anime)}
-                                                    onFocus={() => onAnimeHover?.(anime)}
-                                                    onClick={() => onWatchClick(anime)}
-                                                    className="bg-yorumi-accent text-yorumi-bg px-6 md:px-8 py-3 md:py-3.5 rounded-full font-bold hover:bg-white transition-all duration-300 transform hover:scale-105 flex items-center gap-3 shadow-[0_0_20px_rgba(61,180,242,0.3)] hover:shadow-[0_0_30px_rgba(61,180,242,0.6)] text-sm md:text-base"
-                                                >
-                                                    <div className="bg-yorumi-bg text-white rounded-full p-1.5 -ml-2">
-                                                        <svg className="w-3 h-3 ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
-                                                    </div>
-                                                    Watch Now
-                                                </button>
-                                                <button
-                                                    onMouseEnter={() => onAnimeHover?.(anime)}
-                                                    onFocus={() => onAnimeHover?.(anime)}
-                                                    onClick={() => onAnimeClick(anime)}
-                                                    className="bg-white/10 backdrop-blur-md border border-white/20 text-white px-6 md:px-8 py-3 md:py-3.5 rounded-full font-bold hover:bg-white/20 transition-all duration-300 flex items-center gap-2 text-sm md:text-base"
-                                                >
-                                                    Detail <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        {/* Cover Image (Right - Portrait) */}
-                                        <div className="ml-auto lg:mr-12 xl:mr-20">
-                                            {coverImage && <SpotlightCover thumbnail={coverImage} title={displayTitle} />}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                            <m.div
+                                key={`bg-${selectedIndex}`}
+                                initial={{ scale: 1.05, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 0.7 }}
+                                exit={{ opacity: 0 }}
+                                transition={{ duration: 0.8 }}
+                                className="absolute inset-0 bg-no-repeat bg-cover bg-center"
+                                style={{
+                                    backgroundImage: backgroundCover ? `url(${backgroundCover})` : 'none',
+                                }}
+                            />
                         );
-                    })}
+                    })()}
+                </AnimatePresence>
+                <div className="absolute inset-0 bg-black/60 md:bg-black/40 z-0" />
+                <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#0a0a0a]/60 to-[#0a0a0a] z-0" />
+                <div className="absolute inset-0 bg-gradient-to-r from-[#0a0a0a] via-[#0a0a0a]/80 to-transparent pointer-events-none z-0" />
+            </div>
+
+            {/* Embla Viewport (Invisible Swipe Catcher) */}
+            <div className="absolute inset-0 overflow-hidden z-0" ref={emblaRef}>
+                <div className="flex h-full touch-pan-y">
+                    {animeList.map((anime, index) => (
+                        <div
+                            key={`${anime.scraperId || anime.id || anime.mal_id || anime.title}-${index}`}
+                            className="relative min-w-full h-full flex-[0_0_100%]"
+                        />
+                    ))}
                 </div>
             </div>
 
-            {/* Navigation Buttons (Bottom Right) - Desktop Only */}
-            <div className="absolute bottom-8 right-8 z-20 hidden md:flex gap-2">
-                <button
-                    onClick={handlePrev}
-                    className="p-2 bg-black/60 hover:bg-yorumi-accent hover:text-yorumi-bg text-white rounded-lg border border-white/10 transition-all backdrop-blur-md"
-                    aria-label="Previous Slide"
-                >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-                </button>
-                <button
-                    onClick={handleNext}
-                    className="p-2 bg-black/60 hover:bg-yorumi-accent hover:text-yorumi-bg text-white rounded-lg border border-white/10 transition-all backdrop-blur-md"
-                    aria-label="Next Slide"
-                >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                </button>
+            {/* Fixed Overlay Content */}
+            <div className="absolute inset-0 z-10 pointer-events-none">
+                <AnimatePresence>
+                    {animeList[selectedIndex] && (() => {
+                        const activeAnime = animeList[selectedIndex];
+                        const displayTitle = getDisplayTitle(activeAnime as unknown as Record<string, unknown>, language);
+                        const coverImage = getAnimeCoverImage(activeAnime);
+
+                        return (
+                            <m.div
+                                key={selectedIndex}
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                transition={{ duration: 0.4, ease: "easeInOut" }}
+                                className="absolute inset-0 flex flex-col md:flex-row gap-12 items-center w-full max-w-7xl mx-auto px-8 md:px-14 mt-12"
+                            >
+                                {/* Text Info (Left) */}
+                                <div className="flex-1 pointer-events-auto w-full max-w-2xl flex flex-col justify-end h-[360px] md:h-[380px]">
+                                    {/* Top Section: Mobile Cover & Title */}
+                                    <div className="w-full mb-4">
+                                        <div className="flex items-center gap-3 mb-3">
+                                            {coverImage && (
+                                                <div className="md:hidden h-24 w-16 rounded-md overflow-hidden shadow-lg shadow-black/50 border border-white/10 flex-shrink-0 relative">
+                                                    <img
+                                                        src={coverImage}
+                                                        alt={displayTitle}
+                                                        className="w-full h-full object-cover"
+                                                    />
+                                                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="flex items-start">
+                                            <AnimeLogoImage
+                                                anilistId={activeAnime.id || activeAnime.mal_id}
+                                                title={displayTitle}
+                                                year={activeAnime.year}
+                                                episodes={activeAnime.latestEpisode || activeAnime.episodes}
+                                                format={activeAnime.type}
+                                                className="drop-shadow-2xl"
+                                                size="medium"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Middle Section: Chips */}
+                                    <div className="w-full flex items-center flex-wrap gap-4 text-white select-none mb-4">
+                                        {activeAnime.score > 0 && (
+                                            <span className="flex items-center justify-center gap-1.5 bg-white/10 px-3 h-8 rounded-lg backdrop-blur-sm text-sm font-bold">
+                                                <svg className="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" /></svg>
+                                                {activeAnime.score.toFixed(1)}
+                                            </span>
+                                        )}
+                                        {(activeAnime.latestEpisode || activeAnime.episodes) ? (
+                                            <span className="flex items-center justify-center gap-1.5 bg-[#22c55e] text-white px-3 h-8 rounded-lg backdrop-blur-sm text-sm font-bold">
+                                                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M19 4H5a2 2 0 00-2 2v12a2 2 0 002 2h14a2 2 0 002-2V6a2 2 0 00-2-2zm-8 7H9.5v-.5h-2v3h2V13H18v2h-5V9h5v2z" /></svg>
+                                                {activeAnime.latestEpisode || activeAnime.episodes}
+                                            </span>
+                                        ) : (
+                                            <span className="flex items-center justify-center gap-1.5 bg-white/10 px-3 h-8 rounded-lg backdrop-blur-sm text-sm font-bold">
+                                                <span className={`w-2 h-2 rounded-full ${String(activeAnime.status || '').toUpperCase() === 'RELEASING' || String(activeAnime.status || '').toLowerCase() === 'airing' ? 'bg-green-500' : 'bg-gray-500'}`}></span>
+                                                {activeAnime.status || 'Unknown'}
+                                            </span>
+                                        )}
+                                        <span className="flex items-center justify-center px-3 h-8 rounded-lg bg-yorumi-accent/20 text-yorumi-accent text-sm font-bold border border-yorumi-accent/50 uppercase backdrop-blur-sm">
+                                            {activeAnime.type || 'Anime'}
+                                        </span>
+                                    </div>
+
+                                    {/* Bottom Section: Synopsis & Buttons */}
+                                    <div className="w-full mb-6">
+                                        <p className="text-gray-300 text-sm md:text-base line-clamp-3 max-w-xl leading-relaxed">
+                                            {activeAnime.synopsis || "No synopsis available."}
+                                        </p>
+                                    </div>
+
+                                    <div className="w-full flex gap-4">
+                                        <button
+                                            onMouseEnter={() => onAnimeHover?.(activeAnime)}
+                                            onFocus={() => onAnimeHover?.(activeAnime)}
+                                            onClick={() => onWatchClick(activeAnime)}
+                                            className="bg-yorumi-accent text-yorumi-bg px-5 py-2.5 rounded-lg font-bold hover:bg-white transition-all duration-300 flex items-center gap-2 shadow-[0_0_15px_rgba(61,180,242,0.3)] hover:shadow-[0_0_25px_rgba(61,180,242,0.5)] text-sm md:text-base"
+                                        >
+                                            <svg className="w-4 h-4 ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+                                            Watch Now
+                                        </button>
+                                        <button
+                                            onMouseEnter={() => onAnimeHover?.(activeAnime)}
+                                            onFocus={() => onAnimeHover?.(activeAnime)}
+                                            onClick={() => onAnimeClick(activeAnime)}
+                                            className="bg-white/10 backdrop-blur-md border border-white/20 text-white px-5 py-2.5 rounded-lg font-bold hover:bg-white/20 transition-all duration-300 flex items-center gap-2 text-sm md:text-base"
+                                        >
+                                            Detail <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Coverflow Images (Right - Portrait) */}
+                                <div className="ml-auto lg:mr-12 xl:mr-20 pointer-events-none relative w-56 lg:w-64 h-[336px] lg:h-[384px] group">
+                                    {/* Previous Card */}
+                                    {animeList.length > 1 && (
+                                        <div 
+                                            onClick={() => scrollTo((selectedIndex - 1 + animeList.length) % animeList.length)}
+                                            className="absolute inset-0 hidden md:block pointer-events-auto cursor-pointer z-0"
+                                        >
+                                            <div 
+                                                className="w-full h-full origin-bottom transition-transform duration-500 ease-out [transform:translateX(-40%)_translateY(-20px)_scale(0.9)_rotate(-8deg)] group-hover:[transform:translateX(-45%)_translateY(-20px)_scale(0.92)_rotate(-6deg)]"
+                                            >
+                                                <div className="w-full h-full rounded-xl overflow-hidden shadow-[0_0_30px_rgba(0,0,0,0.5)] border border-white/10 brightness-[0.6] transition-all duration-300">
+                                                    <img src={getAnimeCoverImage(animeList[(selectedIndex - 1 + animeList.length) % animeList.length])} className="w-full h-full object-cover" alt="" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                    
+                                    {/* Next Card */}
+                                    {animeList.length > 2 && (
+                                        <div 
+                                            onClick={() => scrollTo((selectedIndex + 1) % animeList.length)}
+                                            className="absolute inset-0 hidden md:block pointer-events-auto cursor-pointer z-0"
+                                        >
+                                            <div 
+                                                className="w-full h-full origin-bottom transition-transform duration-500 ease-out [transform:translateX(40%)_translateY(-20px)_scale(0.9)_rotate(8deg)] group-hover:[transform:translateX(45%)_translateY(-20px)_scale(0.92)_rotate(6deg)]"
+                                            >
+                                                <div className="w-full h-full rounded-xl overflow-hidden shadow-[0_0_30px_rgba(0,0,0,0.5)] border border-white/10 brightness-[0.6] transition-all duration-300">
+                                                    <img src={getAnimeCoverImage(animeList[(selectedIndex + 1) % animeList.length])} className="w-full h-full object-cover" alt="" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Active Card */}
+                                    <div className="absolute inset-0 z-10 pointer-events-auto">
+                                        {coverImage && <SpotlightCover thumbnail={coverImage} title={displayTitle} />}
+                                    </div>
+                                </div>
+                            </m.div>
+                        );
+                    })()}
+                </AnimatePresence>
             </div>
+
+
 
             {/* Dots Indicator */}
             <div className="absolute z-20 flex gap-2 right-4 top-1/2 -translate-y-1/2 flex-col md:flex-row md:bottom-6 md:left-1/2 md:-translate-x-1/2 md:top-auto md:right-auto md:translate-y-0">

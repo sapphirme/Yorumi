@@ -1,0 +1,143 @@
+import { useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { ArrowLeft, Search, Tv, BookOpen, Library, LogOut } from 'lucide-react';
+import SearchModal from '../shared/SearchModal';
+import { useWatchList } from '../../hooks/useWatchList';
+import { useReadList } from '../../hooks/useReadList';
+import yorumiIcon from '../../../public/yorumi-icon.png';
+
+export default function Sidebar() {
+    const navigate = useNavigate();
+    const location = useLocation();
+    const [isSearchOpen, setIsSearchOpen] = useState(false);
+    const [searchType, setSearchType] = useState<'anime' | 'manga'>('anime');
+    const [hoveredCard, setHoveredCard] = useState<{title: string, top: number} | null>(null);
+
+    const { watchList } = useWatchList();
+    const { readList } = useReadList();
+
+    const savedItems = [
+        ...watchList.map(item => ({ ...item, isManga: false })),
+        ...readList.map(item => ({ ...item, isManga: true }))
+    ].sort((a, b) => new Date(b.addedAt || 0).getTime() - new Date(a.addedAt || 0).getTime());
+
+    return (
+        <>
+        <aside className="fixed left-0 top-0 h-screen w-[70px] bg-[#0a0a0a]/90 backdrop-blur-xl border-r border-white/5 flex flex-col items-center py-6 z-[100]">
+            <div className="flex flex-col items-center gap-3 w-full">
+                {/* Logo */}
+                <div 
+                    onClick={() => navigate('/')} 
+                    className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer mb-4 hover:opacity-80 transition-opacity"
+                    title="Home"
+                >
+                    <img src={yorumiIcon} alt="Yorumi" className="w-8 h-8 object-contain" />
+                </div>
+                
+                <SidebarIcon 
+                    icon={ArrowLeft} 
+                    title="Back" 
+                    onClick={() => {
+                        if (location.pathname.startsWith('/manga/read/')) {
+                            const parts = location.pathname.split('/');
+                            if (parts.length >= 5) {
+                                navigate(`/manga/details/${parts[4]}`);
+                                return;
+                            }
+                        }
+                        if (location.pathname.startsWith('/anime/details/')) {
+                            const parts = location.pathname.split('/');
+                            if (parts.length >= 5) {
+                                navigate(`/anime/details/${parts[4]}`);
+                                return;
+                            }
+                        }
+                        navigate(-1);
+                    }} 
+                />
+                <SidebarIcon 
+                    icon={Search} 
+                    title="Search" 
+                    onClick={() => {
+                        const isManga = location.pathname.startsWith('/manga');
+                        setSearchType(isManga ? 'manga' : 'anime');
+                        setIsSearchOpen(true);
+                    }} 
+                />
+                <SidebarIcon icon={Tv} title="Anime" onClick={() => navigate('/')} isActive={location.pathname === '/' || location.pathname.startsWith('/anime')} />
+                <SidebarIcon icon={BookOpen} title="Manga" onClick={() => navigate('/manga')} isActive={location.pathname === '/manga' || location.pathname.startsWith('/manga')} />
+                <SidebarIcon icon={Library} title="Library" onClick={() => navigate('/library')} isActive={location.pathname === '/library'} />
+            </div>
+
+            {savedItems.length > 0 && (
+                <div className="flex-1 w-full min-h-0 flex flex-col items-center mt-3 overflow-hidden">
+                    <div className="w-8 h-px bg-white/10 mb-3 shrink-0" />
+                    <div className="w-full flex-1 overflow-y-auto flex flex-col items-center gap-3 px-1 pb-4 scrollbar-thin scrollbar-thumb-transparent hover:scrollbar-thumb-blue-500 scrollbar-track-transparent">
+                        {savedItems.map(item => (
+                            <button
+                                key={`${item.isManga ? 'manga' : 'anime'}-${item.id}`}
+                                onClick={() => navigate(item.isManga ? `/manga/details/${item.id}` : `/anime/details/${item.id}`)}
+                                onMouseEnter={(e) => {
+                                    const rect = e.currentTarget.getBoundingClientRect();
+                                    setHoveredCard({ title: item.title, top: rect.top + rect.height / 2 });
+                                }}
+                                onMouseLeave={() => setHoveredCard(null)}
+                                className="relative w-11 h-16 shrink-0 focus:outline-none"
+                            >
+                                <div className="w-full h-full rounded-lg overflow-hidden border-2 border-transparent hover:border-yorumi-accent transition-colors">
+                                    <img src={item.image} alt={item.title} className="w-full h-full object-cover" />
+                                </div>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            <div className="flex flex-col items-center gap-4 w-full mt-auto pt-4">
+                <SidebarIcon 
+                    icon={LogOut} 
+                    title="Exit App" 
+                    onClick={() => window.close()} 
+                    className="text-red-500 hover:text-red-400 hover:bg-red-500/10" 
+                />
+            </div>
+        </aside>
+        
+        <SearchModal 
+            isOpen={isSearchOpen} 
+            onClose={() => setIsSearchOpen(false)} 
+            type={searchType} 
+        />
+        {hoveredCard && (
+            <div 
+                className="fixed left-[70px] bg-[#1a1a1a] text-white text-[13px] font-semibold px-3 py-1.5 rounded-md pointer-events-none whitespace-nowrap z-[150] shadow-xl border border-white/5 -translate-y-1/2"
+                style={{ top: hoveredCard.top }}
+            >
+                {hoveredCard.title}
+            </div>
+        )}
+        </>
+    );
+}
+
+interface SidebarIconProps {
+    icon: React.ElementType;
+    title: string;
+    onClick: () => void;
+    isActive?: boolean;
+    className?: string;
+}
+
+function SidebarIcon({ icon: Icon, title, onClick, isActive, className }: SidebarIconProps) {
+    return (
+        <button
+            onClick={onClick}
+            className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all duration-200 group relative outline-none focus:outline-none ${isActive ? 'bg-yorumi-accent/20 text-yorumi-accent' : 'text-gray-400 hover:text-white hover:bg-white/10'} ${className || ''}`}
+        >
+            <Icon className="w-5 h-5" />
+            <span className="absolute left-[60px] bg-[#1a1a1a] text-white text-[13px] font-semibold px-3 py-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-[150] shadow-xl border border-white/5">
+                {title}
+            </span>
+        </button>
+    );
+}

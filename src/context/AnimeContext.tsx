@@ -80,6 +80,8 @@ interface AnimeContextType {
     // Episode Tracking
     watchedEpisodes: Set<number>;
     markEpisodeComplete: (episodeNumber: number) => void;
+    unmarkEpisodeComplete: (episodeNumber: number) => void;
+    toggleEpisodeComplete: (episodeNumber: number) => void;
 }
 
 const AnimeContext = createContext<AnimeContextType | undefined>(undefined);
@@ -310,7 +312,7 @@ export function AnimeProvider({ children }: { children: ReactNode }) {
     };
 
     // SessionStorage-backed episode cache (survives in-app navigation)
-    const EPISODE_CACHE_PREFIX = 'yorumi_ep_cache_v3';
+    const EPISODE_CACHE_PREFIX = 'yorumi_ep_cache_v4';
     const readEpisodeSessionCache = (animeKey: string): { session: string; episodes: Episode[] } | null => {
         try {
             const raw = sessionStorage.getItem(`${EPISODE_CACHE_PREFIX}:${animeKey}`);
@@ -347,7 +349,7 @@ export function AnimeProvider({ children }: { children: ReactNode }) {
         if (latestEpisode > 0) return latestEpisode;
 
         const status = String(anime.status || '').toUpperCase();
-        if (status === 'RELEASING') return 0;
+        if (status === 'RELEASING' || status === 'NOT_YET_RELEASED') return 0;
 
         return Number(anime.episodes || 0);
     };
@@ -375,7 +377,8 @@ export function AnimeProvider({ children }: { children: ReactNode }) {
 
     const trimEpisodesForAnime = (anime: Anime, episodeList: Episode[]) => {
         const expectedEpisodes = getExpectedEpisodeCount(anime);
-        if (expectedEpisodes <= 0 || episodeList.length <= expectedEpisodes) return episodeList;
+        if (expectedEpisodes <= 0) return [];
+        if (episodeList.length <= expectedEpisodes) return episodeList;
 
         const seasonNumber = getAnimeSeasonNumber(anime);
         if (seasonNumber <= 1) {
@@ -388,15 +391,30 @@ export function AnimeProvider({ children }: { children: ReactNode }) {
                 return Number.isFinite(parsed) ? parsed : NaN;
             })
             .filter((value) => Number.isFinite(value));
+        
         const maxEpisodeNumber = parsedNumbers.length > 0 ? Math.max(...parsedNumbers) : 0;
+        const minEpisodeNumber = parsedNumbers.length > 0 ? Math.min(...parsedNumbers) : 0;
 
-        // Some sequel pages use absolute numbering (for example ep 73 instead of season-local ep 1).
-        // In that case we keep the newest window instead of slicing from the front.
-        if (maxEpisodeNumber > expectedEpisodes) {
-            return episodeList.slice(-expectedEpisodes);
+        // If the scraper gave us a massive continuous list (e.g., 1-50) for a franchise,
+        // or if it strictly starts at a high absolute number (e.g., 26-50),
+        // then we are dealing with absolute numbering and should slice the latest window.
+        // BUT if it's just a small list (e.g., 1-12) and we are Season 2, it probably 
+        // accidentally mapped to Season 1's session. We should NOT slice from the end.
+        const isContinuousList = episodeList.length > expectedEpisodes * 1.5;
+        const isAbsoluteChunk = minEpisodeNumber > 1 && maxEpisodeNumber > expectedEpisodes;
+
+        let sliced: Episode[];
+        if (isContinuousList || isAbsoluteChunk) {
+            sliced = episodeList.slice(-expectedEpisodes);
+        } else {
+            sliced = episodeList.slice(0, expectedEpisodes);
         }
 
-        return episodeList.slice(0, expectedEpisodes);
+        return sliced.map((ep, i) => ({
+            ...ep,
+            _tmdbAbsolute: Number(ep.episodeNumber),
+            episodeNumber: String(i + 1),
+        }));
     };
 
     const hasEnoughEpisodes = (anime: Anime, episodeList: Episode[]) => {
@@ -1410,6 +1428,28 @@ export function AnimeProvider({ children }: { children: ReactNode }) {
         setWatchedEpisodes(prev => new Set(prev).add(episodeNumber));
     };
 
+    const unmarkEpisodeComplete = (episodeNumber: number) => {
+        if (!selectedAnime) return;
+        const canonicalId = getCanonicalAnimeHistoryId(selectedAnime);
+        if (canonicalId) {
+            storage.unmarkEpisodeAsWatched(canonicalId, episodeNumber);
+        }
+
+        setWatchedEpisodes(prev => {
+            const next = new Set(prev);
+            next.delete(episodeNumber);
+            return next;
+        });
+    };
+
+    const toggleEpisodeComplete = (episodeNumber: number) => {
+        if (watchedEpisodes.has(episodeNumber)) {
+            unmarkEpisodeComplete(episodeNumber);
+        } else {
+            markEpisodeComplete(episodeNumber);
+        }
+    };
+
     // --- Actions ---
 
     const handleAnimeClick = async (anime: Anime) => {
@@ -1687,7 +1727,7 @@ export function AnimeProvider({ children }: { children: ReactNode }) {
             watchAnime, closeDetails, closeWatch, closeAllModals, changePage,
             openViewAll, closeViewAll, changeViewAllPage, loadMoreViewAll, prefetchEpisodes, prefetchPage,
             continueWatchingList, saveProgress, removeFromHistory, fetchHomeData,
-            watchedEpisodes, markEpisodeComplete
+            watchedEpisodes, markEpisodeComplete, unmarkEpisodeComplete, toggleEpisodeComplete
         }}>
             {children}
         </AnimeContext.Provider>

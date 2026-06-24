@@ -354,7 +354,7 @@ export default function YumiPage() {
         const item = getAnimeCardItem(card);
         if (!item) return;
         const id = getAnimeWatchRouteId(item) || getAnimeDetailsRouteId(item);
-        if (id) navigate(`/anime/watch/${slugify(item.title || card.title || 'anime')}/${id}?ep=1`, { state: { anime: item } });
+        if (id) navigate(`/anime/details/${id}?ep=1`, { state: { anime: item } });
     };
 
     const handleAddToLibrary = (card: RecommendationCard) => {
