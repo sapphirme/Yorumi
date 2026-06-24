@@ -36,6 +36,7 @@ const launchBrowser = async (): Promise<Browser> => {
 
     return localPuppeteer.launch({
         headless: true,
+        executablePath: process.env.ELECTRON_RUN_AS_NODE === '1' ? process.execPath : undefined,
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',

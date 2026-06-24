@@ -3,12 +3,12 @@
   "private": true,
   "version": "3.0.0",
   "description": "Yorumi - Anime & Manga Streamer",
-  "author": "Yorumi Team",
+  "author": "davenarchives",
   "main": "dist-electron/main.js",
   "type": "module",
   "scripts": {
     "dev": "concurrently \"npm run dev --prefix backend\" \"vite\" \"wait-on tcp:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .\"",
-    "build": "npm run build --prefix backend && tsc -b tsconfig.app.json tsconfig.node.json && vite build",
+    "build": "npx esbuild backend/src/index.ts --bundle --platform=node --target=node18 --outfile=backend/dist/bundle.cjs --external:@sparticuz/chromium && tsc -b tsconfig.app.json tsconfig.node.json && vite build",
     "build:electron": "npm run build && electron-builder",
     "start": "concurrently \"npm run dev --prefix backend\" \"electron .\"",
     "lint": "eslint .",
@@ -74,9 +74,10 @@
     "directories": {
       "output": "dist-app"
     },
+    "artifactName": "${productName}.${ext}",
     "files": [
       "dist/**/*",
-      "dist-electron/**/*", "backend/dist/**/*", "backend/package.json", "backend/node_modules/**/*"
+      "dist-electron/**/*", "backend/dist/bundle.cjs"
     ],
     "win": {
       "target": "nsis",
