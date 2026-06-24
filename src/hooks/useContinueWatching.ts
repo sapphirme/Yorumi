@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useAuth } from '../context/AuthContext';
 import { storage, type WatchProgress } from '../utils/storage';
 import { useActivityHistory } from './useActivityHistory';
 import type { Anime, Episode } from '../types/anime';
@@ -10,31 +9,19 @@ interface PlaybackProgress {
 }
 
 export function useContinueWatching() {
-    const { user } = useAuth();
     const { recordActivity } = useActivityHistory();
-    const [continueWatchingList, setContinueWatchingList] = useState<WatchProgress[]>([]);
+    const [continueWatchingList, setContinueWatchingList] = useState<WatchProgress[]>(() => storage.getContinueWatching());
 
     const reload = useCallback(() => {
         setContinueWatchingList(storage.getContinueWatching());
     }, []);
 
     useEffect(() => {
-        if (!user) {
-            setContinueWatchingList([]);
-            return;
-        }
-
-        // Initial load
-        reload();
-
-        // Re-render whenever storage mutates
         window.addEventListener('yorumi-storage-updated', reload);
         return () => window.removeEventListener('yorumi-storage-updated', reload);
-    }, [user, reload]);
+    }, [reload]);
 
     const saveProgress = useCallback(async (anime: Anime, episode: Episode, playback?: PlaybackProgress) => {
-        if (!user) return;
-
         const image = anime.anilist_banner_image || anime.images.jpg.large_image_url;
         const poster = anime.images.jpg.image_url || anime.images.jpg.large_image_url;
 
@@ -59,7 +46,7 @@ export function useContinueWatching() {
 
         const progress: WatchProgress = {
             animeId: validId.toString(),
-            episodeId: episode.session || (episode as any).id || '',
+            episodeId: episode.session || ('id' in episode ? String((episode as { id?: string | number }).id || '') : ''),
             episodeNumber: parseEpisodeNumber(episode.episodeNumber),
             timestamp: Date.now(),
             lastWatched: Date.now(),
@@ -80,12 +67,11 @@ export function useContinueWatching() {
         } catch (error) {
             console.error('Failed to record activity:', error);
         }
-    }, [user, recordActivity]);
+    }, [recordActivity]);
 
     const removeFromHistory = useCallback(async (malId: number | string) => {
-        if (!user) return;
         storage.removeFromContinueWatching(malId.toString());
-    }, [user]);
+    }, []);
 
     return {
         continueWatchingList,
