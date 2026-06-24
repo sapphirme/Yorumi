@@ -77,11 +77,15 @@
     "artifactName": "${productName}.${ext}",
     "files": [
       "dist/**/*",
-      "dist-electron/**/*", "backend/dist/bundle.cjs"
+      "dist-electron/**/*", "backend/dist/bundle.cjs",
+      "!node_modules/**/*", "!backend/node_modules/**/*"
     ],
     "win": {
       "target": "nsis",
       "icon": "public/yorumi-icon.png"
+    },
+    "nsis": {
+      "uninstallDisplayName": "Yorumi"
     },
     "mac": {
       "target": "dmg",
