@@ -16,7 +16,6 @@ import { db, isFirebaseEnabled } from '../services/firebase';
 import type { Anime } from '../types/anime';
 import { getAnimeDetailsRouteId, getAnimeWatchRouteId } from '../utils/animeNavigation';
 import { cardItemVariants, pressMotion } from '../utils/motion';
-import { slugify } from '../utils/slugify';
 import { storage } from '../utils/storage';
 
 type RecommendationCard = YumiRecommendationCard;

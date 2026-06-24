@@ -3,7 +3,6 @@ import { useContinueReading } from '../../../../hooks/useContinueReading';
 import type { Manga, MangaChapter, MangaPage } from '../../../../types/manga';
 import ReaderHeader from './ReaderHeader';
 import ReaderFooter from './ReaderFooter';
-import ChapterList from './ChapterList';
 import PageViewer from './PageViewer';
 import MangaInfoSidebar from './MangaInfoSidebar';
 import { useTitleLanguage } from '../../../../context/TitleLanguageContext';
