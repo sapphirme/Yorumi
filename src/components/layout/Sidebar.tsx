@@ -2,9 +2,65 @@ import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Search, Tv, BookOpen, Library, LogOut } from 'lucide-react';
 import SearchModal from '../shared/SearchModal';
+import { useContinueReading } from '../../hooks/useContinueReading';
+import { useContinueWatching } from '../../hooks/useContinueWatching';
 import { useWatchList } from '../../hooks/useWatchList';
 import { useReadList } from '../../hooks/useReadList';
+import { getDirectScraperRouteId } from '../../utils/animeNavigation';
+import { slugify } from '../../utils/slugify';
+import type { ReadListItem, WatchListItem } from '../../utils/storage';
 import yorumiIcon from '../../../public/yorumi-icon.png';
+
+type SavedSidebarItem =
+    | (WatchListItem & { isManga: false })
+    | (ReadListItem & { isManga: true });
+
+const toPositiveNumber = (value: unknown) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+};
+
+const getAnimeRouteId = (item: WatchListItem) => (
+    getDirectScraperRouteId(item.scraperId) ||
+    String(item.anilistId || item.malId || item.id || '').trim()
+);
+
+const buildAnimeRouteState = (item: WatchListItem) => {
+    const anilistId = toPositiveNumber(item.anilistId || item.id);
+    const malId = toPositiveNumber(item.malId || item.id);
+    const scraperRouteId = getDirectScraperRouteId(item.scraperId);
+
+    return {
+        id: anilistId || undefined,
+        mal_id: malId,
+        scraperId: scraperRouteId ? scraperRouteId.replace(/^s:/i, '') : item.scraperId,
+        title: item.title,
+        title_english: item.title,
+        title_romaji: item.title,
+        images: { jpg: { image_url: item.image, large_image_url: item.image } },
+        score: item.score || 0,
+        status: item.mediaStatus || 'UNKNOWN',
+        type: item.type || 'TV',
+        episodes: item.totalCount || null,
+        genres: item.genres?.map((name) => ({ mal_id: 0, name })) || [],
+        synopsis: item.synopsis || '',
+    };
+};
+
+const buildMangaRouteState = (item: ReadListItem) => ({
+    id: item.id,
+    mal_id: /^\d+$/.test(item.id) ? Number.parseInt(item.id, 10) : item.id,
+    scraper_id: /^\d+$/.test(item.id) ? undefined : item.id,
+    title: item.title,
+    images: { jpg: { image_url: item.image, large_image_url: item.image } },
+    score: item.score || 0,
+    status: item.mediaStatus || 'UNKNOWN',
+    type: item.type || 'Manga',
+    chapters: item.totalCount || null,
+    volumes: null,
+    genres: item.genres?.map((name) => ({ mal_id: 0, name })) || [],
+    synopsis: item.synopsis || '',
+});
 
 export default function Sidebar() {
     const navigate = useNavigate();
@@ -15,11 +71,53 @@ export default function Sidebar() {
 
     const { watchList } = useWatchList();
     const { readList } = useReadList();
+    const { continueWatchingList } = useContinueWatching();
+    const { continueReadingList } = useContinueReading();
 
-    const savedItems = [
-        ...watchList.map(item => ({ ...item, isManga: false })),
-        ...readList.map(item => ({ ...item, isManga: true }))
+    const savedItems: SavedSidebarItem[] = [
+        ...watchList.map(item => ({ ...item, isManga: false as const })),
+        ...readList.map(item => ({ ...item, isManga: true as const }))
     ].sort((a, b) => new Date(b.addedAt || 0).getTime() - new Date(a.addedAt || 0).getTime());
+
+    const getMatchingWatchProgress = (item: WatchListItem) => {
+        const ids = new Set([
+            item.id,
+            item.anilistId,
+            item.malId,
+            item.scraperId,
+            getDirectScraperRouteId(item.scraperId).replace(/^s:/i, ''),
+        ].map((value) => String(value || '').trim()).filter(Boolean));
+
+        return continueWatchingList.find((progress) => ids.has(String(progress.animeId || '').trim()));
+    };
+
+    const openSavedItem = (item: SavedSidebarItem) => {
+        if (item.isManga) {
+            const progress = continueReadingList.find((entry) => String(entry.mangaId) === String(item.id));
+            if (progress?.chapterNumber) {
+                navigate(`/manga/read/${slugify(item.title || 'manga')}/${item.id}/c${progress.chapterNumber}`);
+                return;
+            }
+
+            navigate(`/manga/details/${item.id}`, { state: { manga: buildMangaRouteState(item) } });
+            return;
+        }
+
+        const routeId = getAnimeRouteId(item);
+        if (!routeId) return;
+
+        const progress = getMatchingWatchProgress(item);
+        const anime = buildAnimeRouteState(item);
+        const resume = Number.isFinite(progress?.positionSeconds)
+            ? Math.max(0, Math.floor(Number(progress?.positionSeconds)))
+            : 0;
+        const episodeNumber = Number(progress?.episodeNumber || 0);
+        const query = episodeNumber > 0
+            ? `?ep=${episodeNumber}${resume > 0 ? `&t=${resume}` : ''}`
+            : '';
+
+        navigate(`/anime/details/${routeId}${query}`, { state: { anime } });
+    };
 
     return (
         <>
@@ -76,7 +174,7 @@ export default function Sidebar() {
                         {savedItems.map(item => (
                             <button
                                 key={`${item.isManga ? 'manga' : 'anime'}-${item.id}`}
-                                onClick={() => navigate(item.isManga ? `/manga/details/${item.id}` : `/anime/details/${item.id}`)}
+                                onClick={() => openSavedItem(item)}
                                 onMouseEnter={(e) => {
                                     const rect = e.currentTarget.getBoundingClientRect();
                                     setHoveredCard({ title: item.title, top: rect.top + rect.height / 2 });
