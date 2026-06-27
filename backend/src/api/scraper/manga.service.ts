@@ -1,5 +1,4 @@
 import * as mangakatana from '../../scraper/mangakatana'; 
-import { anilistService } from '../anilist/anilist.service';
 import { mappingService } from '../mapping/mapping.service';
 import { cacheGet, cacheSet } from '../../utils/redis-cache';
 import { createHash } from 'crypto';
@@ -82,13 +81,8 @@ const scoreSearchResult = (candidate: any, titleCandidates: string[]) => {
     return bestScore;
 };
 
-async function resolveScraperIdFromAniList(anilistId: string, media: any): Promise<string | null> {
-    const mapping = await mappingService.getMapping(anilistId).catch(() => null);
-    if (mapping?.id) {
-        return mapping.id;
-    }
-
-    const titleCandidates = getTitleCandidates(media);
+async function resolveScraperIdFromTitle(title: string): Promise<string | null> {
+    const titleCandidates = [title];
     if (titleCandidates.length === 0) {
         return null;
     }
@@ -97,7 +91,6 @@ async function resolveScraperIdFromAniList(anilistId: string, media: any): Promi
         const resolveCacheKey = `${MANGA_RESOLVE_CACHE_PREFIX}${normalizeTitle(title)}`;
         const cached = await cacheGet<string>(resolveCacheKey).catch(() => null);
         if (cached) {
-            await mappingService.saveMapping(anilistId, cached, title).catch(() => undefined);
             return cached;
         }
 
@@ -113,7 +106,6 @@ async function resolveScraperIdFromAniList(anilistId: string, media: any): Promi
         const best = ranked[0];
         if (best && best.score >= 60) {
             await cacheSet(resolveCacheKey, best.item.id, 7 * 24 * 60 * 60).catch(() => undefined);
-            await mappingService.saveMapping(anilistId, best.item.id, best.item.title || title).catch(() => undefined);
             return best.item.id;
         }
     }
@@ -173,30 +165,10 @@ export async function searchManga(query: string) {
  * Get details
  */
 export async function getMangaDetails(id: string) {
-    // Check if ID is likely AniList (numeric) vs Scraper (string with letters/hyphens)
-    // MK IDs usually "some-manga.12345" or "some-manga".
-    // AniList ID is purely numeric "123456".
+    // We no longer use AniList IDs for manga
     const isAniListId = /^\d+$/.test(id);
-
     if (isAniListId) {
-        console.log(`[getMangaDetails] Treating "${id}" as AniList ID`);
-        const anilistData = await anilistService.getMangaById(parseInt(id, 10));
-        if (!anilistData) throw new Error('AniList media not found');
-
-        let scraperId: string | null = null;
-        try {
-            scraperId = await resolveScraperIdFromAniList(id, anilistData);
-            if (scraperId) {
-                console.log(`[getMangaDetails] Resolved scraperId ${scraperId} for AniList ${id}`);
-            }
-        } catch (e) {
-            console.error('[getMangaDetails] Scraper resolution failed:', e);
-        }
-
-        return {
-            ...anilistData,
-            scraperId,
-        };
+        throw new Error('AniList ID resolution is deprecated. Use MangaKatana IDs.');
     }
 
     // Strip prefix if present
@@ -236,10 +208,7 @@ export async function getMangaDetailsWithChapters(id: string): Promise<HydratedM
     const request = (async () => {
         try {
             const details = await getMangaDetails(normalizedId);
-            const isAniListShape = details?.title && typeof details.title === 'object';
-            const candidateScraperId = isAniListShape
-                ? details?.scraperId
-                : details?.scraperId || details?.id;
+            const candidateScraperId = (details as any)?.scraperId || details?.id;
             const scraperId = stripMangaKatanaPrefix(candidateScraperId);
             const chapters = scraperId ? await getChapterList(scraperId).catch((error) => {
                 console.warn(`[getMangaDetailsWithChapters] Chapter hydration failed for ${scraperId}:`, error);
@@ -552,53 +521,34 @@ export async function getEnrichedSpotlight() {
     }
 
     try {
-        // 1. Get Base Trending from AniList
-        let topManga: any[] = [];
-        try {
-            const trending = await anilistService.getTrendingManga(1, 10);
-            topManga = trending.media || [];
-        } catch (e) {
-            console.warn('AniList trending fetch failed, trying fallback...');
-        }
+        console.log('Using Hot Updates for Spotlight');
+        const hotUpdates = await getHotUpdates();
 
-        // FALLBACK: If AniList fails (empty array), use MangaKatana Hot Updates
-        if (topManga.length === 0) {
-            console.log('Using Hot Updates as Spotlight Fallback');
-            const hotUpdates = await getHotUpdates();
+        // Map Hot Updates
+        const mappedManga = hotUpdates.slice(0, 8).map((update: any) => ({
+            id: update.id, // String ID (mk:...)
+            title: {
+                english: update.title,
+                romaji: update.title,
+                native: update.title
+            },
+            description: `Latest chapter: ${update.chapter}. (Source: MangaKatana)`,
+            coverImage: {
+                extraLarge: update.thumbnail,
+                large: update.thumbnail
+            },
+            format: 'MANGA',
+            chapters: parseFloat(update.chapter) || 0,
+            status: 'RELEASING',
+            averageScore: 0,
+            genres: ['Manga'],
+            countryOfOrigin: 'JP'
+        }));
 
-            // Map Hot Updates to look like AniList Media objects
-            const fallbackManga = hotUpdates.slice(0, 10).map((update: any) => ({
-                id: update.id, // String ID (mk:...)
-                title: {
-                    english: update.title,
-                    romaji: update.title,
-                    native: update.title
-                },
-                description: `Latest chapter: ${update.chapter}. (Source: MangaKatana)`,
-                coverImage: {
-                    extraLarge: update.thumbnail,
-                    large: update.thumbnail
-                },
-                format: 'MANGA',
-                chapters: parseFloat(update.chapter) || 0,
-                status: 'RELEASING',
-                averageScore: 0,
-                genres: ['Manga'],
-                countryOfOrigin: 'JP'
-            }));
-
-            return fallbackManga;
-        }
-
-        // 2. Enrich with MangaKatana Chapters in BACKGROUND
-        // We return the AniList data immediately so the UI doesn't block
-        const limitedManga = topManga.slice(0, 8);
-
-        // Start enrichment in background (fire and forget)
-        enrichAndCache(limitedManga).catch(err => console.error('Background enrichment failed', err));
-
-        return limitedManga;
-
+        spotlightCache = mappedManga;
+        spotlightCacheTime = Date.now();
+        
+        return mappedManga;
     } catch (error) {
         console.error('Error fetching enriched spotlight:', error);
         return [];
@@ -648,14 +598,12 @@ async function enrichAndCache(mangaList: any[]) {
  * This runs in the background so the server starts immediately
  */
 export async function warmSpotlightCache() {
-    console.log('[Cache] Pre-warming manga caches (spotlight, top, popular, manhwa, oneshot)...');
+    console.log('[Cache] Pre-warming manga caches (spotlight, latest)...');
     try {
         await Promise.all([
             getEnrichedSpotlight(),
-            anilistService.getTopManga(1, 24).catch(() => null),
-            anilistService.getPopularManga(1, 24).catch(() => null),
-            anilistService.getPopularManhwa(1, 24).catch(() => null),
-            anilistService.getOneShotManga(1, 24).catch(() => null)
+            getLatestManga(1).catch(() => null),
+            getNewManga(1).catch(() => null)
         ]);
         console.log('[Cache] Manga caches warmed successfully');
     } catch (error) {
@@ -667,47 +615,12 @@ export async function warmSpotlightCache() {
  * Helper to enrich a list of scraper manga with AniList cover photos
  */
 async function enrichWithAniListPhotos(mangaList: any[]) {
-    console.log(`[MangaService] Enriching ${mangaList.length} items with AniList photos...`);
-    
-    // Process in parallel with a concurrency limit if needed, 
-    // but here we just map and Promise.all to keep it simple as anilistService handles rate limiting.
-    const enriched = await Promise.all(mangaList.map(async (item) => {
-        try {
-            // Check cache for this specific title mapping
-            const cacheKey = `manga_photo_enrich:${item.title.toLowerCase().trim()}`;
-            const cached = await cacheGet<string>(cacheKey);
-            if (cached) {
-                return { ...item, thumbnail: cached, coverImage: cached };
-            }
-
-            const searchResults = await anilistService.searchManga(item.title, 1, 1);
-            if (searchResults.media && searchResults.media.length > 0) {
-                const aniMedia = searchResults.media[0];
-                const photo = aniMedia.coverImage?.extraLarge || aniMedia.coverImage?.large;
-                if (photo) {
-                    // Cache the found photo for 7 days
-                    await cacheSet(cacheKey, photo, 7 * 24 * 60 * 60);
-                    return { 
-                        ...item, 
-                        thumbnail: photo, 
-                        coverImage: photo,
-                        anilistId: aniMedia.id,
-                        genres: aniMedia.genres
-                    };
-                }
-            }
-        } catch (e) {
-            // Silently fail for individual items
-        }
-
-        // Fallback: If no AniList enrichment, proxy the original thumbnail to bypass hotlinking protection
+    // Deprecated: We just use proxy for thumbnails now
+    return mangaList.map((item) => {
         if (item.thumbnail && item.thumbnail.includes('mangakatana.com')) {
             const proxiedUrl = `http://localhost:3001/api/image/proxy?url=${encodeURIComponent(item.thumbnail)}`;
             return { ...item, thumbnail: proxiedUrl, coverImage: proxiedUrl };
         }
-
         return item;
-    }));
-
-    return enriched;
+    });
 }
