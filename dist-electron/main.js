@@ -2475,16 +2475,30 @@ function createWindow() {
 			additionalArguments: ["--js-flags=--max-old-space-size=256 --expose-gc"]
 		}
 	});
-	session.defaultSession.webRequest.onHeadersReceived({ urls: ["*://image.tmdb.org/*"] }, (details, callback) => {
+	session.defaultSession.webRequest.onHeadersReceived({ urls: ["*://*/*"] }, (details, callback) => {
 		const headers = { ...details.responseHeaders };
-		headers["cache-control"] = ["public, max-age=604800, immutable"];
-		delete headers["pragma"];
-		delete headers["expires"];
+		const url = details.url || "";
+		for (const key of Object.keys(headers)) {
+			const lower = key.toLowerCase();
+			if (lower === "x-frame-options" || lower === "content-security-policy") delete headers[key];
+		}
+		if (url.includes("image.tmdb.org")) {
+			headers["cache-control"] = ["public, max-age=604800, immutable"];
+			delete headers["pragma"];
+			delete headers["expires"];
+		}
 		callback({ responseHeaders: headers });
+	});
+	session.defaultSession.webRequest.onBeforeRequest({ urls: BLOCKED_HOSTS }, (details, callback) => {
+		import_blockStats.default.recordBlockedRequest(details.url);
+		callback({ cancel: true });
 	});
 	session.defaultSession.webRequest.onBeforeSendHeaders({ urls: ["*://*/*"] }, (details, callback) => {
 		const url = details.url;
-		if (url.includes(".m3u8") || url.includes(".ts") || url.includes(".vtt")) {
+		const isMedia = url.includes(".m3u8") || url.includes(".ts") || url.includes(".vtt");
+		const originalReferer = details.requestHeaders["Referer"] || details.requestHeaders["referer"] || "";
+		const isFromIframe = originalReferer.includes("videasy.to") || originalReferer.includes("vidsrc") || originalReferer.includes("2embed");
+		if (isMedia && !isFromIframe) {
 			details.requestHeaders["Referer"] = "https://allmanga.to/";
 			details.requestHeaders["Origin"] = "https://allmanga.to";
 		}
@@ -2537,9 +2551,9 @@ function createWindow() {
 }
 app.whenReady().then(() => {
     try {
-        const cp = require('child_process');
-        const path = require('path');
-        const fs = require('fs');
+        const cp = __require('child_process');
+        const path = __require('path');
+        const fs = __require('fs');
         
         let backendPath = path.join(__dirname, '../backend/dist/bundle.cjs');
         if (!fs.existsSync(backendPath)) {
