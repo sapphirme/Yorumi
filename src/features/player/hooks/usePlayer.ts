@@ -9,7 +9,7 @@ import { fetchSkipTimestamps, type SkipTimestamp } from '../../../services/skipT
 const AUTO_NEXT_STORAGE_KEY = 'yorumi:auto-next-enabled';
 const AUTO_SKIP_STORAGE_KEY = 'yorumi:auto-skip-enabled';
 
-export function usePlayer(animeId: string | undefined, animeSlugTitle?: string) {
+export function usePlayer(animeId: string | undefined, animeSlugTitle?: string, fallbackEpisode?: Episode | null) {
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
     const location = useLocation();
@@ -41,6 +41,7 @@ export function usePlayer(animeId: string | undefined, animeSlugTitle?: string) 
         titlesKey: [...new Set(streamTitleCandidates)].join('|'),
         year: selectedAnime?.year,
         format: selectedAnime?.type,
+        anilistId: selectedAnime?.id,
     };
     const streamsHook = useStreams(scraperSession, selectedAnime?.title || animeSlugTitle, streamMetadata);
     const {
@@ -130,6 +131,11 @@ export function usePlayer(animeId: string | undefined, animeSlugTitle?: string) 
         if (Number.isFinite(direct)) return direct;
         const match = raw.match(/(\d+(?:\.\d+)?)/);
         return match ? Number(match[1]) : NaN;
+    };
+    const getPlaybackEpisodeNumber = (episode: Episode | null | undefined): number => {
+        const absolute = parseEpisodeNumber(episode?._tmdbAbsolute);
+        if (Number.isFinite(absolute) && absolute > 0) return absolute;
+        return parseEpisodeNumber(episode?.episodeNumber);
     };
     const parseEpisodeDurationSeconds = (value: string | undefined): number | null => {
         const raw = String(value || '').trim();
@@ -286,31 +292,38 @@ export function usePlayer(animeId: string | undefined, animeSlugTitle?: string) 
                 (!!currentSession && extractDirectScraperSession(selectedAnime.scraperId) === currentSession)
             );
 
-        if (!scraperSession) return;
+        if (!scraperSession && selectedServer !== 'videasy') return;
 
-        if (episodes.length > 0 && animeMatch) {
+        const playableEpisodes = episodes.length > 0
+            ? episodes
+            : fallbackEpisode
+                ? [fallbackEpisode]
+                : [];
+
+        if (playableEpisodes.length > 0 && animeMatch) {
             let targetEp: Episode | undefined;
             const parsedTargetEpisode = parseEpisodeNumber(epNumParam);
 
             if (epNumParam === 'latest') {
-                const sorted = [...episodes].sort((a, b) => parseFloat(a.episodeNumber) - parseFloat(b.episodeNumber));
+                const sorted = [...playableEpisodes].sort((a, b) => parseFloat(a.episodeNumber) - parseFloat(b.episodeNumber));
                 targetEp = sorted[sorted.length - 1];
             } else if (Number.isFinite(parsedTargetEpisode) && parsedTargetEpisode > 0) {
-                const sorted = [...episodes].sort(
-                    (a, b) => parseEpisodeNumber(a.episodeNumber) - parseEpisodeNumber(b.episodeNumber)
+                const sorted = [...playableEpisodes].sort(
+                    (a, b) => getPlaybackEpisodeNumber(a) - getPlaybackEpisodeNumber(b)
                 );
                 targetEp =
+                    sorted.find((episode) => getPlaybackEpisodeNumber(episode) === parsedTargetEpisode) ||
                     sorted.find((episode) => parseEpisodeNumber(episode.episodeNumber) === parsedTargetEpisode) ||
                     [...sorted]
                         .reverse()
-                        .find((episode) => parseEpisodeNumber(episode.episodeNumber) <= parsedTargetEpisode) ||
+                        .find((episode) => getPlaybackEpisodeNumber(episode) <= parsedTargetEpisode) ||
                     sorted[sorted.length - 1];
             } else {
-                targetEp = episodes.find(e => e.episodeNumber == epNumParam) || episodes[0];
+                targetEp = playableEpisodes.find(e => e.episodeNumber == epNumParam) || playableEpisodes[0];
             }
 
             if (targetEp) {
-                const isAlreadyCurrent = currentEpisode && String(currentEpisode.episodeNumber) === String(targetEp.episodeNumber);
+                const isAlreadyCurrent = currentEpisode && getPlaybackEpisodeNumber(currentEpisode) === getPlaybackEpisodeNumber(targetEp);
                 if (isAlreadyCurrent && currentStream) return;
 
                 const attemptKey = `${String(animeId || '')}:${String(targetEp.session || targetEp.episodeNumber || '')}`;
@@ -319,24 +332,24 @@ export function usePlayer(animeId: string | undefined, animeSlugTitle?: string) 
                 }
                 autoLoadAttemptKeyRef.current = attemptKey;
 
-                const targetEpisodeNumber = parseEpisodeNumber(targetEp.episodeNumber);
+                const targetEpisodeNumber = getPlaybackEpisodeNumber(targetEp);
                 if (Number.isFinite(targetEpisodeNumber) && targetEpisodeNumber > 0) {
                     markEpisodeComplete(targetEpisodeNumber);
                 }
                 // Update URL if we defaulted to a different episode or resolved 'latest'
-                if (String(targetEp.episodeNumber) !== epNumParam) {
-                    setSearchParams({ ep: String(targetEp.episodeNumber) }, { replace: true });
+                if (String(targetEpisodeNumber) !== epNumParam) {
+                    setSearchParams({ ep: String(targetEpisodeNumber) }, { replace: true });
                 }
                 setIsPlayerReady(false);
                 loadStream(targetEp);
             }
         }
-    }, [episodes, epNumParam, currentStream, streamLoading, selectedAnime?.id, selectedAnime?.mal_id, animeId, scraperSession]);
+    }, [episodes, fallbackEpisode, epNumParam, currentStream, streamLoading, selectedAnime?.id, selectedAnime?.mal_id, animeId, scraperSession, selectedServer]);
 
     // Episode-change bookkeeping.
     useEffect(() => {
         if (!selectedAnime || !currentEpisode) return;
-        const episodeNumber = parseEpisodeNumber(currentEpisode.episodeNumber);
+        const episodeNumber = getPlaybackEpisodeNumber(currentEpisode);
         if (Number.isFinite(episodeNumber) && episodeNumber > 0) {
             markEpisodeComplete(episodeNumber);
         }
@@ -358,7 +371,7 @@ export function usePlayer(animeId: string | undefined, animeSlugTitle?: string) 
             setSkipTimestamps([]);
             return;
         }
-        const episodeNumber = parseEpisodeNumber(currentEpisode.episodeNumber);
+        const episodeNumber = getPlaybackEpisodeNumber(currentEpisode);
         if (!Number.isFinite(episodeNumber) || episodeNumber <= 0) {
             setSkipTimestamps([]);
             return;
@@ -411,7 +424,7 @@ export function usePlayer(animeId: string | undefined, animeSlugTitle?: string) 
             resetScheduledStreamRetry();
             return;
         }
-        if (String(currentEpisode.episodeNumber) !== String(epNumParam)) return;
+        if (String(getPlaybackEpisodeNumber(currentEpisode)) !== String(epNumParam)) return;
 
         const retryKey = `${String(scraperSession || '')}:${String(currentEpisode.session || currentEpisode.episodeNumber || '')}`;
         if (streamRetryStateRef.current.key !== retryKey) {
@@ -593,12 +606,12 @@ export function usePlayer(animeId: string | undefined, animeSlugTitle?: string) 
     const handleEpisodeClick = (ep: Episode) => {
         persistLatestProgress();
         autoLoadAttemptKeyRef.current = '';
-        const episodeNumber = parseEpisodeNumber(ep.episodeNumber);
+        const episodeNumber = getPlaybackEpisodeNumber(ep);
         if (Number.isFinite(episodeNumber) && episodeNumber > 0) {
             markEpisodeComplete(episodeNumber);
         }
         resetEpisodePlaybackState(false);
-        setSearchParams({ ep: String(ep.episodeNumber) });
+        setSearchParams({ ep: String(episodeNumber) });
         loadStream(ep);
     };
 
@@ -635,11 +648,17 @@ export function usePlayer(animeId: string | undefined, animeSlugTitle?: string) 
         applySelectedAudio(audio);
     };
 
-    const sortedEpisodes = [...episodes].sort(
-        (a, b) => parseEpisodeNumber(a.episodeNumber) - parseEpisodeNumber(b.episodeNumber)
+    const displayEpisodes = episodes.length > 0
+        ? episodes
+        : fallbackEpisode
+            ? [fallbackEpisode]
+            : [];
+    const sortedEpisodes = [...displayEpisodes].sort(
+        (a, b) => getPlaybackEpisodeNumber(a) - getPlaybackEpisodeNumber(b)
     );
     const currentEpisodeIndex = sortedEpisodes.findIndex((episode) => (
         String(episode.session || '') === String(currentEpisode?.session || '')
+        || String(getPlaybackEpisodeNumber(episode)) === String(epNumParam)
         || String(episode.episodeNumber) === String(epNumParam)
     ));
     const prevEpisode = currentEpisodeIndex > 0 ? sortedEpisodes[currentEpisodeIndex - 1] : null;
@@ -656,7 +675,10 @@ export function usePlayer(animeId: string | undefined, animeSlugTitle?: string) 
     };
 
     // Derived State
-    const currentEpisodeData = episodes.find(e => e.episodeNumber == epNumParam);
+    const currentEpisodeData = displayEpisodes.find(e => (
+        String(getPlaybackEpisodeNumber(e)) === String(epNumParam)
+        || String(e.episodeNumber) === String(epNumParam)
+    ));
     const episodeNumber = parseFloat(String(epNumParam));
     const metadata = selectedAnime?.episodeMetadata || [];
     
@@ -675,7 +697,10 @@ export function usePlayer(animeId: string | undefined, animeSlugTitle?: string) 
     );
     const cleanRawTitle = rawTitle && !isBasicTitle ? rawTitle : null;
 
-    const cleanCurrentTitle = meta?.title?.replace(/^Episode \d+[\s-]*:?/i, '').trim() || cleanRawTitle;
+    let cleanCurrentTitle = meta?.title?.replace(/^Episode \d+[\s-]*:?/i, '').trim() || cleanRawTitle;
+    if (cleanCurrentTitle) {
+        cleanCurrentTitle = cleanCurrentTitle.split('<note-split>')[0].trim();
+    }
 
     return {
         // Data
