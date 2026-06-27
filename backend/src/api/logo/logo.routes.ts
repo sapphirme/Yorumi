@@ -1,77 +1,25 @@
 import { Router } from 'express';
 import { getAnimeLogo, batchGetAnimeLogos } from './fanart.service';
-import { anilistService } from '../anilist/anilist.service';
 
 const router = Router();
 
 /**
- * GET /api/logo/resolve?title=...&year=...&episodes=...&format=...
- * Resolve an anime title to AniList, then fetch the Fanart.tv logo.
+ * GET /api/logo/:tmdbId
+ * Fetch anime logo by TMDB ID
  */
-router.get('/resolve', async (req, res) => {
+router.get('/:tmdbId', async (req, res) => {
     try {
-        const title = String(req.query.title || '').replace(/\s+/g, ' ').trim();
+        const tmdbId = parseInt(req.params.tmdbId);
 
-        if (!title) {
+        if (isNaN(tmdbId)) {
             return res.status(400).json({
-                error: 'Query parameter title is required',
-                logo: null,
-                source: 'fallback',
-                cached: false
-            });
-        }
-
-        const year = Number(req.query.year || 0) || undefined;
-        const episodes = Number(req.query.episodes || 0) || undefined;
-        const format = String(req.query.format || '').trim() || undefined;
-        const match = await anilistService.findBestAnimeMatch({
-            titles: [title],
-            year,
-            episodes,
-            format,
-            perPage: 5
-        });
-        const anilistId = Number(match?.id || 0);
-
-        if (!anilistId) {
-            return res.json({
-                anilistId: null,
-                logo: null,
-                source: 'fallback',
-                cached: false
-            });
-        }
-
-        const result = await getAnimeLogo(anilistId);
-        res.json({ ...result, anilistId });
-    } catch (error) {
-        console.error('[Logo API] Resolve error:', error);
-        res.status(500).json({
-            error: 'Failed to resolve logo',
-            logo: null,
-            source: 'fallback',
-            cached: false
-        });
-    }
-});
-
-/**
- * GET /api/logo/:anilistId
- * Fetch anime logo by AniList ID
- */
-router.get('/:anilistId', async (req, res) => {
-    try {
-        const anilistId = parseInt(req.params.anilistId);
-
-        if (isNaN(anilistId)) {
-            return res.status(400).json({
-                error: 'Invalid AniList ID',
+                error: 'Invalid TMDB ID',
                 logo: null,
                 source: 'fallback'
             });
         }
 
-        const result = await getAnimeLogo(anilistId);
+        const result = await getAnimeLogo(tmdbId);
 
         res.json(result);
     } catch (error) {
@@ -88,20 +36,20 @@ router.get('/:anilistId', async (req, res) => {
 /**
  * POST /api/logo/batch
  * Fetch multiple anime logos in one request
- * Body: { anilistIds: number[] }
+ * Body: { tmdbIds: number[] }
  */
 router.post('/batch', async (req, res) => {
     try {
-        const { anilistIds } = req.body;
+        const { tmdbIds } = req.body;
 
-        if (!Array.isArray(anilistIds) || anilistIds.length === 0) {
+        if (!Array.isArray(tmdbIds) || tmdbIds.length === 0) {
             return res.status(400).json({
-                error: 'Invalid request: anilistIds must be a non-empty array'
+                error: 'Invalid request: tmdbIds must be a non-empty array'
             });
         }
 
         // Limit to 20 IDs per request to prevent abuse
-        const ids = anilistIds.slice(0, 20).map(id => parseInt(id)).filter(id => !isNaN(id));
+        const ids = tmdbIds.slice(0, 20).map((id: any) => parseInt(id)).filter((id: number) => !isNaN(id));
 
         const results = await batchGetAnimeLogos(ids);
 
@@ -121,4 +69,3 @@ router.post('/batch', async (req, res) => {
 });
 
 export default router;
-
