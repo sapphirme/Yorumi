@@ -84,7 +84,7 @@ class TmdbService {
         return Boolean(TMDB_ACCESS_TOKEN || TMDB_API_KEY);
     }
 
-    private async get<T>(path: string, params: Record<string, unknown>) {
+    public async get<T>(path: string, params: Record<string, unknown>) {
         if (!this.isConfigured()) return null;
 
         const { data } = await axios.get<T>(`${TMDB_API_BASE}${path}`, {
@@ -100,7 +100,7 @@ class TmdbService {
         return data;
     }
 
-    private buildImageUrl(path?: string | null, size = 'original') {
+    public buildImageUrl(path?: string | null, size = 'original') {
         const filePath = String(path || '').trim();
         return filePath ? `${TMDB_IMAGE_BASE}/${size}${filePath}` : '';
     }
