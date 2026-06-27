@@ -253,7 +253,7 @@ const SpotlightHero: React.FC<SpotlightHeroProps> = ({ animeList, isLoading = fa
                                         </div>
                                         <div className="flex items-start">
                                             <AnimeLogoImage
-                                                anilistId={activeAnime.id || activeAnime.mal_id}
+                                                tmdbId={activeAnime.id || activeAnime.mal_id}
                                                 title={displayTitle}
                                                 year={activeAnime.year}
                                                 episodes={activeAnime.latestEpisode || activeAnime.episodes}
