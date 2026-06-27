@@ -68,6 +68,13 @@ export function useStreams(scraperSession: string | null, animeTitle?: string, a
         return normalized;
     };
 
+    // Canonical cache key for a (server, episode) pair.
+    // Must be consistent across ensureStreamDataForServer, loadStream, bustEpisodeCache, handleServerChange.
+    const getEpisodeCacheKey = useCallback((server: StreamServerKey, episode: Episode) => {
+        const epKey = String(episode.session || episode.episodeNumber || episode._tmdbAbsolute || 'ep');
+        return `${server}:${epKey}`;
+    }, []);
+
     const normalizeAudio = (value: string) => {
         const lower = String(value || '').trim().toLowerCase();
         if (!lower) return 'sub';
@@ -93,10 +100,14 @@ export function useStreams(scraperSession: string | null, animeTitle?: string, a
     const metadataTitlesKey = animeMetadata?.titlesKey || '';
     const ensureStreamDataForServer = useCallback((episode: Episode, server: StreamServerKey): Promise<StreamLink[]> => {
         const activeSession = normalizeDirectScraperSession(scraperSession);
-        if (!activeSession) return Promise.resolve([]);
-        const cacheKey = `${server}:${episode.session}`;
+        // Videasy resolves via TMDB (title + episode), so it doesn't need a real scraper session.
+        // For all other providers, bail if we have no session.
+        const isVideasy = server === 'videasy';
+        const effectiveSession = activeSession || (isVideasy ? 'videasy' : '');
+        if (!effectiveSession) return Promise.resolve([]);
+        const cacheKey = getEpisodeCacheKey(server, episode);
         if (!streamCache.current.has(cacheKey)) {
-            const promise = getStreamData(episode, activeSession, {
+            const promise = getStreamData(episode, effectiveSession, {
                 provider: server,
                 title: animeTitle,
                 titles: metadataTitlesKey ? metadataTitlesKey.split('|') : undefined,
@@ -118,19 +129,19 @@ export function useStreams(scraperSession: string | null, animeTitle?: string, a
             streamCache.current.set(cacheKey, promise);
         }
         return streamCache.current.get(cacheKey)!;
-    }, [scraperSession, animeTitle, metadataTitlesKey, metadataYear, metadataFormat]);
+    }, [scraperSession, animeTitle, metadataTitlesKey, metadataYear, metadataFormat, getEpisodeCacheKey]);
+
 
     const ensureStreamData = useCallback((episode: Episode): Promise<StreamLink[]> => {
         return ensureStreamDataForServer(episode, selectedServer);
     }, [ensureStreamDataForServer, selectedServer]);
 
     const prefetchStream = useCallback((episode: Episode) => {
-        if (scraperSession) ensureStreamData(episode);
-    }, [scraperSession, ensureStreamData]);
+        if (scraperSession || selectedServer === 'videasy') ensureStreamData(episode);
+    }, [scraperSession, selectedServer, ensureStreamData]);
 
     // Silently prefetch the other server's stream so switching is instant
     const prefetchAlternateServer = useCallback((episode: Episode) => {
-        if (!scraperSession) return;
         const alternateServers: StreamServerKey[] = STREAM_SERVER_OPTIONS
             .map(s => s.key)
             .filter(k => k !== selectedServer);
@@ -193,13 +204,25 @@ export function useStreams(scraperSession: string | null, animeTitle?: string, a
     const loadStream = useCallback(async (episode: Episode, isServerSwitch = false) => {
         const requestId = activeLoadRequestRef.current + 1;
         activeLoadRequestRef.current = requestId;
-        setCurrentEpisode(episode);
         setStreamLoading(true);
-        // Don't blank the current video during a server switch — keep playing until new data arrives
-        if (!isServerSwitch) {
+
+        // On episode switch: always clear old stream state immediately so the player
+        // unmounts the old iframe/video and shows a loading state instead of persisting.
+        const isEpisodeSwitch = !isServerSwitch;
+        if (isEpisodeSwitch) {
+            // Evict stale cache for this episode so we always fetch fresh on switch
+            if (currentEpisode) {
+                STREAM_SERVER_OPTIONS.forEach(({ key }) => {
+                    streamCache.current.delete(getEpisodeCacheKey(key, episode));
+                });
+            }
+            setCurrentEpisode(episode);
             setAllStreams([]);
             setStreams([]);
             setSelectedStreamIndex(0);
+        } else {
+            // Server switch: update episode reference but keep playing current stream
+            setCurrentEpisode(episode);
         }
 
         try {
@@ -219,8 +242,7 @@ export function useStreams(scraperSession: string | null, animeTitle?: string, a
                 setSelectedStreamIndex(0);
                 setIsAutoQuality(true);
             } else {
-                streamCache.current.delete(episode.session);
-                streamCache.current.delete(`${selectedServer}:${episode.session}`);
+                streamCache.current.delete(getEpisodeCacheKey(selectedServer, episode));
                 // Only blank if we truly got nothing
                 if (!isServerSwitch) {
                     setAllStreams([]);
@@ -237,7 +259,8 @@ export function useStreams(scraperSession: string | null, animeTitle?: string, a
                 setStreamLoading(false);
             }
         }
-    }, [ensureStreamData, selectedAudio, filterStreams]);
+    }, [ensureStreamData, selectedAudio, filterStreams, currentEpisode, getEpisodeCacheKey]);
+
 
     useEffect(() => {
         if (previousServerRef.current === selectedServer) return;
@@ -321,10 +344,11 @@ export function useStreams(scraperSession: string | null, animeTitle?: string, a
         setIsAutoQuality(true);
         setShowQualityMenu(false);
         if (shouldForceReload && currentEpisode) {
-            streamCache.current.delete(`${server}:${currentEpisode.session}`);
+            streamCache.current.delete(getEpisodeCacheKey(server, currentEpisode));
             loadStream(currentEpisode);
         }
-    }, [currentEpisode, loadStream, selectedServer]);
+    }, [currentEpisode, loadStream, selectedServer, getEpisodeCacheKey]);
+
 
     return {
         // State
