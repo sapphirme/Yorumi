@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import { scraperService } from './scraper.service';
 import axios from 'axios';
-import { anilistService } from '../anilist/anilist.service';
 import { redis } from '../mapping/mapper';
 import { tmdbService } from './tmdb.service';
 import { getBrowserInstance } from '../../utils/browser';
@@ -25,7 +24,7 @@ const buildAnimeKaiFallbackItems = (items: any[]) => {
         ...item,
         id: Number(item?.id || 0) || 0,
         mal_id: Number(item?.mal_id || item?.id || 0) || 0,
-        anilist: item?.anilist || null,
+        tmdb: item?.tmdb || null,
     }));
 };
 
@@ -33,18 +32,16 @@ const enrichAnimeKaiItems = async (items: any[]) => {
     const safeItems = Array.isArray(items) ? items.filter((item) => item?.title) : [];
     const results = await Promise.allSettled(
         safeItems.map(async (item) => {
-            const anilistMedia = await anilistService.findBestAnimeMatch({
+            const tmdbMedia = await tmdbService.resolveMediaTarget({
                 titles: [item.title, item.jname].filter(Boolean),
-                episodes: Number(item.episodes || item.latestEpisode || item.sub || 0) || undefined,
                 format: item.type,
-                perPage: 5,
             });
 
             return {
                 ...item,
-                id: anilistMedia?.id || 0,
-                mal_id: anilistMedia?.idMal || anilistMedia?.id || 0,
-                anilist: anilistMedia || null,
+                id: tmdbMedia?.tmdbId || 0,
+                mal_id: tmdbMedia?.tmdbId || 0,
+                tmdb: tmdbMedia || null,
             };
         })
     );
@@ -56,7 +53,7 @@ const enrichAnimeKaiItems = async (items: any[]) => {
                 ...safeItems[index],
                 id: 0,
                 mal_id: 0,
-                anilist: null,
+                tmdb: null,
             })
         .filter((item) => item?.title);
 };
@@ -103,39 +100,11 @@ const clearSpotlightBanners = (items: any[]) =>
         banner: item?.banner || item?.anilist?.bannerImage || undefined,
     }));
 
-const wrapAniListSpotlightItems = (items: any[]) =>
-    (Array.isArray(items) ? items : []).map((item) => ({
-        title: item?.title?.english || item?.title?.romaji || item?.title?.native || 'Unknown',
-        poster: item?.coverImage?.extraLarge || item?.coverImage?.large,
-        banner: item?.bannerImage,
-        type: item?.format,
-        episodes: item?.episodes,
-        latestEpisode: item?.nextAiringEpisode?.episode ? item.nextAiringEpisode.episode - 1 : undefined,
-        trailer: item?.trailer,
-        id: item?.id || 0,
-        mal_id: item?.idMal || item?.id || 0,
-        anilist: item,
-    }));
-
 const refreshSpotlightCache = async (): Promise<{ spotlight: any[] }> => {
-    const media = await anilistService.getNativeSpotlightAnime(8);
-    if (media.length === 0) {
-        throw new Error('AniList native spotlight returned no items');
-    }
-
-    const enrichedSpotlight = wrapAniListSpotlightItems(media);
-    const spotlight = await Promise.race([
-        applyTmdbSpotlightBanners(enrichedSpotlight),
-        new Promise<any[]>((resolve) => setTimeout(() => resolve(clearSpotlightBanners(enrichedSpotlight)), 3500)),
-    ]);
-    const payload = { spotlight };
-
-    if (spotlight.length > 0) {
-        spotlightMemCache = payload;
-        redis.set(SPOTLIGHT_REDIS_KEY, payload, { ex: CACHE_TTL_SECONDS }).catch(() => undefined);
-    }
-
-    return payload;
+    // Spotlight cache is no longer powered by AniList here.
+    // It should hit TMDB instead, or just be empty if not used anymore.
+    // Let's just return empty spotlight to prevent crashes since frontend uses /anime/home-fast anyway.
+    return { spotlight: [] };
 };
 
 const getStaleSpotlight = async (): Promise<{ spotlight: any[] }> => {
@@ -499,7 +468,7 @@ router.get('/search/animekai', async (req, res) => {
 });
 
 router.get('/animekai/latest-updates', async (_req, res) => {
-    res.set('Cache-Control', 'public, max-age=60, s-maxage=120, stale-while-revalidate=300');
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
     try {
         if (latestUpdatesMemCache && latestUpdatesMemCache.latestEpisodes.length >= LATEST_HOME_LIMIT) {
             res.json(latestUpdatesMemCache);
@@ -531,7 +500,7 @@ router.get('/animekai/latest-updates', async (_req, res) => {
 // ── Recently Updated / View All (paginated) — never 500s ──────────────────
 router.get('/animepahe/latest-releases', async (req, res) => {
     const page = req.query.page ? parseInt(req.query.page as string, 10) : 1;
-    res.set('Cache-Control', 'public, max-age=60, s-maxage=120, stale-while-revalidate=300');
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
 
     try {
         const result = await scraperService.getAllMangaLatestUpdates(page);
@@ -669,7 +638,11 @@ router.get('/streams', async (req, res) => {
         const epSession = normalizeEpisodeSession(animeSession, epSessionRaw);
 
         if (!epSession || !animeSession) {
-            return res.status(400).json({ error: 'anime_session and ep_session are required' });
+            const provider = String(req.query.provider || '').trim().toLowerCase();
+            // Videasy resolves via TMDB (title + episode number) — no scraper session needed.
+            if (provider !== 'videasy') {
+                return res.status(400).json({ error: 'anime_session and ep_session are required' });
+            }
         }
         const provider = String(req.query.provider || 'auto').trim().toLowerCase();
         const title = String(req.query.title || '').trim();

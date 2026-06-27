@@ -3,7 +3,7 @@ import { API_BASE } from '../../config/api';
 import { setLocalStorageWithCleanup } from '../../utils/localStorageQuota';
 
 interface AnimeLogoImageProps {
-    anilistId?: number | null;
+    tmdbId?: number | null;
     title: string;
     year?: number;
     episodes?: number | null;
@@ -73,9 +73,9 @@ function persistCache() {
  * Preload logos for multiple anime IDs in a single batch request
  * Call this when spotlight/trending anime data loads
  */
-export async function preloadLogos(anilistIds: number[]): Promise<void> {
+export async function preloadLogos(tmdbIds: number[]): Promise<void> {
     // Filter out already cached IDs
-    const uncachedIds = anilistIds
+    const uncachedIds = tmdbIds
         .map(getPositiveId)
         .filter((id): id is number => Boolean(id))
         .filter(id => !logoCache.has(`id:${id}`));
@@ -90,7 +90,7 @@ export async function preloadLogos(anilistIds: number[]): Promise<void> {
         const response = await fetch(`${API_BASE}/logo/batch`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ anilistIds: uncachedIds })
+            body: JSON.stringify({ tmdbIds: uncachedIds })
         });
 
         if (response.ok) {
@@ -115,7 +115,7 @@ export async function preloadLogos(anilistIds: number[]): Promise<void> {
     }
 }
 
-export default function AnimeLogoImage({ anilistId, title, year, episodes, format, className = '', size = 'medium', style }: AnimeLogoImageProps) {
+export default function AnimeLogoImage({ tmdbId, title, year, episodes, format, className = '', size = 'medium', style }: AnimeLogoImageProps) {
     const [logoUrl, setLogoUrl] = useState<string | null>(null);
     const [hasError, setHasError] = useState(false);
 
@@ -134,7 +134,7 @@ export default function AnimeLogoImage({ anilistId, title, year, episodes, forma
         let isMounted = true;
         setLogoUrl(null);
         setHasError(false);
-        const resolvedId = getPositiveId(anilistId);
+        const resolvedId = getPositiveId(tmdbId);
         const cacheKey = resolvedId ? `id:${resolvedId}` : getTitleCacheKey(title);
 
         if (!cacheKey) {
@@ -184,7 +184,7 @@ export default function AnimeLogoImage({ anilistId, title, year, episodes, forma
                     if (format) params.set('format', format);
                     const logoEndpoint = resolvedId
                         ? `${API_BASE}/logo/${resolvedId}`
-                        : `${API_BASE}/logo/resolve?${params.toString()}`;
+                        : `${API_BASE}/logo/${resolvedId}`; // Should not happen, temporary fallback if we ever restore resolve
                     const response = await fetch(logoEndpoint);
 
                     if (!response.ok) {
@@ -195,8 +195,8 @@ export default function AnimeLogoImage({ anilistId, title, year, episodes, forma
 
                     if (data.logo && data.source === 'fanart') {
                         logoCache.set(key, data.logo);
-                        if (data.anilistId) {
-                            logoCache.set(`id:${data.anilistId}`, data.logo);
+                        if (data.tmdbId) {
+                            logoCache.set(`id:${data.tmdbId}`, data.logo);
                         }
                         persistCache();
                         return data.logo;
@@ -233,7 +233,7 @@ export default function AnimeLogoImage({ anilistId, title, year, episodes, forma
         return () => {
             isMounted = false;
         };
-    }, [anilistId, title, year, episodes, format]);
+    }, [tmdbId, title, year, episodes, format]);
 
     // If logo is available and no error, show the logo
     if (false && logoUrl && !hasError) {

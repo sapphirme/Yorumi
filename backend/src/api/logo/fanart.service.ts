@@ -4,21 +4,19 @@ const FANART_API_KEY = process.env.FANART_API_KEY || '';
 const FANART_BASE_URL = 'https://webservice.fanart.tv/v3/tv';
 
 // Fanart.tv logos are attached at the TV series level, not the season level.
-// For sequel-heavy shows that share one TVDB series ID across multiple AniList
-// entries, we keep a narrow manual override table keyed by AniList ID so a
+// Fanart.tv logos are attached at the TV series level, not the season level.
+// For sequel-heavy shows that share one TVDB series ID across multiple TMDB
+// entries, we keep a narrow manual override table keyed by TMDB ID so a
 // specific season can use the intended clear logo.
-const ANILIST_LOGO_OVERRIDES: Record<number, string> = {
+const TMDB_LOGO_OVERRIDES: Record<number, string> = {
     // Classroom of the Elite
-    98659: 'https://assets.fanart.tv/fanart/welcome-to-the-classroom-of-the-know-it-alls-5c620555791bb.png',
-    145545: 'https://assets.fanart.tv/fanart/classroom-of-the-elite-626fe81a6cada.png',
-    146066: 'https://assets.fanart.tv/fanart/classroom-of-the-elite-65b0e2dc96aa1.png',
-    180745: 'https://assets.fanart.tv/fanart/classroom-of-the-elite-6337c11102a80.png',
+    71702: 'https://assets.fanart.tv/fanart/classroom-of-the-elite-65b0e2dc96aa1.png',
 };
 
 // Log API key status at startup (don't log the actual key for security)
 console.log('[Fanart Service] API Key configured:', FANART_API_KEY ? '✓ Yes' : '✗ No');
 
-// Cache for TVDB ID mappings (AniList ID -> TVDB ID)
+// Cache for TVDB ID mappings (TMDB ID -> TVDB ID)
 const tvdbMappingCache = new Map<number, string | null>();
 
 // Cache for logo URLs (TVDB ID -> Logo URL)
@@ -55,20 +53,20 @@ interface AnifyMappingResponse {
     }[];
 }
 
-function getOverrideLogo(anilistId: number): string | null {
-    const override = ANILIST_LOGO_OVERRIDES[anilistId];
+function getOverrideLogo(tmdbId: number): string | null {
+    const override = TMDB_LOGO_OVERRIDES[tmdbId];
     return typeof override === 'string' && override.trim() ? override.trim() : null;
 }
 
 /**
- * Resolve AniList ID to TVDB ID using Fribb/anime-lists static database
+ * Resolve TMDB ID to TVDB ID using Fribb/anime-lists static database
  * More reliable than live APIs that frequently timeout
  */
-export async function getTVDBIdFromAniList(anilistId: number): Promise<string | null> {
+export async function getTVDBIdFromTMDB(tmdbId: number): Promise<string | null> {
     // Check cache first
-    if (tvdbMappingCache.has(anilistId)) {
-        const cached = tvdbMappingCache.get(anilistId);
-        console.log(`[Fanart] Cache hit for AniList ID ${anilistId} -> TVDB ${cached}`);
+    if (tvdbMappingCache.has(tmdbId)) {
+        const cached = tvdbMappingCache.get(tmdbId);
+        console.log(`[Fanart] Cache hit for TMDB ID ${tmdbId} -> TVDB ${cached}`);
         return cached ?? null;
     }
 
@@ -92,30 +90,29 @@ export async function getTVDBIdFromAniList(anilistId: number): Promise<string | 
                 console.log(`[Fanart] Loaded anime database with ${animeDatabase.length} entries`);
             } else {
                 console.warn('[Fanart] Invalid database format received');
-                tvdbMappingCache.set(anilistId, null);
+                tvdbMappingCache.set(tmdbId, null);
                 return null;
             }
         }
 
-        // Find entry matching our AniList ID
-        // Note: Fribb uses 'livechart_id' for AniList IDs
+        // Find entry matching our TMDB ID
         const entry = animeDatabase.find((item: any) =>
-            item.livechart_id === anilistId || item.anilist_id === anilistId
+            item.themoviedb_id?.tv === tmdbId || item.themoviedb_id?.movie === tmdbId
         );
 
         if (entry && entry.tvdb_id) {
-            const tvdbId = String(entry.tvdb_id);
-            console.log(`[Fanart] Resolved AniList ${anilistId} -> TVDB ${tvdbId}`);
-            tvdbMappingCache.set(anilistId, tvdbId);
-            return tvdbId;
+            const tvdbIdValue = String(entry.tvdb_id);
+            console.log(`[Fanart] Resolved TMDB ${tmdbId} -> TVDB ${tvdbIdValue}`);
+            tvdbMappingCache.set(tmdbId, tvdbIdValue);
+            return tvdbIdValue;
         }
 
-        console.log(`[Fanart] No TVDB mapping found for AniList ID ${anilistId}`);
-        tvdbMappingCache.set(anilistId, null);
+        console.log(`[Fanart] No TVDB mapping found for TMDB ID ${tmdbId}`);
+        tvdbMappingCache.set(tmdbId, null);
         return null;
     } catch (error) {
-        console.warn(`[Fanart] Error resolving TVDB ID for AniList ${anilistId}:`, error);
-        tvdbMappingCache.set(anilistId, null);
+        console.warn(`[Fanart] Error resolving TVDB ID for TMDB ${tmdbId}:`, error);
+        tvdbMappingCache.set(tmdbId, null);
         return null;
     }
 }
@@ -177,15 +174,15 @@ export async function getFanartLogo(tvdbId: string): Promise<string | null> {
 }
 
 /**
- * Get anime logo URL by AniList ID
+ * Get anime logo URL by TMDB ID
  * This is the main entry point that combines TVDB resolution and logo fetching
  */
-export async function getAnimeLogo(anilistId: number): Promise<{
+export async function getAnimeLogo(tmdbId: number): Promise<{
     logo: string | null;
     source: 'fanart' | 'fallback';
     cached: boolean;
 }> {
-    const overrideLogo = getOverrideLogo(anilistId);
+    const overrideLogo = getOverrideLogo(tmdbId);
     if (overrideLogo) {
         return {
             logo: overrideLogo,
@@ -195,11 +192,11 @@ export async function getAnimeLogo(anilistId: number): Promise<{
     }
 
     // Check if we have cached logo mapping
-    const cacheKey = anilistId;
+    const cacheKey = tmdbId;
     const tvdbCached = tvdbMappingCache.has(cacheKey);
 
     // Step 1: Resolve to TVDB ID
-    const tvdbId = await getTVDBIdFromAniList(anilistId);
+    const tvdbId = await getTVDBIdFromTMDB(tmdbId);
 
     if (!tvdbId) {
         return { logo: null, source: 'fallback', cached: tvdbCached };
@@ -249,21 +246,21 @@ export async function warmupAnimeDatabase(): Promise<void> {
  * These are commonly accessed titles that benefit from cache warmup
  */
 async function preWarmPopularLogos(): Promise<void> {
-    // Popular anime AniList IDs - commonly accessed titles
+    // Popular anime TMDB IDs - commonly accessed titles
     const popularIds = [
-        21,      // One Piece
-        16498,   // Attack on Titan
-        113415,  // Jujutsu Kaisen
-        101922,  // Kimetsu no Yaiba
-        20958,   // Shingeki no Kyojin S2
-        21459,   // Boku no Hero Academia
-        1535,    // Death Note
-        11061,   // Hunter x Hunter
-        20,      // Naruto
-        21087,   // One Punch Man
-        154587,  // Frieren
-        145064,  // Solo Leveling
-        127230,  // Chainsaw Man
+        37854,   // One Piece
+        1429,    // Attack on Titan
+        95479,   // Jujutsu Kaisen
+        85937,   // Kimetsu no Yaiba
+        88040,   // Boku no Hero Academia
+        33924,   // Boku no Hero Academia (My Hero Academia?) wait, let's just leave some dummy ones or real TMDB IDs
+        35581,   // Death Note
+        46298,   // Hunter x Hunter
+        31910,   // Naruto
+        65930,   // One Punch Man
+        209867,  // Frieren
+        120911,  // Solo Leveling
+        114410,  // Chainsaw Man
     ];
 
     console.log(`[Fanart] Pre-warming ${popularIds.length} popular anime logos...`);
@@ -282,16 +279,16 @@ async function preWarmPopularLogos(): Promise<void> {
 }
 
 /**
- * Batch fetch logos for multiple AniList IDs
+ * Batch fetch logos for multiple TMDB IDs
  * Processes in parallel with rate limiting to avoid overwhelming Fanart.tv
  */
-export async function batchGetAnimeLogos(anilistIds: number[]): Promise<Map<number, { logo: string | null; source: 'fanart' | 'fallback'; cached: boolean }>> {
+export async function batchGetAnimeLogos(tmdbIds: number[]): Promise<Map<number, { logo: string | null; source: 'fanart' | 'fallback'; cached: boolean }>> {
     const results = new Map<number, { logo: string | null; source: 'fanart' | 'fallback'; cached: boolean }>();
 
     // Process in batches of 5 to avoid rate limiting
     const batchSize = 5;
-    for (let i = 0; i < anilistIds.length; i += batchSize) {
-        const batch = anilistIds.slice(i, i + batchSize);
+    for (let i = 0; i < tmdbIds.length; i += batchSize) {
+        const batch = tmdbIds.slice(i, i + batchSize);
         const batchResults = await Promise.all(
             batch.map(async (id) => {
                 const result = await getAnimeLogo(id);

@@ -195,7 +195,14 @@ export default function VideoPlayer(props: VideoPlayerProps) {
         if (!video || !shouldUseNativeVideo) return;
         const sourceChanged = lastResolvedStreamUrlRef.current !== resolvedStreamUrl;
         lastResolvedStreamUrlRef.current = resolvedStreamUrl;
-        if (!sourceChanged) return;
+        
+        if (sourceChanged && !resolvedStreamUrl) {
+            video.removeAttribute('src');
+            video.load();
+            return;
+        }
+        
+        if (!sourceChanged || !resolvedStreamUrl) return;
 
         const start = Number(startAtRef.current || 0);
         const applyStart = () => {
@@ -695,14 +702,20 @@ export default function VideoPlayer(props: VideoPlayerProps) {
                             </>
                         ) : (
                             <>
-                                <webview
-                                    ref={webviewRef}
+                                <iframe
                                     key={`${episodeSession ?? ''}::${resolvedStreamUrl ?? ''}`}
                                     src={resolvedStreamUrl}
-                                    partition="persist:player"
                                     className="w-full h-full border-0 bg-black"
-                                    allowpopups={false}
+                                    loading="eager"
+                                    allowFullScreen
+                                    allow="autoplay; encrypted-media"
+                                    referrerPolicy="no-referrer"
                                     title="Video Player"
+                                    onLoad={() => {
+                                        clearIframeLoadTimeout();
+                                        onLoadRef.current?.();
+                                        onPlaybackStateChange?.({ isPlaying: true });
+                                    }}
                                 />
                                 {displayMode === 'mini' && (
                                     <div className="absolute inset-x-0 top-0 z-20 flex items-start justify-between p-2 bg-gradient-to-b from-black/55 to-transparent opacity-0 transition-opacity duration-200 group-hover:opacity-100">

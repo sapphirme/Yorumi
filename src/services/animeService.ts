@@ -96,19 +96,17 @@ const hasSufficientEpisodePayload = (anime: Partial<Anime> | null | undefined, p
 
 // Helper to map AniList response to our Anime interface format
 const mapAnilistToAnime = (item: any) => {
-    // Debug metadata availability - Silenced to reduce console noise
-    /*
-    if (!item.streamingEpisodes || item.streamingEpisodes.length === 0) {
-        console.warn('[AnimeService] No streaming episodes found for:', item.title?.english || item.id, item);
-    } else {
-        console.log('[AnimeService] Found streaming episodes for:', item.title?.english, item.streamingEpisodes.length);
+    let extractedTitle = 'Unknown';
+    if (typeof item.title === 'string') {
+        extractedTitle = item.title;
+    } else if (item.title && typeof item.title === 'object') {
+        extractedTitle = item.title.english || item.title.romaji || item.title.native || item.title.userPreferred || 'Unknown';
     }
-    */
 
     return {
         mal_id: item.idMal || item.id,
         id: item.id,
-        title: item.title?.english || item.title?.romaji || item.title?.native || 'Unknown',
+        title: extractedTitle,
         title_japanese: item.title?.native,
         title_english: item.title?.english,
         title_romaji: item.title?.romaji,
@@ -167,13 +165,14 @@ const mapScraperToAnime = (item: any) => {
     const year = typeof item.year === 'number' ? item.year : parseInt(item.year || '', 10);
     const episodes = typeof item.episodes === 'number' ? item.episodes : parseInt(item.episodes || '', 10);
     const image = getDisplayImageUrl(item.poster || item.image || '');
+    const cleanTitle = typeof item.title === 'string' ? item.title.split('<note-split>')[0].trim() : 'Unknown';
     return {
         mal_id: 0,
         id: 0,
         scraperId: item.session || item.scraperId || item.id,
-        title: item.title || 'Unknown',
-        title_english: item.title,
-        title_romaji: item.title,
+        title: cleanTitle,
+        title_english: cleanTitle,
+        title_romaji: cleanTitle,
         images: {
             jpg: {
                 image_url: image,
@@ -195,7 +194,7 @@ const mapScraperToAnime = (item: any) => {
 };
 
 const mapTopTenItemToAnime = (item: any, index: number): Anime => {
-    const anime = mapAnilistToAnime(item.anilist || {}) as Anime;
+    const anime = mapAnilistToAnime(item.anilist || item || {}) as Anime;
     const score = typeof item.score === 'number' ? item.score : parseFloat(item.score || '0');
     if (item.poster) {
         const posterUrl = getDisplayImageUrl(item.poster);
@@ -203,11 +202,11 @@ const mapTopTenItemToAnime = (item: any, index: number): Anime => {
         anime.images.jpg.large_image_url = posterUrl;
         anime.anilist_cover_image = posterUrl;
     }
-    if (!item.anilist || !item.anilist.id) {
+    if (!item.anilist && !item.id) {
         const fallbackId = parseInt(item.dataId || '', 10) || 0;
         anime.id = fallbackId || anime.id || 0;
         anime.mal_id = fallbackId || anime.mal_id || 0;
-        anime.title = item.title || anime.title;
+        anime.title = (typeof item.title === 'string' ? item.title : undefined) || anime.title;
         anime.type = anime.type || 'TV';
         anime.episodes = anime.episodes ?? (item.sub || null);
     }
@@ -237,9 +236,13 @@ const mapLatestUpdateItemToAnime = (item: any): Anime => {
         anime.anilist_cover_image = posterUrl;
     }
 
-    anime.title = item.title || anime.title;
-    anime.title_romaji = item.jname || anime.title_romaji;
-    anime.title_english = anime.title_english || item.title;
+    if (typeof item.title === 'string') {
+        const cleanTitle = item.title.split('<note-split>')[0].trim();
+        anime.title = cleanTitle || anime.title;
+        anime.title_english = anime.title_english || cleanTitle;
+    }
+    const cleanJname = item.jname ? item.jname.split('<note-split>')[0].trim() : '';
+    anime.title_romaji = cleanJname || anime.title_romaji;
     anime.type = item.type || anime.type || 'TV';
     anime.duration = item.duration || anime.duration;
     const latestImage = item.image || item.snapshot || item.poster;
@@ -499,7 +502,7 @@ export const animeService = {
     },
 
     async getHomeFastData() {
-        const cacheKey = 'home-fast-data-v18';
+        const cacheKey = 'home-fast-data-v19';
         const cached = getCached(cacheKey, DETAIL_CACHE_TTL);
         if (cached) return cached;
 
@@ -509,7 +512,7 @@ export const animeService = {
 
         const fetchPromise = (async () => {
             try {
-                const res = await fetchJsonWithTimeout(`${API_BASE}/anilist/home-fast`, {}, 6000);
+                const res = await fetchJsonWithTimeout(`${API_BASE}/anime/home-fast`, {}, 6000);
                 if (!res.ok) {
                     throw new Error(`Failed to fetch fast home data: ${res.statusText}`);
                 }
@@ -519,7 +522,9 @@ export const animeService = {
                     ? payload.spotlight.map((item: any) => {
                         const anime = item?.anilist
                             ? (mapAnilistToAnime(item.anilist) as Anime)
-                            : (mapScraperToAnime(item) as Anime);
+                            : item?.title?.romaji || item?.title?.english || item?.coverImage
+                                ? (mapAnilistToAnime(item) as Anime)
+                                : (mapScraperToAnime(item) as Anime);
                         anime.anilist_banner_image = item.banner || anime.anilist_banner_image;
                         if (item.poster) {
                             const posterUrl = getDisplayImageUrl(item.poster);
@@ -527,9 +532,11 @@ export const animeService = {
                             anime.images.jpg.large_image_url = posterUrl;
                             anime.anilist_cover_image = posterUrl;
                         }
-                        anime.title = item.title || anime.title;
-                        anime.title_romaji = item.jname || anime.title_romaji;
-                        anime.title_english = anime.title_english || item.title;
+                        const cleanTitle = typeof item.title === 'string' ? item.title.split('<note-split>')[0].trim() : '';
+                        const cleanJname = typeof item.jname === 'string' ? item.jname.split('<note-split>')[0].trim() : '';
+                        anime.title = cleanTitle || anime.title;
+                        anime.title_romaji = cleanJname || anime.title_romaji;
+                        anime.title_english = anime.title_english || cleanTitle;
                         anime.type = item.type || anime.type || 'TV';
                         anime.synopsis = anime.synopsis || item.description || '';
                         anime.trailer = anime.trailer || item.trailer;
@@ -693,7 +700,7 @@ export const animeService = {
         const fetchPromise = (async () => {
             try {
                 const formatParam = format ? `&format=${encodeURIComponent(format)}` : '';
-                const res = await fetch(`${API_BASE}/anilist/top?page=${page}&limit=18${formatParam}`);
+                const res = await fetch(`${API_BASE}/anime/popular?page=${page}&limit=18${formatParam}`);
                 if (!res.ok) {
                     throw new Error(`Failed to fetch top anime: ${res.statusText}`);
                 }
@@ -722,7 +729,7 @@ export const animeService = {
 
     // Search anime via AniList
     async searchAnime(query: string, page: number = 1, limit: number = 18) {
-        const res = await fetch(`${API_BASE}/anilist/search?q=${encodeURIComponent(query)}&page=${page}&limit=${limit}`);
+        const res = await fetch(`${API_BASE}/anime/search?q=${encodeURIComponent(query)}&page=${page}&limit=${limit}`);
         const data = await res.json();
         return {
             data: data.media?.map(mapAnilistToAnime) || [],
@@ -802,8 +809,8 @@ export const animeService = {
             try {
                 const isBroadPage = normalizedLetter === 'All' || normalizedLetter === '#' || normalizedLetter === '0-9';
                 const endpoint = isBroadPage
-                    ? `${API_BASE}/anilist/top?page=${page}&limit=24`
-                    : `${API_BASE}/anilist/search?q=${encodeURIComponent(normalizedLetter)}&page=${page}&limit=24`;
+                    ? `${API_BASE}/anime/popular?page=${page}&limit=24`
+                    : `${API_BASE}/anime/search?q=${encodeURIComponent(normalizedLetter)}&page=${page}&limit=24`;
                 const res = await fetch(endpoint);
                 if (!res.ok) {
                     throw new Error(`Failed to fetch A-Z list: ${res.statusText}`);
@@ -855,7 +862,7 @@ export const animeService = {
 
         const fetchPromise = (async () => {
             try {
-                const res = await fetch(`${API_BASE}/anilist/anime/${id}`);
+                const res = await fetch(`${API_BASE}/anime/metadata?id=${id}`);
                 const data = await res.json();
                 if (!data || data.error) return { data: null };
                 const result = { data: mapAnilistToAnime(data) };
@@ -895,22 +902,19 @@ export const animeService = {
 
         const fetchPromise = (async () => {
             try {
-                const res = await fetch(`${API_BASE}/anilist/anime/${id}/fast`);
+                const res = await fetch(`${API_BASE}/anime/metadata?id=${id}`);
                 if (!res.ok) {
                     throw new Error(`Failed to fetch fast anime details: ${res.statusText}`);
                 }
-                const payload = await res.json();
-                const mappedAnime = payload?.anime ? (mapAnilistToAnime(payload.anime) as Anime) : null;
-                const scraperSession = extractSupportedScraperSession(payload?.scraperSession);
-                if (mappedAnime && scraperSession) {
-                    mappedAnime.scraperId = scraperSession;
-                }
+                const data = await res.json();
+                const mappedAnime = data && !data.error ? (mapAnilistToAnime(data) as Anime) : null;
+                
                 const result = {
                     data: mappedAnime,
-                    episodes: Array.isArray(payload?.episodes) ? payload.episodes : [],
-                    scraperSession: scraperSession || null,
+                    episodes: [], // Episodes are handled separately via /anime/episodes in new TMDB flow
+                    scraperSession: null, // Anime metadata doesn't hold session in the new pipeline
                 };
-                if (hasSufficientEpisodePayload(mappedAnime, result) || Boolean(result.scraperSession)) {
+                if (hasSufficientEpisodePayload(mappedAnime, result)) {
                     setCache(cacheKey, result, DETAIL_CACHE_TTL);
                 }
                 return result;
@@ -1006,7 +1010,7 @@ export const animeService = {
 
         const fetchPromise = (async () => {
             try {
-                const res = await fetch(`${API_BASE}/anilist/popular-this-season?page=${page}&limit=${limit}`);
+                const res = await fetch(`${API_BASE}/anime/seasonal?page=${page}&limit=${limit}`);
                 if (!res.ok) {
                     console.warn(`Failed to fetch popular season: ${res.statusText}`);
                     return { data: [], pagination: null };
@@ -1296,7 +1300,7 @@ export const animeService = {
 
         const fetchPromise = (async () => {
             try {
-                const res = await fetch(`${API_BASE}/anilist/popular-this-month?page=${page}&limit=${limit}`);
+                const res = await fetch(`${API_BASE}/anime/popular?page=${page}&limit=${limit}`);
                 if (!res.ok) {
                     console.warn(`Failed to fetch popular this month: ${res.statusText}`);
                     return { data: [], pagination: null };
@@ -1338,14 +1342,25 @@ export const animeService = {
         }).catch(() => undefined);
     },
 
-    // Get native AniList spotlight, scored from trending, seasonal, monthly, and popular pools.
+    async getAnimeStream(tmdbId: number, episode: number, source = 'videasy', title?: string, year?: number | string) {
+        let url = `${API_BASE}/anime/stream?tmdbId=${tmdbId}&episode=${episode}&source=${source}`;
+        if (title) url += `&title=${encodeURIComponent(title)}`;
+        if (year) url += `&year=${year}`;
+        const res = await fetchJsonWithTimeout(url, {}, 25000);
+        if (!res.ok) throw new Error('Failed to fetch anime stream');
+        const data = await res.json();
+        return Array.isArray(data) ? data : [data];
+    },
+
+    // Get native spotlight anime from TMDB trending pool
     async getSpotlightAnime() {
         try {
-            const res = await fetchJsonWithTimeout(`${API_BASE}/anilist/native-spotlight`, {}, 12000);
+            const res = await fetchJsonWithTimeout(`${API_BASE}/anime/trending?limit=8`, {}, 12000);
             if (!res.ok) throw new Error('Failed to fetch spotlight');
-            const { spotlight } = await res.json();
+            const data = await res.json();
+            const spotlight = data?.media || [];
 
-            const data = (spotlight || []).map((item: any) => {
+            const processedSpotlight = (spotlight || []).map((item: any) => {
                 const anime = (item?.anilist
                     ? mapAnilistToAnime(item.anilist)
                     : item?.title?.romaji || item?.title?.english || item?.coverImage
@@ -1359,19 +1374,23 @@ export const animeService = {
                     anime.images.jpg.large_image_url = posterUrl;
                     anime.anilist_cover_image = posterUrl;
                 }
-                anime.title = item.title || anime.title;
-                anime.title_romaji = item.jname || anime.title_romaji;
-                anime.title_english = anime.title_english || item.title;
+                if (typeof item.title === 'string') {
+                    const cleanTitle = item.title.split('<note-split>')[0].trim();
+                    anime.title = cleanTitle || anime.title;
+                    anime.title_english = anime.title_english || cleanTitle;
+                }
+                const cleanJname = item.jname ? item.jname.split('<note-split>')[0].trim() : '';
+                anime.title_romaji = cleanJname || anime.title_romaji;
                 anime.type = item.type || anime.type || 'TV';
                 anime.synopsis = anime.synopsis || item.description || '';
                 anime.trailer = anime.trailer || item.trailer;
                 if (item.scraperId) anime.scraperId = item.scraperId;
                 return anime;
             });
-            if (data.length === 0) {
+            if (processedSpotlight.length === 0) {
                 throw new Error('Spotlight endpoint returned no items');
             }
-            return { data };
+            return { data: processedSpotlight };
         } catch (error) {
             console.error('Error in getSpotlightAnime:', error);
             throw error;
@@ -1380,11 +1399,7 @@ export const animeService = {
 
     // Search AniList (returns raw AniList data for spotlight resolution)
     async searchAnilist(query: string) {
-        const res = await fetch(`${API_BASE}/anilist/search`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query }),
-        });
+        const res = await fetch(`${API_BASE}/anime/search?q=${encodeURIComponent(query)}`);
         return res.json();
     },
 
@@ -1400,7 +1415,7 @@ export const animeService = {
 
         const fetchPromise = (async () => {
             try {
-                const res = await fetch(`${API_BASE}/anilist/trending?page=${page}&limit=${limit}`);
+                const res = await fetch(`${API_BASE}/anime/trending?page=${page}&limit=${limit}`);
                 if (!res.ok) {
                     console.warn(`Failed to fetch trending: ${res.statusText}`);
                     return { data: [], pagination: null };
@@ -1430,17 +1445,29 @@ export const animeService = {
     },
 
     // Get airing schedule for a time range
-    async getAiringSchedule(start: number, end: number) {
-        const res = await fetch(`${API_BASE}/anilist/schedule?start=${start}&end=${end}`);
-        if (!res.ok) throw new Error('Failed to fetch schedule');
-        return res.json();
+    async getAiringSchedule(start: number, end: number): Promise<any[]> {
+        return []; // Deprecated: no longer using AniList schedule
     },
 
     // Get list of genres
-    async getGenres() {
-        const res = await fetch(`${API_BASE}/anilist/genres`);
-        if (!res.ok) throw new Error('Failed to fetch genres');
-        return res.json();
+    async getGenres(): Promise<{name: string; color: string}[]> {
+        return [
+            { name: 'Action', color: '#ff6b6b' },
+            { name: 'Adventure', color: '#4ecdc4' },
+            { name: 'Comedy', color: '#ffd93d' },
+            { name: 'Drama', color: '#ff8c42' },
+            { name: 'Fantasy', color: '#9d4edd' },
+            { name: 'Horror', color: '#e5383b' },
+            { name: 'Mecha', color: '#a0a0a0' },
+            { name: 'Mystery', color: '#118ab2' },
+            { name: 'Psychological', color: '#7b2cbf' },
+            { name: 'Romance', color: '#ffb5a7' },
+            { name: 'Sci-Fi', color: '#4cc9f0' },
+            { name: 'Slice of Life', color: '#06d6a0' },
+            { name: 'Sports', color: '#fca311' },
+            { name: 'Supernatural', color: '#3a0ca3' },
+            { name: 'Thriller', color: '#d90429' }
+        ];
     },
 
     // Get random anime (Client-side pool for speed)
@@ -1450,9 +1477,10 @@ export const animeService = {
             if (!refillPromise) {
                 refillPromise = (async () => {
                     try {
-                        const res = await fetch(`${API_BASE}/anilist/random`);
+                        const res = await fetch(`${API_BASE}/anime/popular?limit=50`);
                         if (!res.ok) throw new Error('Failed to fetch random anime batch');
-                        const batch = await res.json();
+                        const data = await res.json();
+                        const batch = data.media || [];
 
                         // Shuffle the batch
                         for (let i = batch.length - 1; i > 0; i--) {

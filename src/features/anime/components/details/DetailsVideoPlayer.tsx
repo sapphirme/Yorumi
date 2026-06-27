@@ -2,6 +2,7 @@ import React, { useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { usePersistentPlayer } from '../../../player/context/PersistentPlayerContext';
 import { usePlayer } from '../../../player/hooks/usePlayer';
+import type { Episode } from '../../../../types/anime';
 
 interface DetailsVideoPlayerProps {
     animeId: string;
@@ -9,14 +10,15 @@ interface DetailsVideoPlayerProps {
     onClose: () => void;
     isWatched?: boolean;
     onMarkWatched?: () => void;
+    isResolvingEpisode?: boolean;
+    fallbackEpisode?: Episode | null;
 }
 
-export default function DetailsVideoPlayer({ animeId, animeTitle, onClose, isWatched, onMarkWatched }: DetailsVideoPlayerProps) {
+export default function DetailsVideoPlayer({ animeId, animeTitle, onClose, isWatched, onMarkWatched, isResolvingEpisode = false, fallbackEpisode = null }: DetailsVideoPlayerProps) {
     const location = useLocation();
     const { registerPlayer, setInlinePlayerElement } = usePersistentPlayer();
 
     const {
-        anime,
         currentEpisode,
         currentStream,
         streams,
@@ -51,17 +53,19 @@ export default function DetailsVideoPlayer({ animeId, animeTitle, onClose, isWat
         handlePlaybackProgress,
         handleStreamError,
         toggleExpand,
-    } = usePlayer(animeId, animeTitle);
+    } = usePlayer(animeId, animeTitle, fallbackEpisode);
 
     const playerProps = useMemo(() => ({
         streamUrl: currentStream?.url,
         episodeSession: currentEpisode?.session ?? epNum,
         isHls: currentStream?.isHls,
         subtitles: currentStream?.subtitles,
-        isLoading: streamLoading,
+        isLoading: streamLoading || (isResolvingEpisode && !currentEpisode),
         streamExhausted,
         skipTimestampsLoading,
-        hasPlayableSource: !currentEpisode || Boolean(currentStream?.url) || streamLoading,
+        hasPlayableSource: currentEpisode
+            ? Boolean(currentStream?.url) || streamLoading
+            : !isResolvingEpisode,
         onLoad: () => setIsPlayerReady(true),
         onError: handleStreamError,
         onProgress: handlePlaybackProgress,
@@ -103,6 +107,7 @@ export default function DetailsVideoPlayer({ animeId, animeTitle, onClose, isWat
         handleStreamError,
         isAutoQuality,
         isExpanded,
+        isResolvingEpisode,
         resumeAtSeconds,
         selectedAudio,
         selectedServer,
@@ -143,9 +148,16 @@ export default function DetailsVideoPlayer({ animeId, animeTitle, onClose, isWat
                     <span className="px-4 py-1.5 bg-yorumi-accent text-black text-sm font-black rounded flex-shrink-0">
                         E{epNum}
                     </span>
-                    <h2 className="text-xl font-bold text-white truncate max-w-xl">
-                        {cleanCurrentTitle || `Episode ${epNum}`}
-                    </h2>
+                    <div className="flex flex-col">
+                        {animeTitle && (
+                            <span className="text-sm font-medium text-gray-400 truncate max-w-xl">
+                                {animeTitle}
+                            </span>
+                        )}
+                        <h2 className="text-xl font-bold text-white truncate max-w-xl">
+                            {cleanCurrentTitle || `Episode ${epNum}`}
+                        </h2>
+                    </div>
                 </div>
                 <div className="flex items-center gap-3">
                     <button 

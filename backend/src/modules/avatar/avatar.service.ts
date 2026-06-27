@@ -3,8 +3,11 @@ import path from 'path';
 import { AppError } from '../../core/errors/app-error';
 
 const isElectron = !!process.env.ELECTRON_RUN_AS_NODE;
+const resourcesPath = typeof (process as any).resourcesPath === 'string' && (process as any).resourcesPath
+    ? (process as any).resourcesPath
+    : '';
 const avatarsDir = isElectron 
-    ? path.join(process.resourcesPath, 'avatars')
+    ? path.join(resourcesPath || path.join(__dirname, '../../../'), 'avatars')
     : path.join(__dirname, '../../../avatars');
 
 if (isElectron && !fs.existsSync(avatarsDir)) {

@@ -1,8 +1,12 @@
 import type { Anime } from '../types/anime';
+import { setLocalStorageWithCleanup } from '../utils/localStorageQuota';
 
 const TMDB_BASE = 'https://api.themoviedb.org/3';
+const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p';
 const TOKEN_KEY = 'yorumi_tmdb_read_access_token';
-const CACHE_TTL = 10 * 60 * 1000;
+const SETUP_COMPLETE_KEY = 'yorumi_tmdb_setup_complete';
+const CACHE_PREFIX = 'yorumi_tmdb_cache_v2';
+const CACHE_TTL = 24 * 60 * 60 * 1000;
 
 type CachedValue<T> = {
     expiresAt: number;
@@ -34,7 +38,7 @@ export type TmdbSeason = {
     air_date?: string | null;
 };
 
-type TmdbTvDetails = {
+export type TmdbTvDetails = {
     id: number;
     name?: string;
     original_name?: string;
@@ -44,6 +48,13 @@ type TmdbTvDetails = {
 
 type TmdbConfig = {
     images?: Record<string, unknown>;
+};
+
+type TmdbTitleDetails = {
+    name?: string;
+    original_name?: string;
+    title?: string;
+    original_title?: string;
 };
 
 export type TmdbEpisode = {
@@ -73,6 +84,45 @@ type ValidateResult =
 
 const memoryCache = new Map<string, CachedValue<unknown>>();
 
+const buildTmdbImageUrl = (path?: string | null, size = 'w300') => {
+    const cleanPath = String(path || '').trim();
+    if (!cleanPath) return '';
+    if (/^https?:\/\//i.test(cleanPath)) return cleanPath;
+    return `${TMDB_IMAGE_BASE}/${size}${cleanPath.startsWith('/') ? cleanPath : `/${cleanPath}`}`;
+};
+
+const encodeCacheKey = (key: string) => `${CACHE_PREFIX}:${encodeURIComponent(key)}`;
+
+const readCachedValue = <T>(cacheKey: string): T | null => {
+    const cached = memoryCache.get(cacheKey) as CachedValue<T> | undefined;
+    if (cached && Date.now() < cached.expiresAt) return cached.value;
+    if (cached) memoryCache.delete(cacheKey);
+
+    try {
+        const raw = localStorage.getItem(encodeCacheKey(cacheKey));
+        if (!raw) return null;
+        const parsed = JSON.parse(raw) as CachedValue<T>;
+        if (!parsed || Date.now() >= Number(parsed.expiresAt || 0)) {
+            localStorage.removeItem(encodeCacheKey(cacheKey));
+            return null;
+        }
+        memoryCache.set(cacheKey, parsed);
+        return parsed.value;
+    } catch {
+        return null;
+    }
+};
+
+const writeCachedValue = <T>(cacheKey: string, value: T, ttl = CACHE_TTL) => {
+    const payload: CachedValue<T> = { value, expiresAt: Date.now() + ttl };
+    memoryCache.set(cacheKey, payload);
+    try {
+        setLocalStorageWithCleanup(encodeCacheKey(cacheKey), JSON.stringify(payload));
+    } catch {
+        // Keep the memory cache even if browser storage is unavailable or full.
+    }
+};
+
 const normalizeTitle = (value: unknown) =>
     String(value || '')
         .toLowerCase()
@@ -97,8 +147,25 @@ const readToken = () => {
     }
 };
 
+const hasCompletedSetup = () => {
+    try {
+        return localStorage.getItem(SETUP_COMPLETE_KEY) === 'true';
+    } catch {
+        return false;
+    }
+};
+
+const markSetupComplete = () => {
+    try {
+        localStorage.setItem(SETUP_COMPLETE_KEY, 'true');
+    } catch {
+        // Non-persistent storage can still continue for this session.
+    }
+};
+
 const writeToken = (token: string) => {
     localStorage.setItem(TOKEN_KEY, token.trim());
+    markSetupComplete();
     memoryCache.clear();
 };
 
@@ -112,8 +179,8 @@ const tmdbFetch = async <T>(path: string, token = readToken()): Promise<T> => {
     if (!token) throw new Error('TMDB token missing');
 
     const cacheKey = `${token}:${path}`;
-    const cached = memoryCache.get(cacheKey) as CachedValue<T> | undefined;
-    if (cached && Date.now() < cached.expiresAt) return cached.value;
+    const cached = readCachedValue<T>(cacheKey);
+    if (cached) return cached;
 
     const { signal, cleanup } = buildSignal(8000);
     try {
@@ -128,7 +195,7 @@ const tmdbFetch = async <T>(path: string, token = readToken()): Promise<T> => {
         if (!res.ok) throw new Error(`TMDB ${res.status}`);
 
         const value = await res.json() as T;
-        memoryCache.set(cacheKey, { value, expiresAt: Date.now() + CACHE_TTL });
+        writeCachedValue(cacheKey, value);
         return value;
     } finally {
         cleanup();
@@ -164,7 +231,31 @@ const getAnimeTitles = (anime: Anime) => [
     ...(anime.synonyms || []),
 ].map((title) => String(title || '').trim()).filter(Boolean);
 
+const getSeededTmdbId = (anime: Anime) => {
+    const seeded = (anime as Anime & { tmdbId?: unknown; tmdb_id?: unknown }).tmdbId
+        ?? (anime as Anime & { tmdbId?: unknown; tmdb_id?: unknown }).tmdb_id;
+    const parsed = Number(seeded);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+};
+
+const getAnimeDetailsCacheKey = (anime: Anime) => {
+    const ids = [anime.id, anime.mal_id, getSeededTmdbId(anime)].filter(Boolean).join(':');
+    const titles = getAnimeTitles(anime).slice(0, 4).join('|');
+    return `anime-details:${ids}:${anime.year || ''}:${titles}`;
+};
+
 const resolveTvDetails = async (anime: Anime): Promise<TmdbTvDetails | null> => {
+    const detailsCacheKey = getAnimeDetailsCacheKey(anime);
+    const cachedDetails = readCachedValue<TmdbTvDetails | null>(detailsCacheKey);
+    if (cachedDetails) return cachedDetails;
+
+    const seededTmdbId = getSeededTmdbId(anime);
+    if (seededTmdbId) {
+        const details = await tmdbFetch<TmdbTvDetails>(`/tv/${seededTmdbId}?language=en-US`).catch(() => null);
+        writeCachedValue(detailsCacheKey, details);
+        return details;
+    }
+
     const titles = getAnimeTitles(anime);
     const titleTokens = [...new Set(titles.map(normalizeTitle).filter(Boolean))];
     if (titleTokens.length === 0) return null;
@@ -193,14 +284,28 @@ const resolveTvDetails = async (anime: Anime): Promise<TmdbTvDetails | null> => 
 
     if (!best) return null;
 
-    return tmdbFetch<TmdbTvDetails>(`/tv/${best.id}?language=en-US`).catch(() => null);
+    const details = await tmdbFetch<TmdbTvDetails>(`/tv/${best.id}?language=en-US`).catch(() => null);
+    writeCachedValue(detailsCacheKey, details);
+    return details;
 };
 
 export const tmdbService = {
     getToken: readToken,
 
+    imgUrl(path?: string | null, size = 'w300') {
+        return buildTmdbImageUrl(path, size);
+    },
+
     hasToken() {
         return Boolean(readToken());
+    },
+
+    hasCompletedSetup() {
+        return hasCompletedSetup();
+    },
+
+    completeSetupWithoutToken() {
+        markSetupComplete();
     },
 
     saveToken(token: string) {
@@ -232,15 +337,26 @@ export const tmdbService = {
         }
     },
 
+    async getTvDetailsForAnime(anime: Anime): Promise<TmdbTvDetails | null> {
+        return resolveTvDetails(anime);
+    },
+
     async getTvSeasonsForAnime(anime: Anime): Promise<TmdbSeason[]> {
         const details = await resolveTvDetails(anime);
         return (details?.seasons || []).filter((season) => Number(season.season_number) > 0);
     },
 
-    async getTvSeasonEpisodes(anime: Anime, seasonNumber: number): Promise<TmdbEpisode[]> {
-        const details = await resolveTvDetails(anime);
-        if (!details) return [];
-        const seasonData = await tmdbFetch<TmdbSeasonDetails>(`/tv/${details.id}/season/${seasonNumber}?language=en-US`).catch(() => null);
+    getCachedTvSeasonEpisodes(tmdbId: string | number, seasonNumber: number): TmdbEpisode[] | null {
+        const token = readToken();
+        if (!token || !tmdbId || !seasonNumber) return null;
+        const path = `/tv/${tmdbId}/season/${seasonNumber}?language=en-US`;
+        const seasonData = readCachedValue<TmdbSeasonDetails>(`${token}:${path}`);
+        return seasonData?.episodes || null;
+    },
+
+    async getTvSeasonEpisodes(tmdbId: string | number, seasonNumber: number): Promise<TmdbEpisode[]> {
+        if (!tmdbId || !seasonNumber) return [];
+        const seasonData = await tmdbFetch<TmdbSeasonDetails>(`/tv/${tmdbId}/season/${seasonNumber}?language=en-US`).catch(() => null);
         return seasonData?.episodes || [];
     },
 
@@ -250,41 +366,52 @@ export const tmdbService = {
         return (result?.results || []).filter((r) => r.media_type !== 'person');
     },
 
+    async resolveAbsoluteEpisode(tmdbId: string | number, absoluteEpisode: number): Promise<{ season_number: number; episode_number: number } | null> {
+        const details = await tmdbFetch<TmdbTvDetails>(`/tv/${tmdbId}?language=en-US`).catch(() => null);
+        if (!details || !details.seasons) return null;
+
+        let remaining = absoluteEpisode;
+        const validSeasons = details.seasons.filter(s => s.season_number > 0).sort((a, b) => a.season_number - b.season_number);
+
+        for (const season of validSeasons) {
+            if (remaining <= season.episode_count) {
+                return { season_number: season.season_number, episode_number: remaining };
+            }
+            remaining -= season.episode_count;
+        }
+        return null;
+    },
+
+    async resolveTvEpisodeThumbnails(tmdbId: string | number): Promise<Map<number, string>> {
+        const map = new Map<number, string>();
+        const details = await tmdbFetch<TmdbTvDetails>(`/tv/${tmdbId}?language=en-US`).catch(() => null);
+        if (!details || !details.seasons) return map;
+
+        const validSeasons = details.seasons.filter(s => s.season_number > 0).sort((a, b) => a.season_number - b.season_number);
+        let absoluteCounter = 1;
+
+        for (const season of validSeasons) {
+            const seasonData = await tmdbFetch<TmdbSeasonDetails>(`/tv/${tmdbId}/season/${season.season_number}?language=en-US`).catch(() => null);
+            if (seasonData && seasonData.episodes) {
+                const sortedEps = [...seasonData.episodes].sort((a, b) => a.episode_number - b.episode_number);
+                for (const ep of sortedEps) {
+                    if (ep.still_path) {
+                        map.set(absoluteCounter, buildTmdbImageUrl(ep.still_path, 'w780'));
+                    }
+                    absoluteCounter++;
+                }
+            } else {
+                absoluteCounter += season.episode_count;
+            }
+        }
+        return map;
+    },
+
     isAnimeContent(item: TmdbSearchResult): boolean {
         const lang = item.original_language;
         const countries = item.origin_country || [];
         const genreIds = item.genre_ids || [];
         const hasAnimation = genreIds.includes(16);
         return hasAnimation && (lang === 'ja' || countries.includes('JP'));
-    },
-
-    async resolveTmdbToAnilist(tmdbId: string): Promise<Anime | null> {
-        try {
-            // First try as TV, if fails, try as Movie
-            let title = '';
-            let isTv = true;
-            try {
-                const tvDetails = await tmdbFetch<any>(`/tv/${tmdbId}?language=en-US`);
-                title = tvDetails.name || tvDetails.original_name;
-            } catch {
-                const movieDetails = await tmdbFetch<any>(`/movie/${tmdbId}?language=en-US`);
-                title = movieDetails.title || movieDetails.original_title;
-                isTv = false;
-            }
-
-            if (!title) return null;
-
-            // Search AniList
-            const { animeService } = await import('./animeService');
-            const { data } = await animeService.searchAnime(title, 1, 3);
-            
-            if (data && data.length > 0) {
-                return data[0] as Anime;
-            }
-            return null;
-        } catch (err) {
-            console.error('Failed to resolve TMDB ID to AniList', err);
-            return null;
-        }
-    },
+    }
 };

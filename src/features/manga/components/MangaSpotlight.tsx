@@ -255,7 +255,7 @@ const MangaSpotlight: React.FC<MangaSpotlightProps> = ({ onMangaClick }) => {
                                         </div>
                                         <div className="flex items-start">
                                             <AnimeLogoImage
-                                                anilistId={parseInt((activeManga.id || activeManga.mal_id || '0').toString())}
+                                                tmdbId={parseInt((activeManga.id || activeManga.mal_id || '0').toString())}
                                                 title={displayTitle}
                                                 className="drop-shadow-2xl"
                                                 size="medium"

@@ -560,8 +560,8 @@ export class ScraperService {
                 }
 
                 const url = tmdbTarget.mediaType === 'movie' 
-                    ? `https://player.videasy.to/movie/${tmdbTarget.tmdbId}`
-                    : `https://player.videasy.to/tv/${tmdbTarget.tmdbId}/${seasonNumber}/${relEpisode}`;
+                    ? `https://player.videasy.to/movie/${tmdbTarget.tmdbId}?overlay=true`
+                    : `https://player.videasy.to/tv/${tmdbTarget.tmdbId}/${seasonNumber}/${relEpisode}?overlay=true`;
                 
                 return [{
                     quality: 'auto',
@@ -579,7 +579,7 @@ export class ScraperService {
         // ── AllManga provider ──────────────────────────────────────────────
         if (provider === 'allmanga' || provider === 'auto' || provider === 'videasy' || this.isAllMangaSession(animeSession)) {
             let title = String(options?.title || this.queryFromSessionSlug(animeSession)).trim();
-            let episodeNumber = Number(options?.episodeNumber || this.parseEpisodeNumber(epSession));
+            const episodeNumber = Number(options?.episodeNumber || this.parseEpisodeNumber(epSession));
             let showId = AllMangaScraper.fromSession(animeSession);
             const year = options?.year;
             const format = options?.format;

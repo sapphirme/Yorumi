@@ -30,13 +30,13 @@ router.use((req, res, next) => {
 
 router.get('/metadata', async (req, res) => {
     try {
-        const anilistId = Number(req.query.anilistId || req.query.id);
-        if (!Number.isFinite(anilistId) || anilistId <= 0) {
-            res.status(400).json({ error: 'Query parameter anilistId is required' });
+        const tmdbId = Number(req.query.tmdbId || req.query.id);
+        if (!Number.isFinite(tmdbId) || tmdbId <= 0) {
+            res.status(400).json({ error: 'Query parameter id is required' });
             return;
         }
 
-        const metadata = await streambertAnimeService.getMetadata(Math.floor(anilistId));
+        const metadata = await streambertAnimeService.getMetadata(Math.floor(tmdbId));
         if (!metadata) {
             res.status(404).json({ error: 'Anime not found' });
             return;
@@ -52,7 +52,7 @@ router.get('/metadata', async (req, res) => {
 router.get('/search', async (req, res) => {
     try {
         const filters = streambertAnimeService.parseSearchFilters(req.query);
-        if (!filters.query && !filters.season && !filters.seasonYear && !filters.status && !filters.format && !filters.genres?.length && !filters.tags?.length) {
+        if (!filters.query && !filters.season && !filters.seasonYear) {
             res.status(400).json({ error: 'Query parameter query is required unless filters are provided' });
             return;
         }
@@ -67,13 +67,13 @@ router.get('/search', async (req, res) => {
 
 router.get('/episodes', async (req, res) => {
     try {
-        const anilistId = Number(req.query.anilistId || req.query.id);
-        if (!Number.isFinite(anilistId) || anilistId <= 0) {
-            res.status(400).json({ error: 'Query parameter anilistId is required' });
+        const tmdbId = Number(req.query.tmdbId || req.query.id);
+        if (!Number.isFinite(tmdbId) || tmdbId <= 0) {
+            res.status(400).json({ error: 'Query parameter id is required' });
             return;
         }
 
-        const result = await streambertAnimeService.getEpisodes(Math.floor(anilistId));
+        const result = await streambertAnimeService.getEpisodes(Math.floor(tmdbId));
         if (!result) {
             res.status(404).json({ error: 'Anime not found' });
             return;
@@ -88,13 +88,13 @@ router.get('/episodes', async (req, res) => {
 
 router.get('/episode/:episodeId', async (req, res) => {
     try {
-        const anilistId = Number(req.query.anilistId || req.query.id);
-        if (!Number.isFinite(anilistId) || anilistId <= 0) {
-            res.status(400).json({ error: 'Query parameter anilistId is required' });
+        const tmdbId = Number(req.query.tmdbId || req.query.id);
+        if (!Number.isFinite(tmdbId) || tmdbId <= 0) {
+            res.status(400).json({ error: 'Query parameter id is required' });
             return;
         }
 
-        const result = await streambertAnimeService.getEpisode(Math.floor(anilistId), req.params.episodeId);
+        const result = await streambertAnimeService.getEpisode(Math.floor(tmdbId), req.params.episodeId);
         if (!result) {
             res.status(404).json({ error: 'Episode not found' });
             return;
@@ -108,11 +108,11 @@ router.get('/episode/:episodeId', async (req, res) => {
 
 router.get('/stream', async (req, res) => {
     try {
-        const anilistId = Number(req.query.anilistId || req.query.id);
+        const tmdbId = Number(req.query.tmdbId || req.query.id);
         const episode = Number(req.query.episode || 1);
         const source = String(req.query.source || 'videasy');
-        if (!Number.isFinite(anilistId) || anilistId <= 0) {
-            res.status(400).json({ error: 'Query parameter anilistId is required' });
+        if (!Number.isFinite(tmdbId) || tmdbId <= 0) {
+            res.status(400).json({ error: 'Query parameter id is required' });
             return;
         }
         if (!Number.isFinite(episode) || episode <= 0) {
@@ -120,7 +120,9 @@ router.get('/stream', async (req, res) => {
             return;
         }
 
-        const result = await animeVideoSources.getStream(Math.floor(anilistId), episode, source);
+        const title = req.query.title ? String(req.query.title) : undefined;
+        const year = req.query.year ? Number(req.query.year) : undefined;
+        const result = await animeVideoSources.getStream(Math.floor(tmdbId), episode, source);
         if (!result) {
             res.status(404).json({ error: 'No playable stream found' });
             return;
@@ -157,6 +159,42 @@ router.get('/seasonal', async (req, res) => {
     const perPage = animeQuery.toPositiveInt(req.query.perPage || req.query.limit, 10, 50);
     const result = await streambertAnimeService.seasonal(season, year, page, perPage);
     res.json(result);
+});
+
+router.get('/home-fast', async (_req, res) => {
+    try {
+        const now = new Date();
+        const month = now.getMonth() + 1;
+        const season = month <= 3 ? 'WINTER' : month <= 6 ? 'SPRING' : month <= 9 ? 'SUMMER' : 'FALL';
+        const year = now.getFullYear();
+
+        const [trending, seasonal, popular] = await Promise.all([
+            streambertAnimeService.trending(1, 10).catch(() => ({ media: [] })),
+            streambertAnimeService.seasonal(season, year, 1, 10).catch(() => ({ media: [] })),
+            streambertAnimeService.popular(1, 18).catch(() => ({ media: [] })),
+        ]);
+
+        const payload = {
+            spotlight: trending.media.slice(0, 8),
+            latestEpisodes: [], // Scraper updates can be skipped or added later
+            trending: trending,
+            seasonal: seasonal,
+            monthly: popular,
+            topAnime: popular,
+            topTen: {
+                day: trending.media,
+                week: seasonal.media,
+                month: popular.media,
+            },
+            generatedAt: Date.now(),
+        };
+
+        res.set('Cache-Control', 'public, max-age=60, s-maxage=120, stale-while-revalidate=300');
+        res.json(payload);
+    } catch (error) {
+        console.error('Error in anime home-fast route:', error);
+        res.status(500).json({ error: 'Failed to fetch home bundle' });
+    }
 });
 
 export default router;

@@ -325,14 +325,6 @@ export class AllMangaScraper {
         if (!target || target.mediaType !== 'tv') return new Map();
 
         let searchTitle = title;
-        try {
-            const { anilistService } = require('../api/scraper/anilist.service');
-            const anilistMatch = await anilistService.resolveSeasonTitle(title, 1);
-            if (anilistMatch?.title) {
-                searchTitle = anilistMatch.title.english || anilistMatch.title.romaji || title;
-            }
-        } catch {}
-
         let seasonNumber = await tmdbService.resolveSeasonByTitle(target.tmdbId, searchTitle);
         
         if (!seasonNumber) {
@@ -743,8 +735,8 @@ export class AllMangaScraper {
             const orderedSources = sources
                 .filter((source) => source?.sourceUrl)
                 .sort((a, b) => {
-                    const aDirect = /^https?:\/\//i.test(String(a.sourceUrl || '')) ? 1 : 0;
-                    const bDirect = /^https?:\/\//i.test(String(b.sourceUrl || '')) ? 1 : 0;
+                    const aDirect = String(a.sourceUrl || '').startsWith('--') ? 1 : 0;
+                    const bDirect = String(b.sourceUrl || '').startsWith('--') ? 1 : 0;
                     return (bDirect - aDirect) || (Number(b.priority || 0) - Number(a.priority || 0));
                 });
 
@@ -787,8 +779,8 @@ export class AllMangaScraper {
             const orderedSources = sources
                 .filter((source) => source?.sourceUrl)
                 .sort((a, b) => {
-                    const aDirect = /^https?:\/\//i.test(String(a.sourceUrl || '')) ? 1 : 0;
-                    const bDirect = /^https?:\/\//i.test(String(b.sourceUrl || '')) ? 1 : 0;
+                    const aDirect = String(a.sourceUrl || '').startsWith('--') ? 1 : 0;
+                    const bDirect = String(b.sourceUrl || '').startsWith('--') ? 1 : 0;
                     return (bDirect - aDirect) || (Number(b.priority || 0) - Number(a.priority || 0));
                 });
 

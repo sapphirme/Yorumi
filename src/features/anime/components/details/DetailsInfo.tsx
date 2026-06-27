@@ -1,7 +1,6 @@
-import { Play, Plus, Check, Heart } from 'lucide-react';
+import { Play, Plus, Check } from 'lucide-react';
 import { AnimatePresence, m } from 'framer-motion';
 import type { Anime } from '../../../../types/anime';
-import AnimeLogoImage from '../../../../components/anime/AnimeLogoImage';
 import { useTitleLanguage } from '../../../../context/TitleLanguageContext';
 import { getDisplayTitle } from '../../../../utils/titleLanguage';
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { m, AnimatePresence } from 'framer-motion';
-import { Search, X, Clock, Play } from 'lucide-react';
+import { Search, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useTitleLanguage } from '../../context/TitleLanguageContext';
 import { useNavbarSearch } from '../../features/search/hooks/useNavbarSearch';
