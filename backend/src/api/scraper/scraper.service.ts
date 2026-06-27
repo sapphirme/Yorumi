@@ -560,8 +560,8 @@ export class ScraperService {
                 }
 
                 const url = tmdbTarget.mediaType === 'movie' 
-                    ? `https://player.videasy.to/movie/${tmdbTarget.tmdbId}`
-                    : `https://player.videasy.to/tv/${tmdbTarget.tmdbId}/${seasonNumber}/${relEpisode}`;
+                    ? `https://player.videasy.to/movie/${tmdbTarget.tmdbId}?overlay=true`
+                    : `https://player.videasy.to/tv/${tmdbTarget.tmdbId}/${seasonNumber}/${relEpisode}?overlay=true`;
                 
                 return [{
                     quality: 'auto',
