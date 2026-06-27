@@ -193,8 +193,9 @@ export default function EpisodeList({
                             const isCurrent = ep.episodeNumber == currentEpNumber;
                             const isWatched = watchedEpisodes.has(parseFloat(ep.episodeNumber));
                             const meta = getEpisodeMeta(ep);
-                            const cleanTitle = ep.title && ep.title.trim().toLowerCase() !== 'untitled' ? ep.title : null;
-                            const displayTitle = meta?.title?.replace(/^Episode \d+[\s-]*:?/i, '').trim() || cleanTitle || `Episode ${ep.episodeNumber}`;
+                            const cleanTitle = ep.title && ep.title.trim().toLowerCase() !== 'untitled' ? ep.title.split('<note-split>')[0].trim() : null;
+                            let displayTitle = meta?.title?.replace(/^Episode \d+[\s-]*:?/i, '').trim() || cleanTitle || `Episode ${ep.episodeNumber}`;
+                            displayTitle = displayTitle.split('<note-split>')[0].trim();
                             const previewImage = getPreviewImage(ep, meta);
 
                             return (
