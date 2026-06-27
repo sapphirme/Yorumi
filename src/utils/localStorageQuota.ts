@@ -4,6 +4,9 @@ const VOLATILE_STORAGE_PREFIXES = [
     'yorumi_home_cache_',
     'yorumi_logo_cache_',
     'yorumi_stream_cache_',
+    'yorumi_anilist_season_chain_',
+    'yorumi_ep_cache_',
+    'yorumi_tmdb_cache_',
 ];
 
 const isQuotaError = (error: unknown) => {
