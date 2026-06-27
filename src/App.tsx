@@ -16,7 +16,9 @@ function App() {
     const location = useLocation();
     const { language } = useTitleLanguage();
     const [showScrollToTop, setShowScrollToTop] = useState(false);
-    const [hasTmdbToken, setHasTmdbToken] = useState(() => tmdbService.hasToken());
+    const [tmdbSetupReady, setTmdbSetupReady] = useState(() => (
+        tmdbService.hasToken() || tmdbService.hasCompletedSetup()
+    ));
 
     const queryParams = new URLSearchParams(location.search);
     const activeTab = location.pathname.startsWith('/manga')
@@ -53,8 +55,8 @@ function App() {
     }, []);
 
 
-    if (!hasTmdbToken) {
-        return <TmdbSetupScreen onReady={() => setHasTmdbToken(true)} />;
+    if (!tmdbSetupReady) {
+        return <TmdbSetupScreen onReady={() => setTmdbSetupReady(true)} />;
     }
 
     return (
