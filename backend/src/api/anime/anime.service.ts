@@ -1,105 +1,8 @@
-import axios from 'axios';
+import { tmdbService } from '../scraper/tmdb.service';
 import { cacheGet, cacheSet } from '../../utils/redis-cache';
 
-const ANILIST_API_URL = 'https://graphql.anilist.co';
-const ONE_DAY_SECONDS = 24 * 60 * 60;
 const FIVE_MINUTES_SECONDS = 5 * 60;
-
-const MEDIA_FIELDS = `
-    id
-    idMal
-    title { romaji english native userPreferred }
-    coverImage { extraLarge large medium color }
-    bannerImage
-    description(asHtml: false)
-    episodes
-    status
-    nextAiringEpisode { episode airingAt timeUntilAiring }
-    season
-    seasonYear
-    genres
-    tags { id name rank isMediaSpoiler isGeneralSpoiler category }
-    averageScore
-    meanScore
-    popularity
-    trailer { id site thumbnail }
-    relations {
-        edges {
-            relationType
-            node {
-                id
-                type
-                format
-                title { romaji english native userPreferred }
-                coverImage { large }
-                bannerImage
-                episodes
-                season
-                seasonYear
-                startDate { year month day }
-                isAdult
-            }
-        }
-    }
-    recommendations(perPage: 12, sort: RATING_DESC) {
-        nodes {
-            mediaRecommendation {
-                id
-                title { romaji english native userPreferred }
-                coverImage { large }
-                bannerImage
-                averageScore
-                isAdult
-            }
-        }
-    }
-    characters(sort: [ROLE, RELEVANCE, ID], perPage: 24) {
-        edges {
-            role
-            node { id name { full native } image { large medium } }
-            voiceActors(language: JAPANESE, sort: [RELEVANCE, ID]) {
-                id
-                name { full native }
-                image { large medium }
-                languageV2
-            }
-        }
-    }
-    staff(sort: [RELEVANCE, ID], perPage: 16) {
-        edges {
-            role
-            node { id name { full native } image { large medium } }
-        }
-    }
-    studios { nodes { id name isAnimationStudio } }
-    externalLinks { id url site type language color icon notes isDisabled }
-    streamingEpisodes { title thumbnail url site }
-    rankings { id rank type format year season allTime context }
-    trending
-    favourites
-    isAdult
-    countryOfOrigin
-    source
-    duration
-    format
-    startDate { year month day }
-    endDate { year month day }
-    synonyms
-    hashtag
-`;
-
-type SearchFilters = {
-    query?: string;
-    page: number;
-    perPage: number;
-    season?: string;
-    seasonYear?: number;
-    status?: string;
-    format?: string;
-    genres?: string[];
-    tags?: string[];
-    sort?: string[];
-};
+const ONE_DAY_SECONDS = 24 * 60 * 60;
 
 function toPositiveInt(value: unknown, fallback: number, max = 50) {
     const parsed = Number(value);
@@ -119,184 +22,256 @@ function parseSort(value: unknown, fallback: string[]) {
     return parsed.length > 0 ? parsed : fallback;
 }
 
-function stripAdultNested(media: any) {
-    if (!media || typeof media !== 'object') return media;
-
-    if (media.relations?.edges) {
-        media.relations.edges = media.relations.edges.filter((edge: any) => !edge?.node?.isAdult);
-    }
-    if (media.recommendations?.nodes) {
-        media.recommendations.nodes = media.recommendations.nodes.filter((node: any) => !node?.mediaRecommendation?.isAdult);
-    }
-
-    return media;
+function getYear(dateStr: string | undefined): number | undefined {
+    if (!dateStr) return undefined;
+    const y = parseInt(dateStr.substring(0, 4));
+    return isNaN(y) ? undefined : y;
 }
 
-async function anilistRequest<T>(query: string, variables: Record<string, unknown>, ttlSeconds: number): Promise<T> {
-    const cacheKey = `anime:anilist:${Buffer.from(JSON.stringify({ query, variables })).toString('base64url')}`;
-    const cached = await cacheGet<T>(cacheKey);
-    if (cached) return cached;
-
-    const response = await axios.post(
-        ANILIST_API_URL,
-        { query, variables },
-        {
-            headers: {
-                Accept: 'application/json',
-                'Content-Type': 'application/json',
-            },
-            timeout: 20_000,
-        }
-    );
-
-    if (response.data?.errors?.length) {
-        throw new Error(response.data.errors.map((error: any) => error?.message || 'AniList error').join('; '));
-    }
-
-    const data = response.data as T;
-    await cacheSet(cacheKey, data, ttlSeconds);
-    return data;
+function getSeason(dateStr: string | undefined): string | undefined {
+    if (!dateStr) return undefined;
+    const m = parseInt(dateStr.substring(5, 7));
+    if (isNaN(m)) return undefined;
+    if (m <= 3) return 'WINTER';
+    if (m <= 6) return 'SPRING';
+    if (m <= 9) return 'SUMMER';
+    return 'FALL';
 }
 
-function mapStreamingEpisode(episode: any, index: number, fallbackDuration?: number) {
-    const numberMatch = String(episode?.title || '').match(/(?:episode|ep\.?)\s*(\d+(?:\.\d+)?)/i);
-    const episodeNumber = numberMatch ? Number(numberMatch[1]) : index + 1;
+function mapTmdbStatus(status: string | undefined): string {
+    switch (status) {
+        case 'Returning Series': return 'RELEASING';
+        case 'Ended': return 'FINISHED';
+        case 'Canceled': return 'CANCELLED';
+        case 'In Production': return 'NOT_YET_RELEASED';
+        default: return 'RELEASING';
+    }
+}
 
+function mapTmdbToAnilistMedia(item: any, isFullDetails = false) {
+    if (!item) return null;
     return {
-        id: `anilist:${episodeNumber}`,
-        episode: episodeNumber,
-        title: episode?.title || `Episode ${episodeNumber}`,
-        thumbnail: episode?.thumbnail || null,
-        airDate: null,
-        length: fallbackDuration || null,
-        description: null,
-        summary: null,
-        url: episode?.url || null,
-        site: episode?.site || null,
+        id: item.id,
+        idMal: item.id,
+        title: {
+            romaji: item.name || item.original_name || item.title,
+            english: item.name || item.title,
+            native: item.original_name || item.original_title,
+            userPreferred: item.name || item.original_name || item.title
+        },
+        coverImage: {
+            extraLarge: tmdbService.buildImageUrl(item.poster_path, 'w780'),
+            large: tmdbService.buildImageUrl(item.poster_path, 'w500'),
+            medium: tmdbService.buildImageUrl(item.poster_path, 'w342'),
+            color: '#000000'
+        },
+        bannerImage: tmdbService.buildImageUrl(item.backdrop_path, 'w1280') || tmdbService.buildImageUrl(item.poster_path, 'w1280'),
+        description: item.overview,
+        episodes: item.number_of_episodes || 12,
+        status: mapTmdbStatus(item.status),
+        season: getSeason(item.first_air_date || item.release_date),
+        seasonYear: getYear(item.first_air_date || item.release_date),
+        genres: (item.genres || []).map((g: any) => g.name || 'Anime'),
+        tags: [],
+        averageScore: Math.round((item.vote_average || 0) * 10),
+        meanScore: Math.round((item.vote_average || 0) * 10),
+        popularity: Math.round(item.popularity || 0),
+        format: 'TV',
+        isAdult: false,
+        startDate: {
+            year: getYear(item.first_air_date || item.release_date),
+            month: (item.first_air_date || item.release_date) ? parseInt((item.first_air_date || item.release_date).substring(5, 7)) : null,
+            day: (item.first_air_date || item.release_date) ? parseInt((item.first_air_date || item.release_date).substring(8, 10)) : null
+        },
+        countryOfOrigin: 'JP',
+        characters: { edges: [] },
+        relations: { edges: [] },
+        recommendations: { nodes: [] },
+        staff: { edges: [] },
+        studios: { nodes: [] },
+        externalLinks: [],
+        streamingEpisodes: [],
     };
 }
 
 export const streambertAnimeService = {
-    parseSearchFilters(query: Record<string, unknown>): SearchFilters {
+    parseSearchFilters(query: Record<string, unknown>) {
         return {
             query: String(query.query || query.q || '').trim(),
             page: toPositiveInt(query.page, 1, 500),
-            perPage: toPositiveInt(query.perPage || query.limit, 25, 50),
+            perPage: toPositiveInt(query.perPage || query.limit, 20, 50),
             season: query.season ? String(query.season).toUpperCase() : undefined,
             seasonYear: query.seasonYear || query.year ? toPositiveInt(query.seasonYear || query.year, new Date().getFullYear(), 3000) : undefined,
-            status: query.status ? String(query.status).toUpperCase() : undefined,
-            format: query.format ? String(query.format).toUpperCase() : undefined,
-            genres: parseList(query.genres || query.genre),
-            tags: parseList(query.tags || query.tag),
-            sort: parseSort(query.sort, ['SEARCH_MATCH']),
         };
     },
 
-    async getMetadata(anilistId: number) {
-        const query = `
-            query ($id: Int) {
-                Media(id: $id, type: ANIME) {
-                    ${MEDIA_FIELDS}
-                }
-            }
-        `;
-        const payload = await anilistRequest<{ data?: { Media?: any } }>(query, { id: anilistId }, ONE_DAY_SECONDS);
-        return stripAdultNested(payload.data?.Media || null);
+    async getMetadata(tmdbId: number) {
+        const cacheKey = `anime:tmdb:tv:${tmdbId}`;
+        const cached = await cacheGet<any>(cacheKey);
+        if (cached) return cached;
+
+        const payload = await tmdbService.get<any>(`/tv/${tmdbId}`, { append_to_response: 'credits,recommendations,similar' });
+        if (!payload) return null;
+
+        const media = mapTmdbToAnilistMedia(payload, true);
+        
+        if (payload.credits?.cast) {
+            media!.characters.edges = payload.credits.cast.slice(0, 15).map((cast: any) => ({
+                role: 'MAIN',
+                node: { id: cast.id, name: { full: cast.character, native: cast.character }, image: { large: tmdbService.buildImageUrl(cast.profile_path, 'w500') } },
+                voiceActors: [{ id: cast.id, name: { full: cast.name, native: cast.name }, image: { large: tmdbService.buildImageUrl(cast.profile_path, 'w500') }, languageV2: 'Japanese' }]
+            }));
+        }
+
+        if (payload.recommendations?.results) {
+            media!.recommendations.nodes = payload.recommendations.results.slice(0, 12).map((rec: any) => ({
+                mediaRecommendation: mapTmdbToAnilistMedia(rec)
+            }));
+        } else if (payload.similar?.results) {
+            media!.recommendations.nodes = payload.similar.results.slice(0, 12).map((rec: any) => ({
+                mediaRecommendation: mapTmdbToAnilistMedia(rec)
+            }));
+        }
+
+        await cacheSet(cacheKey, media, ONE_DAY_SECONDS);
+        return media;
     },
 
-    async search(filters: SearchFilters) {
-        const query = `
-            query (
-                $search: String
-                $page: Int
-                $perPage: Int
-                $season: MediaSeason
-                $seasonYear: Int
-                $status: MediaStatus
-                $format: MediaFormat
-                $genres: [String]
-                $tags: [String]
-                $sort: [MediaSort]
-            ) {
-                Page(page: $page, perPage: $perPage) {
-                    pageInfo { total perPage currentPage lastPage hasNextPage }
-                    media(
-                        search: $search
-                        type: ANIME
-                        season: $season
-                        seasonYear: $seasonYear
-                        status: $status
-                        format: $format
-                        genre_in: $genres
-                        tag_in: $tags
-                        sort: $sort
-                        isAdult: false
-                    ) {
-                        ${MEDIA_FIELDS}
-                    }
-                }
+    async search(filters: any) {
+        const page = filters.page || 1;
+        
+        let path = '/discover/tv';
+        let sort_by = 'popularity.desc';
+        if (filters.sort && Array.isArray(filters.sort)) {
+            if (filters.sort.includes('POPULARITY_DESC')) {
+                sort_by = 'popularity.desc';
             }
-        `;
-        const variables = {
-            search: filters.query || undefined,
-            page: filters.page,
-            perPage: filters.perPage,
-            season: filters.season,
-            seasonYear: filters.seasonYear,
-            status: filters.status,
-            format: filters.format,
-            genres: filters.genres && filters.genres.length > 0 ? filters.genres : undefined,
-            tags: filters.tags && filters.tags.length > 0 ? filters.tags : undefined,
-            sort: filters.sort,
+            if (filters.sort.includes('VOTE_COUNT_DESC') || filters.sort.includes('ALL_TIME_POPULAR')) {
+                sort_by = 'vote_count.desc';
+            }
+        }
+
+        let params: Record<string, any> = {
+            with_genres: '16',
+            with_original_language: 'ja',
+            sort_by,
+            page,
+            include_adult: false,
         };
-        const payload = await anilistRequest<{ data?: { Page?: any } }>(query, variables, FIVE_MINUTES_SECONDS);
-        const page = payload.data?.Page || { media: [], pageInfo: {} };
-        page.media = Array.isArray(page.media) ? page.media.map(stripAdultNested) : [];
-        return page;
+
+        if (filters.query) {
+            path = '/search/tv';
+            params = {
+                query: filters.query,
+                page,
+                include_adult: false,
+                language: 'en-US'
+            };
+        } else if (filters.seasonYear) {
+            let firstDate = `${filters.seasonYear}-01-01`;
+            let lastDate = `${filters.seasonYear}-12-31`;
+            
+            if (filters.season === 'WINTER') { firstDate = `${filters.seasonYear}-01-01`; lastDate = `${filters.seasonYear}-03-31`; }
+            else if (filters.season === 'SPRING') { firstDate = `${filters.seasonYear}-04-01`; lastDate = `${filters.seasonYear}-06-30`; }
+            else if (filters.season === 'SUMMER') { firstDate = `${filters.seasonYear}-07-01`; lastDate = `${filters.seasonYear}-09-30`; }
+            else if (filters.season === 'FALL') { firstDate = `${filters.seasonYear}-10-01`; lastDate = `${filters.seasonYear}-12-31`; }
+
+            params['first_air_date.gte'] = firstDate;
+            params['first_air_date.lte'] = lastDate;
+        }
+
+        const cacheKey = `anime:tmdb:search:${Buffer.from(JSON.stringify({ path, params })).toString('base64url')}`;
+        const cached = await cacheGet<any>(cacheKey);
+        if (cached) return cached;
+
+        const payload = await tmdbService.get<any>(path, params);
+        if (!payload || !payload.results) return { pageInfo: { total: 0, perPage: 20, currentPage: page, lastPage: 1, hasNextPage: false }, media: [] };
+
+        let results = payload.results;
+        // In search, filter out non-anime if needed, but for now we just return the results.
+        if (filters.query) {
+            results = results; // removed tmdbService.isAnimeContent filter
+        }
+
+        const res = {
+            pageInfo: {
+                total: payload.total_results || 0,
+                perPage: 20,
+                currentPage: payload.page || 1,
+                lastPage: payload.total_pages || 1,
+                hasNextPage: (payload.page || 1) < (payload.total_pages || 1)
+            },
+            media: results.map((i: any) => mapTmdbToAnilistMedia(i))
+        };
+
+        await cacheSet(cacheKey, res, FIVE_MINUTES_SECONDS);
+        return res;
     },
 
-    async getEpisodes(anilistId: number) {
-        const metadata = await this.getMetadata(anilistId);
+    async getEpisodes(tmdbId: number) {
+        const metadata = await this.getMetadata(tmdbId);
         if (!metadata) return null;
 
-        const streamingEpisodes = Array.isArray(metadata.streamingEpisodes) ? metadata.streamingEpisodes : [];
-        const mapped = streamingEpisodes.map((episode: any, index: number) => mapStreamingEpisode(episode, index, metadata.duration));
-        const total = Math.max(Number(metadata.episodes || 0), mapped.length);
-        const episodes = mapped.length > 0
-            ? mapped
-            : Array.from({ length: total }, (_item, index) => ({
-                id: `anilist:${index + 1}`,
-                episode: index + 1,
-                title: `Episode ${index + 1}`,
-                thumbnail: metadata.coverImage?.large || metadata.coverImage?.extraLarge || null,
+        const thumbnailsMap = await tmdbService.resolveTvEpisodeThumbnails(tmdbId, { fetchAllSeasons: true }).catch(() => new Map<number, string>());
+        
+        // Construct basic episodes based on metadata count.
+        const total = Number(metadata.episodes || 12);
+        const episodes = Array.from({ length: total }, (_item, index) => {
+            const epNum = index + 1;
+            return {
+                id: `tmdb:${epNum}`,
+                episode: epNum,
+                title: `Episode ${epNum}`,
+                thumbnail: thumbnailsMap.get(epNum) || metadata.bannerImage || metadata.coverImage?.large || null,
                 airDate: null,
-                length: metadata.duration || null,
+                length: null,
                 description: null,
                 summary: null,
-            }));
+            };
+        });
 
         return {
-            anilistId,
+            anilistId: tmdbId,
             season: metadata.season,
             seasonYear: metadata.seasonYear,
-            totalEpisodes: total || null,
+            totalEpisodes: total,
             episodes,
         };
     },
 
-    async getEpisode(anilistId: number, episodeId: string) {
-        const bundle = await this.getEpisodes(anilistId);
+    async getEpisode(tmdbId: number, episodeId: string) {
+        const bundle = await this.getEpisodes(tmdbId);
         if (!bundle) return null;
-        const requested = String(episodeId).replace(/^anilist:/i, '');
+        const requested = String(episodeId).replace(/^tmdb:/i, '');
         return bundle.episodes.find((episode: any) => String(episode.id) === episodeId || String(episode.episode) === requested) || null;
     },
 
     async trending(page: number, perPage: number) {
-        return this.search({ page, perPage, sort: ['TRENDING_DESC'] });
+        const params = {
+            with_genres: '16',
+            with_original_language: 'ja',
+            sort_by: 'popularity.desc',
+            page,
+            'first_air_date.gte': new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+            include_adult: false,
+        };
+        const payload = await tmdbService.get<any>('/discover/tv', params);
+        if (!payload) return { pageInfo: {}, media: [] };
+        
+        return {
+            pageInfo: {
+                total: payload.total_results || 0,
+                perPage: 20,
+                currentPage: payload.page || 1,
+                lastPage: payload.total_pages || 1,
+                hasNextPage: (payload.page || 1) < (payload.total_pages || 1)
+            },
+            media: (payload.results || []).map((i: any) => mapTmdbToAnilistMedia(i))
+        };
     },
 
     async popular(page: number, perPage: number) {
-        return this.search({ page, perPage, sort: ['POPULARITY_DESC'] });
+        return this.search({ page, perPage, sort: ['VOTE_COUNT_DESC'] });
     },
 
     async seasonal(season: string, year: number, page: number, perPage: number) {
