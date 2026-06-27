@@ -26,9 +26,10 @@ export const getStreamData = async (
         format?: string;
     }
 ): Promise<StreamLink[]> => {
+    const playbackEpisodeNumber = Number(episode._tmdbAbsolute || episode.episodeNumber || 0) || undefined;
     const data = await animeService.getStreams(scraperSession, episode.session, {
         ...options,
-        episodeNumber: Number(episode.episodeNumber || 0) || undefined,
+        episodeNumber: playbackEpisodeNumber,
     });
 
     if (data && data.length > 0) {
