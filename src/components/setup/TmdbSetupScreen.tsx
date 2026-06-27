@@ -70,6 +70,11 @@ export default function TmdbSetupScreen({ onReady }: { onReady: () => void }) {
         setError(getErrorMessage(result.reason, result.status));
     };
 
+    const handleContinueWithoutToken = () => {
+        tmdbService.completeSetupWithoutToken();
+        onReady();
+    };
+
     return (
         <div className="min-h-screen bg-[#07090d] text-white flex items-center justify-center px-5">
             <div className="absolute inset-0 pointer-events-none overflow-hidden">
@@ -157,6 +162,14 @@ export default function TmdbSetupScreen({ onReady }: { onReady: () => void }) {
                                 Continue
                             </>
                         )}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={handleContinueWithoutToken}
+                        disabled={checking}
+                        className="flex h-11 w-full items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-5 font-bold text-white transition-colors hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                        Continue without TMDB
                     </button>
                 </div>
             </div>
