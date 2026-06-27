@@ -66,8 +66,10 @@ class VideasySource implements VideoSource {
         const match = html.match(/(?:file|src)\s*[:=]\s*["']([^"']+\.m3u8[^"']*)["']/i);
         if (!match?.[1]) return null;
 
+        const m3u8Url = absoluteUrl(match[1], baseUrl);
+
         return {
-            m3u8: absoluteUrl(match[1], baseUrl),
+            m3u8: `/api/scraper/proxy?url=${encodeURIComponent(m3u8Url)}&referer=${encodeURIComponent(baseUrl)}`,
             subtitles: extractSubtitles(html, baseUrl),
             source: this.id,
             episode,
@@ -116,11 +118,13 @@ class AllMangaSource implements VideoSource {
         const best = links
             .filter((link) => link?.directUrl || link?.url)
             .sort((a, b) => {
+                const directA = a.directUrl ? 100_000 : 0;
+                const directB = b.directUrl ? 100_000 : 0;
                 const qualityA = Number(String(a.quality || '').replace(/[^\d]/g, '')) || 0;
                 const qualityB = Number(String(b.quality || '').replace(/[^\d]/g, '')) || 0;
                 const subA = String(a.audio || '').toLowerCase() === 'sub' ? 10_000 : 0;
                 const subB = String(b.audio || '').toLowerCase() === 'sub' ? 10_000 : 0;
-                return subB + qualityB - (subA + qualityA);
+                return (directB + subB + qualityB) - (directA + subA + qualityA);
             })[0];
         const url = best?.directUrl || best?.url;
         if (!url) return null;
