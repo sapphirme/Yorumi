@@ -91,7 +91,7 @@ export function AnimeProvider({ children }: { children: ReactNode }) {
     const { user } = useAuth();
 
     // Cache reader (defined early so useState initializers can use it)
-    const HOME_CACHE_PREFIX = 'yorumi_home_cache_v16';
+    const HOME_CACHE_PREFIX = 'yorumi_home_cache_v17';
     const HOME_LATEST_MIN_ITEMS = 10;
     const readHomeCache = <T,>(key: string, ttlMs: number): T | null => {
         try {
@@ -108,7 +108,7 @@ export function AnimeProvider({ children }: { children: ReactNode }) {
 
     // TTL constants for cache hydration
     const HOME_TTL_TOPTEN = 10 * 60 * 1000;
-    const HOME_TTL_SPOTLIGHT = 12 * 60 * 60 * 1000;
+    const HOME_TTL_SPOTLIGHT = 10 * 60 * 1000;
     const HOME_TTL_LATEST = 10 * 60 * 1000;
     const HOME_TTL_TRENDING = 10 * 60 * 1000;
     const HOME_TTL_SEASON = 10 * 60 * 1000;
@@ -510,7 +510,7 @@ export function AnimeProvider({ children }: { children: ReactNode }) {
 
     const fetchHomeData = async () => {
         const HOME_TTL = {
-            spotlight: 12 * 60 * 60 * 1000,
+            spotlight: 10 * 60 * 1000,
             latestUpdates: 10 * 60 * 1000,
             trending: 10 * 60 * 1000,
             popularSeason: 10 * 60 * 1000,
