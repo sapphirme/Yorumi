@@ -73,3 +73,4 @@ A task is done only when all are true:
 - List key file changes with paths.
 - List validation commands run and outcomes.
 - End with short residual risks or follow-up items (only if real).
+- Do not remove navigation logic from the Vault unlock flow; spam-clicking the logo 5x MUST navigate to the Vault interface (\/\ or \/manga\).
