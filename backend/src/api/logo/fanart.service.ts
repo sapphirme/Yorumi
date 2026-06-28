@@ -25,6 +25,7 @@ const logoCache = new Map<string, string | null>();
 // Cache for the entire anime list database (loaded once, reused)
 let animeDatabaseCache: any[] | null = null;
 let databaseLastFetched: number = 0;
+let databaseFetchPromise: Promise<any[]> | null = null;
 const DATABASE_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
 
 interface FanartTVResponse {
@@ -76,20 +77,29 @@ export async function getTVDBIdFromTMDB(tmdbId: number): Promise<string | null> 
         const now = Date.now();
 
         if (!animeDatabase || (now - databaseLastFetched) > DATABASE_CACHE_TTL) {
-            console.log('[Fanart] Fetching anime database from GitHub...');
-            // Use anime-list-mini for faster loading (smaller file)
-            const response = await axios.get(
-                'https://raw.githubusercontent.com/Fribb/anime-lists/master/anime-list-mini.json',
-                { timeout: 15000 }
-            );
+            if (!databaseFetchPromise) {
+                console.log('[Fanart] Fetching anime database from GitHub...');
+                databaseFetchPromise = axios.get(
+                    'https://raw.githubusercontent.com/Fribb/anime-lists/master/anime-list-mini.json',
+                    { timeout: 15000 }
+                ).then(response => {
+                    if (response.data && Array.isArray(response.data)) {
+                        animeDatabaseCache = response.data;
+                        databaseLastFetched = Date.now();
+                        console.log(`[Fanart] Loaded anime database with ${animeDatabaseCache.length} entries`);
+                        return animeDatabaseCache;
+                    } else {
+                        throw new Error('Invalid database format received');
+                    }
+                }).finally(() => {
+                    databaseFetchPromise = null;
+                });
+            }
 
-            if (response.data && Array.isArray(response.data)) {
-                animeDatabase = response.data;
-                animeDatabaseCache = animeDatabase;
-                databaseLastFetched = now;
-                console.log(`[Fanart] Loaded anime database with ${animeDatabase.length} entries`);
-            } else {
-                console.warn('[Fanart] Invalid database format received');
+            try {
+                animeDatabase = await databaseFetchPromise;
+            } catch (err) {
+                console.warn('[Fanart] Failed to load database:', err);
                 tvdbMappingCache.set(tmdbId, null);
                 return null;
             }
