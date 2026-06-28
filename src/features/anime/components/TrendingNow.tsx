@@ -62,10 +62,17 @@ const TrendingNow: React.FC<TrendingNowProps> = ({
                                 : 'flex-[0_0_140px] md:flex-[0_0_180px] lg:flex-[0_0_200px]'}
                         >
                             {variant === 'landscape' ? (
-                                <>
-                                    <div className="aspect-video rounded-lg bg-white/10 animate-pulse mb-3" />
-                                    <div className="h-4 w-4/5 rounded bg-white/10 animate-pulse" />
-                                </>
+                                <div className="relative z-0">
+                                    <div className="relative aspect-video rounded-lg overflow-hidden mb-3 shadow-lg border border-white/5 bg-white/5">
+                                        <div className="absolute inset-0 bg-white/10 animate-pulse rounded-none" />
+                                        <div className="absolute top-2 left-2">
+                                            <div className="w-[45px] h-[20px] bg-white/20 animate-pulse rounded border border-white/10" />
+                                        </div>
+                                    </div>
+                                    <div className="px-1">
+                                        <div className="h-4 w-[80%] rounded bg-white/10 animate-pulse" />
+                                    </div>
+                                </div>
                             ) : (
                                 <AnimeCardSkeleton />
                             )}
