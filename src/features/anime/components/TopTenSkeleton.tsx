@@ -3,28 +3,32 @@ import Skeleton from '../../../components/ui/Skeleton';
 
 const TopTenSkeleton: React.FC = () => {
     return (
-        <div className="space-y-3">
+        <div className="space-y-2">
             {Array.from({ length: 10 }).map((_, index) => (
                 <div
                     key={`top-ten-skeleton-${index}`}
-                    className="relative flex items-stretch gap-3 rounded-xl bg-[#0f1116] overflow-hidden"
+                    className="relative flex h-[72px] items-stretch gap-2 rounded-lg bg-[#0f1116] overflow-hidden"
                 >
                     {/* Rank Number Skeleton */}
-                    <div className="relative w-16 flex items-center justify-center">
-                        <Skeleton className="h-6 w-8" />
+                    <div className="relative w-14 shrink-0 flex items-center justify-center">
+                        <Skeleton className="w-6 h-6" />
                     </div>
 
                     {/* Info Skeleton */}
-                    <div className="min-w-0 flex-1 py-3 pr-1 space-y-2">
+                    <div className="min-w-0 flex-1 py-2 pr-1 space-y-2">
                         <Skeleton className="h-4 w-3/4" />
-                        <div className="flex gap-2">
-                            <Skeleton className="h-4 w-12 rounded-md" />
-                            <Skeleton className="h-4 w-12 rounded-md" />
+                        <div className="mt-1.5 flex items-center gap-1.5">
+                            <Skeleton className="h-6 w-[45px] rounded-md" />
+                            <Skeleton className="h-6 w-[35px] rounded-md" />
                         </div>
                     </div>
 
                     {/* Image Placeholder */}
-                    <div className="w-32 bg-white/5" />
+                    <div 
+                        className="relative h-full w-24 shrink-0 -mr-1 bg-[#1a1d24] overflow-hidden [clip-path:polygon(14%_0,100%_0,100%_100%,0_100%)]"
+                    >
+                        <Skeleton className="w-full h-full rounded-none" />
+                    </div>
                 </div>
             ))}
         </div>
