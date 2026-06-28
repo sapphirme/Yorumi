@@ -65,6 +65,12 @@ const normalizeSearchText = (input: string): string =>
         .replace(/\s+/g, ' ')
         .trim();
 
+const getSearchTokens = (input: string): string[] =>
+    normalizeSearchText(input)
+        .toLowerCase()
+        .split(/\s+/)
+        .filter((word) => word.length >= 2);
+
 const buildSearchQueries = (query: string): string[] => {
     const original = String(query || '').trim();
     const normalized = normalizeSearchText(original);
@@ -86,11 +92,42 @@ const buildSearchQueries = (query: string): string[] => {
     ].filter((value) => String(value || '').trim().length > 0))];
 };
 
+const scoreSearchResult = (query: string, item: MangaSearchResult): number => {
+    const normalizedQuery = normalizeSearchText(query).toLowerCase();
+    const normalizedTitle = normalizeSearchText(item.title).toLowerCase();
+    if (!normalizedQuery || !normalizedTitle) return 0;
+    if (normalizedTitle === normalizedQuery) return 100;
+    if (normalizedTitle.includes(normalizedQuery)) return 90;
+
+    const queryTokens = getSearchTokens(query);
+    if (queryTokens.length === 0) return 0;
+
+    const titleTokens = new Set(getSearchTokens(item.title));
+    const overlap = queryTokens.filter((token) => titleTokens.has(token)).length;
+    if (overlap === queryTokens.length) return 80;
+    if (overlap === 0) return 0;
+
+    return Math.round((overlap / queryTokens.length) * 70);
+};
+
+const rankSearchResults = (query: string, results: MangaSearchResult[]): MangaSearchResult[] =>
+    results
+        .map((item, index) => ({ item, index, score: scoreSearchResult(query, item) }))
+        .filter(({ score }) => score >= 60)
+        .sort((a, b) => b.score - a.score || a.index - b.index)
+        .map(({ item }) => item);
+
 const parseMangaItemsFromList = ($: any): MangaSearchResult[] => {
     const results: MangaSearchResult[] = [];
     $('#book_list .item, .item').each((_: number, element: any) => {
         const $el = $(element);
-        const linkEl = $el.find('h3.title a, div.text > h3 > a, .title a').first();
+        let linkEl = $el.find('h3.title a, div.text > h3 > a, .title a').first();
+        if (!linkEl.length || !linkEl.text().trim()) {
+            linkEl = $el
+                .find('a[href*="/manga/"]')
+                .filter((__: number, link: any) => Boolean($(link).text().trim()))
+                .first();
+        }
         const title = linkEl.text().trim();
         const url = linkEl.attr('href') || '';
         if (!title || !url.includes('/manga/')) return;
@@ -119,6 +156,29 @@ const parseMangaItemsFromList = ($: any): MangaSearchResult[] => {
         }
     });
     return results;
+};
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const fetchSearchResults = async (searchQuery: string, mode: string): Promise<MangaSearchResult[]> => {
+    const searchUrl = `${BASE_URL}/?search=${encodeURIComponent(searchQuery)}&search_by=${mode}`;
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+        const response = await axiosInstance.get(searchUrl);
+        const html = typeof response.data === 'string' ? response.data : String(response.data || '');
+
+        if (html.trim().length > 0) {
+            const $ = cheerio.load(html);
+            const results = parseMangaItemsFromList($);
+            if (results.length > 0) return results;
+        }
+
+        if (attempt < 2) {
+            await sleep(250 * (attempt + 1));
+        }
+    }
+
+    return [];
 };
 
 export interface HotUpdate {
@@ -173,18 +233,32 @@ export interface ChapterPage {
 export async function searchManga(query: string): Promise<MangaSearchResult[]> {
     const searchQueries = buildSearchQueries(query);
     const searchModes = ['m_name', 'book_name'];
+    const collectedResults: MangaSearchResult[] = [];
+    const seenIds = new Set<string>();
 
     for (const searchQuery of searchQueries) {
         for (const mode of searchModes) {
-            const searchUrl = `${BASE_URL}/?search=${encodeURIComponent(searchQuery)}&search_by=${mode}`;
-            const response = await axiosInstance.get(searchUrl);
-            const $ = cheerio.load(response.data);
-            const quickResults = parseMangaItemsFromList($);
+            const quickResults = await fetchSearchResults(searchQuery, mode);
             if (quickResults.length > 0) {
-                console.log(`[searchManga:http] Found ${quickResults.length} results for "${query}" via "${searchQuery}" (${mode})`);
-                return quickResults;
+                quickResults.forEach((item) => {
+                    if (!seenIds.has(item.id)) {
+                        seenIds.add(item.id);
+                        collectedResults.push(item);
+                    }
+                });
+
+                const rankedResults = rankSearchResults(query, collectedResults);
+                if (rankedResults.length > 0) {
+                    console.log(`[searchManga:http] Found ${rankedResults.length} relevant results for "${query}" via "${searchQuery}" (${mode})`);
+                    return rankedResults;
+                }
             }
         }
+    }
+
+    if (collectedResults.length > 0) {
+        console.log(`[searchManga:http] Found ${collectedResults.length} fallback results for "${query}"`);
+        return collectedResults;
     }
 
     console.log(`[searchManga:http] Found 0 results for "${query}"`);
