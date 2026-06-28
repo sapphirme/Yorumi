@@ -338,7 +338,7 @@ const mappingCache = new Map<string, string>();
 const scraperSearchCache = new Map<string, { data: any[]; timestamp: number }>();
 const SCRAPER_SEARCH_TTL = 5 * 60 * 1000;
 const AZ_LIST_CACHE_TTL = 10 * 60 * 1000;
-const PERSISTED_CACHE_PREFIX = 'yorumi_api_cache_v6';
+const PERSISTED_CACHE_PREFIX = 'yorumi_api_cache_v8';
 const STREAM_CACHE_VERSION = 'v9';
 const PERSISTED_STREAM_CACHE_PREFIX = `yorumi_stream_cache_${STREAM_CACHE_VERSION}`;
 
@@ -502,7 +502,7 @@ export const animeService = {
     },
 
     async getHomeFastData() {
-        const cacheKey = 'home-fast-data-v19';
+        const cacheKey = 'home-fast-data-v20';
         const cached = getCached(cacheKey, DETAIL_CACHE_TTL);
         if (cached) return cached;
 
@@ -851,8 +851,10 @@ export const animeService = {
         await this.getAZList(letter, page).catch(() => undefined);
     },
 
-    // Get anime details from AniList
     async getAnimeDetails(id: number | string) {
+        if (typeof id === 'string' && (id.startsWith('s:') || isNaN(Number(id)))) {
+            return { data: null };
+        }
         const cacheKey = getAnimeDetailsCacheKey(id);
         const cached = getCached(cacheKey, DETAIL_CACHE_TTL);
         if (cached) return cached;
@@ -880,6 +882,9 @@ export const animeService = {
     },
 
     async getAnimeDetailsFast(id: number | string) {
+        if (typeof id === 'string' && (id.startsWith('s:') || isNaN(Number(id)))) {
+            return { data: null, episodes: [], scraperSession: null };
+        }
         const cacheKey = getAnimeDetailsFastCacheKey(id);
         const cached = getCached(cacheKey, DETAIL_CACHE_TTL);
         if (cached) {
