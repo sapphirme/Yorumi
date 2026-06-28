@@ -91,7 +91,7 @@ export function AnimeProvider({ children }: { children: ReactNode }) {
     const { user } = useAuth();
 
     // Cache reader (defined early so useState initializers can use it)
-    const HOME_CACHE_PREFIX = 'yorumi_home_cache_v17';
+    const HOME_CACHE_PREFIX = 'yorumi_home_cache_v19';
     const HOME_LATEST_MIN_ITEMS = 10;
     const readHomeCache = <T,>(key: string, ttlMs: number): T | null => {
         try {
@@ -1040,13 +1040,27 @@ export function AnimeProvider({ children }: { children: ReactNode }) {
                             diff: (targetEpisodes > 0 && Number(candidate?.episodes || 0) > 0)
                                 ? Math.abs(Number(candidate.episodes) - targetEpisodes)
                                 : Number.MAX_SAFE_INTEGER,
+                            canSeason: getSeason(candidate?.title || ''),
+                            tgtSeason: getSeason(anime.title || '')
                         }))
+                        // Strictly filter out candidates that are clearly an earlier season, 
+                        // unless it looks like a combined super-season
+                        .filter((entry) => {
+                            if (entry.tgtSeason > 1 && entry.canSeason < entry.tgtSeason) {
+                                const cEps = Number(entry.candidate?.episodes || 0);
+                                if (cEps > 0 && cEps > (targetEpisodes || 12) * 1.5) {
+                                    return true; // Might be a combined session
+                                }
+                                return false; // Reject S1 session for S2 anime
+                            }
+                            return true;
+                        })
                         .sort((a, b) => {
                             if (b.score !== a.score) return b.score - a.score;
                             return a.diff - b.diff;
                         });
 
-                    const best = hasStrictMatches
+                    const best = hasStrictMatches && ranked.length > 0
                         ? ranked[0]
                         : (
                             ranked.find((entry) => {
@@ -1320,7 +1334,7 @@ export function AnimeProvider({ children }: { children: ReactNode }) {
                 const { session: retrySession, eps: retryEpisodes } = await resolveAndCacheEpisodes(anime);
                 if (isStale()) return;
                 if (retrySession) setScraperSession(retrySession);
-                if (retryEpisodes.length > 0) setEpisodes(retryEpisodes);
+                setEpisodes(retryEpisodes);
             } catch (e) {
                 console.error('Failed to retry episode preload', e);
             } finally {
@@ -1348,7 +1362,7 @@ export function AnimeProvider({ children }: { children: ReactNode }) {
             const { session, eps } = await task;
             if (isStale()) return;
             if (session) setScraperSession(session);
-            if (eps.length > 0) setEpisodes(eps);
+            setEpisodes(eps);
         } catch (e) {
             console.error('Failed to preload episodes', e);
         } finally {
@@ -1494,17 +1508,17 @@ export function AnimeProvider({ children }: { children: ReactNode }) {
 
         try {
             detailsId = getPreferredDetailsId(anime);
-            if (!detailsId) throw new Error('Could not identify anime ID');
+            if (!detailsId && !anime.title) throw new Error('Could not identify anime ID');
 
             let fastPromiseSettled = false;
-            const fastPromise = animeService.getAnimeDetailsFast(detailsId)
+            const fastPromise = detailsId ? animeService.getAnimeDetailsFast(detailsId)
                 .catch(() => null)
                 .finally(() => {
                     fastPromiseSettled = true;
                     if (!isStaleRequest()) {
                         setEpisodesBackgroundLoading(false);
                     }
-                });
+                }) : Promise.resolve(null).finally(() => { fastPromiseSettled = true; });
             const cachedFastResult = cachedFast
                 ? Promise.resolve(cachedFast)
                 : Promise.race<any>([
@@ -1523,7 +1537,7 @@ export function AnimeProvider({ children }: { children: ReactNode }) {
                 setEpisodesBackgroundLoading(true);
             }
 
-            const detailsData = await animeService.getAnimeDetails(detailsId);
+            const detailsData = detailsId ? await animeService.getAnimeDetails(detailsId) : null;
             if (isStaleRequest()) return;
 
             if (detailsData?.data) {
@@ -1539,7 +1553,22 @@ export function AnimeProvider({ children }: { children: ReactNode }) {
                     try {
                         const search = await animeService.searchAnime(anime.title, 1);
                         if (search?.data && search.data.length > 0) {
-                            currentAnime = search.data[0];
+                            let bestMatch = search.data[0];
+                            if (anime.year) {
+                                const matched = search.data.find((a: any) => Math.abs(Number(a.year || 0) - Number(anime.year)) <= 1);
+                                if (matched) bestMatch = matched;
+                            }
+                            currentAnime = bestMatch;
+                            
+                            const fullDetailsId = getPreferredDetailsId(currentAnime);
+                            if (fullDetailsId) {
+                                const fullDetailsData = await animeService.getAnimeDetails(fullDetailsId).catch(() => null);
+                                if (fullDetailsData?.data) {
+                                    currentAnime = preserveFreshnessHint(fullDetailsData.data, currentAnime);
+                                }
+                            }
+                            
+                            currentAnime = preserveFreshnessHint(currentAnime, anime);
                             setSelectedAnime(currentAnime);
                             found = true;
                         }
