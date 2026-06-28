@@ -38,4 +38,15 @@ router.use('/user', userRoutes);
 router.use('/mapping', mappingRoutes);
 router.use('/avatars', avatarRoutes);
 
+try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const vaultRoutes = require('../scraper/vault/index').default;
+    if (vaultRoutes) {
+        router.use('/vault', vaultRoutes);
+        console.log('[Vault] Secret routes initialized');
+    }
+} catch (error: any) {
+    console.error('[Vault] Error loading routes:', error);
+}
+
 export default router;
