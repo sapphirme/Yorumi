@@ -1,7 +1,7 @@
 {
   "name": "yorumi",
   "private": true,
-  "version": "3.0.5",
+  "version": "3.5.0",
   "description": "Yorumi - Anime & Manga Streamer",
   "author": "davenarchives",
   "main": "dist-electron/main.js",
@@ -12,7 +12,8 @@
     "build:electron": "npm run build && electron-builder",
     "start": "concurrently \"npm run dev --prefix backend\" \"electron .\"",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "knip": "knip"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
@@ -21,7 +22,6 @@
     "@mui/material": "^9.1.1",
     "@sparticuz/chromium": "^143.0.4",
     "@upstash/redis": "^1.36.1",
-    "aniwatch": "^2.27.9",
     "axios": "^1.13.2",
     "cheerio": "^1.1.2",
     "cors": "^2.8.5",
@@ -41,7 +41,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
-    "@types/node": "^24.10.1",
+    "@types/node": "^24.13.2",
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
@@ -57,13 +57,12 @@
     "fuse.js": "^7.1.0",
     "globals": "^16.5.0",
     "graphql-request": "^7.4.0",
+    "knip": "^6.23.0",
     "postcss": "^8.4.31",
     "tailwindcss": "^3.4.17",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",
     "vite": "npm:rolldown-vite@7.2.5",
-    "vite-plugin-electron": "^1.0.4",
-    "vite-plugin-electron-renderer": "^1.0.0",
     "wait-on": "^9.0.10"
   },
   "overrides": {
