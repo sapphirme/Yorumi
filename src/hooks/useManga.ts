@@ -3,6 +3,7 @@ import type { Manga, MangaChapter, MangaPage } from '../types/manga';
 import { mangaService } from '../services/mangaService';
 import { token_set_ratio } from 'fuzzball';
 import { storage } from '../utils/storage';
+import { useReadList } from './useReadList';
 import { API_BASE } from '../config/api';
 
 export type MangaViewMode = 'default' | 'popular_manhwa' | 'all_time_popular' | 'top_100';
@@ -154,18 +155,25 @@ export function useManga() {
         setChapterPages([]);
         setCurrentMangaChapter(null);
 
+        let isVault = false;
         try {
+            if (String(manga.scraper_id || manga.mal_id).startsWith('vault:')) {
+                isVault = true;
+                // Do not perform MangaKatana resolution for Vault items.
+                return;
+            }
+
             let mangakatanaId: string | null = null;
 
             // Optimization: If ID is string, assume it's already a scraper ID (Hot Update)
-            if (typeof manga.mal_id === 'string') {
+            if (typeof manga.mal_id === 'string' && !manga.mal_id.startsWith('vault:')) {
                 mangakatanaId = manga.mal_id;
                 mangaIdCache.current.set(manga.mal_id, mangakatanaId);
-            } else if (manga.scraper_id) {
+            } else if (manga.scraper_id && !String(manga.scraper_id).startsWith('vault:')) {
                 // Optimization: We already know the scraper ID from the service enrichment!
                 mangakatanaId = manga.scraper_id;
                 mangaIdCache.current.set(manga.mal_id, mangakatanaId);
-            } else if (mangaIdCache.current.has(manga.mal_id)) {
+            } else if (mangaIdCache.current.has(manga.mal_id) && !String(mangaIdCache.current.get(manga.mal_id)).startsWith('vault:')) {
                 // Check cache first
                 mangakatanaId = mangaIdCache.current.get(manga.mal_id)!;
             } else {
@@ -495,7 +503,9 @@ export function useManga() {
         } catch (error) {
             console.error('Failed to fetch chapters', error);
         } finally {
-            setMangaChaptersLoading(false);
+            if (!isVault) {
+                setMangaChaptersLoading(false);
+            }
         }
     }, []);
 
@@ -708,6 +718,12 @@ export function useManga() {
             if (seedManga?.mal_id) {
                 setSelectedManga(seedManga);
 
+                const seedChapters = getResolvedChapters(seedManga);
+                if (seedChapters.length > 0) {
+                    setMangaChapters(seedChapters);
+                    setMangaChaptersLoading(false); // Render UI immediately
+                }
+
                 // Start chapter resolution immediately from route/cached manga so
                 // the details page does not wait for the full unified fetch first.
                 handleMangaClick(seedManga).catch((warmErr) => {
@@ -715,6 +731,37 @@ export function useManga() {
                 });
             } else {
                 setSelectedManga(null);
+            }
+
+            if (String(id).startsWith('vault:')) {
+                try {
+                    const queryUrl = (seedManga as any)?.url ? `?url=${encodeURIComponent((seedManga as any).url)}` : '';
+                    const vaultRes = await fetch(`${API_BASE}/vault/manga/details/${encodeURIComponent(String(id))}${queryUrl}`);
+                    const vaultJson = await vaultRes.json();
+                    if (vaultJson.success && vaultJson.data?.chapters) {
+                        const hydrated = {
+                            mal_id: id,
+                            id: id,
+                            scraper_id: id,
+                            title: seedManga?.title || 'Unknown Title',
+                            images: seedManga?.images || { jpg: { large_image_url: '' } },
+                            type: 'Manga',
+                            synopsis: vaultJson.data.synopsis || seedManga?.synopsis || '',
+                            score: parseFloat(vaultJson.data.rating) || seedManga?.score || 0,
+                            views: vaultJson.data.views || '',
+                            author: vaultJson.data.author || '',
+                            artist: vaultJson.data.artist || ''
+                        } as any;
+                        setSelectedManga(hydrated);
+                        if (vaultJson.data.chapters.length > 0) {
+                            setMangaChapters(vaultJson.data.chapters);
+                        }
+                    }
+                } catch (e) {
+                    console.error('[Vault] Error fetching details:', e);
+                }
+                setMangaChaptersLoading(false);
+                return;
             }
 
             const data = await mangaService.getUnifiedMangaDetails(id);
