@@ -5,6 +5,7 @@ import AnimeLogoImage from '../../../components/anime/AnimeLogoImage';
 import SpotlightSkeleton from './SpotlightSkeleton';
 import { useTitleLanguage } from '../../../context/TitleLanguageContext';
 import { getDisplayTitle } from '../../../utils/titleLanguage';
+import { getDisplayImageUrl } from '../../../utils/image';
 import { AnimatePresence, m } from 'framer-motion';
 
 interface SpotlightHeroProps {
@@ -186,23 +187,24 @@ const SpotlightHero: React.FC<SpotlightHeroProps> = ({ animeList, isLoading = fa
                         const anime = animeList[selectedIndex];
                         const coverImage = getAnimeCoverImage(anime);
                         const backgroundCover = getAnimeBackgroundCover(anime, coverImage);
+                        const isPosterFallback = backgroundCover === coverImage && !(anime as any).anilist_banner_image && !(anime as any).bannerImage && !(anime as any).backdrop;
+                        const displayBackground = getDisplayImageUrl(backgroundCover);
                         return (
                             <m.div
                                 key={`bg-${selectedIndex}`}
                                 initial={{ scale: 1.05, opacity: 0 }}
-                                animate={{ scale: 1, opacity: 0.7 }}
+                                animate={{ scale: 1, opacity: isPosterFallback ? 0.5 : 0.7 }}
                                 exit={{ opacity: 0 }}
                                 transition={{ duration: 0.8 }}
-                                className="absolute inset-0 bg-no-repeat bg-cover bg-center"
+                                className={`absolute inset-0 bg-no-repeat bg-cover bg-center ${isPosterFallback ? 'blur-xl scale-110' : ''}`}
                                 style={{
-                                    backgroundImage: backgroundCover ? `url(${backgroundCover})` : 'none',
+                                    backgroundImage: displayBackground ? `url(${displayBackground})` : 'none',
                                 }}
                             />
                         );
                     })()}
                 </AnimatePresence>
-                <div className="absolute inset-0 bg-black/60 md:bg-black/40 z-0" />
-                <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#0a0a0a]/60 to-[#0a0a0a] z-0" />
+                <div className="absolute inset-x-0 bottom-0 h-[60%] bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/80 to-transparent z-0 pointer-events-none" />
                 <div className="absolute inset-0 bg-gradient-to-r from-[#0a0a0a] via-[#0a0a0a]/80 to-transparent pointer-events-none z-0" />
             </div>
 
@@ -224,7 +226,7 @@ const SpotlightHero: React.FC<SpotlightHeroProps> = ({ animeList, isLoading = fa
                     {animeList[selectedIndex] && (() => {
                         const activeAnime = animeList[selectedIndex];
                         const displayTitle = getDisplayTitle(activeAnime as unknown as Record<string, unknown>, language);
-                        const coverImage = getAnimeCoverImage(activeAnime);
+                        const coverImage = getDisplayImageUrl(getAnimeCoverImage(activeAnime));
 
                         return (
                             <m.div
@@ -272,7 +274,12 @@ const SpotlightHero: React.FC<SpotlightHeroProps> = ({ animeList, isLoading = fa
                                                 {activeAnime.score.toFixed(1)}
                                             </span>
                                         )}
-                                        {(activeAnime.latestEpisode || activeAnime.episodes) ? (
+                                        {activeAnime.scraperId?.startsWith('vault-anime') && activeAnime.rating ? (
+                                            <span className="flex items-center justify-center gap-1.5 bg-white/10 px-3 h-8 rounded-lg backdrop-blur-sm text-sm font-bold uppercase">
+                                                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+                                                {activeAnime.rating}
+                                            </span>
+                                        ) : (activeAnime.latestEpisode || activeAnime.episodes) ? (
                                             <span className="flex items-center justify-center gap-1.5 bg-[#22c55e] text-white px-3 h-8 rounded-lg backdrop-blur-sm text-sm font-bold">
                                                 <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M19 4H5a2 2 0 00-2 2v12a2 2 0 002 2h14a2 2 0 002-2V6a2 2 0 00-2-2zm-8 7H9.5v-.5h-2v3h2V13H18v2h-5V9h5v2z" /></svg>
                                                 {activeAnime.latestEpisode || activeAnime.episodes}
