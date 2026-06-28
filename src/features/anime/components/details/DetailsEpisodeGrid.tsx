@@ -1,4 +1,5 @@
 import { memo, useState } from 'react';
+import { CircleCheckBig } from 'lucide-react';
 import type { Episode, Anime } from '../../../../types/anime';
 
 export type NormalizedEpisode = Episode & {
@@ -111,9 +112,7 @@ const EpisodeCard = memo(function EpisodeCard({ episode, isWatched, isActive, fa
                 <div className="flex justify-between items-center w-full">
                     <span className={`font-black text-xs uppercase tracking-wider ${isWatched ? 'text-green-500' : 'text-blue-300'}`}>E{episode.episodeNumber}</span>
                     {isWatched && (
-                        <svg className="w-4 h-4 text-green-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
+                        <CircleCheckBig className="w-4 h-4 text-green-500 shrink-0" />
                     )}
                 </div>
                 <span className={`font-semibold text-sm line-clamp-2 mt-0.5 leading-snug min-h-[2.5rem] ${isWatched ? 'text-green-50' : 'text-white'}`}>{isUnreleased ? 'Unreleased' : displayTitle}</span>
@@ -123,12 +122,16 @@ const EpisodeCard = memo(function EpisodeCard({ episode, isWatched, isActive, fa
 });
 
 const EpisodeCardSkeleton = () => (
-    <div className="flex items-stretch bg-[#141414] rounded-lg overflow-hidden animate-pulse">
-        <div className="w-28 sm:w-32 aspect-video shrink-0 bg-white/10" />
-        <div className="flex-1 p-3 space-y-2">
-            <div className="h-3 w-10 bg-white/10 rounded" />
-            <div className="h-4 w-4/5 bg-white/10 rounded" />
-            <div className="h-3 w-full bg-white/5 rounded" />
+    <div className="flex items-stretch bg-[#141414] rounded-lg overflow-hidden animate-pulse h-[104px]">
+        <div className="w-28 sm:w-32 shrink-0 bg-white/10" />
+        <div className="flex-1 p-3 flex flex-col justify-start min-w-0">
+            <div className="flex justify-between items-center w-full mb-1.5">
+                <div className="h-3 w-10 bg-white/20 rounded" />
+            </div>
+            <div className="space-y-1.5">
+                <div className="h-3.5 w-[90%] bg-white/10 rounded" />
+                <div className="h-3.5 w-[60%] bg-white/10 rounded" />
+            </div>
         </div>
     </div>
 );
