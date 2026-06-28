@@ -5,6 +5,7 @@ import type { TitleLanguage } from '../../context/TitleLanguageContext';
 import { getDisplayTitle, getSecondaryTitle } from '../../utils/titleLanguage';
 import type { Anime } from '../../types/anime';
 import type { Manga } from '../../types/manga';
+import { API_BASE } from '../../config/api';
 
 export interface SearchPreviewItem {
     id: string | number;
@@ -28,7 +29,30 @@ type PreviewManga = Manga & {
 };
 
 export const searchApi = {
-    async getAnimePreview(query: string, language: TitleLanguage) {
+    async getAnimePreview(rawQuery: string, language: TitleLanguage) {
+        const query = rawQuery.replace(/\s+movie$/i, '').trim() || rawQuery;
+        if (sessionStorage.getItem('_yrm_vlt_s') === 'unlocked') {
+            try {
+                const res = await fetch(`${API_BASE}/vault/anime/search?q=${encodeURIComponent(query)}`);
+                const json = await res.json();
+                if (json.success) {
+                    return json.data.slice(0, 6).map((item: any) => ({
+                        id: item.id,
+                        title: item.title,
+                        subtitle: item.releaseDate ? new Date(item.releaseDate).getFullYear().toString() : 'OVA',
+                        image: item.image,
+                        date: item.releaseDate,
+                        type: item.type,
+                        duration: null,
+                        score: null,
+                        url: `/anime/details/${encodeURIComponent(item.scraperId)}`
+                    }));
+                }
+            } catch (e) {
+                console.error('[Vault] Anime Search Error:', e);
+            }
+        }
+
         if (!tmdbService.hasToken()) {
             const { data } = await animeService.searchAnime(query, 1, 6);
             return (data as PreviewAnime[]).slice(0, 4).map((item) => ({
@@ -73,18 +97,36 @@ export const searchApi = {
     },
 
     async getMangaPreview(query: string, language: TitleLanguage) {
-        const { data } = await mangaService.searchMangaScraper(query, 1, 6);
+        if (sessionStorage.getItem('_yrm_vlt_s') === 'unlocked') {
+            try {
+                const res = await fetch(`${API_BASE}/vault/manga/search?q=${encodeURIComponent(query)}`);
+                const json = await res.json();
+                if (json.success) {
+                    return json.data.slice(0, 6).map((item: any) => ({
+                        id: item.id,
+                        title: item.title,
+                        subtitle: item.rating ? `★ ${item.rating}` : 'Manga',
+                        image: item.image,
+                        date: item.date,
+                        type: item.type,
+                        duration: null,
+                        score: item.rating ? parseFloat(item.rating) : undefined,
+                        url: `/manga/details/${encodeURIComponent(item.scraperId)}`
+                    }));
+                }
+            } catch (e) {
+                console.error('[Vault] Manga Search Error:', e);
+            }
+        }
+
+        const { data } = await mangaService.searchManga(query, 1, 6);
         return (data as PreviewManga[]).slice(0, 4).map((item) => ({
             id: item.id || item.mal_id,
             title: getDisplayTitle(item as unknown as Record<string, unknown>, language),
-            subtitle: item.latestChapter || getSecondaryTitle(item as unknown as Record<string, unknown>, language),
-            image: item.images.jpg.image_url,
+            subtitle: item.chapters ? `Chapters: ${item.chapters}` : getSecondaryTitle(item as unknown as Record<string, unknown>, language),
+            image: item.images?.jpg?.image_url || '',
             date: item.published?.string
-                ? new Date(item.published.string).toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric',
-                })
+                ? item.published.string
                 : '',
             type: item.type,
             duration: null,
