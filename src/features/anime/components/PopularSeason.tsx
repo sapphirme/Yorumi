@@ -12,9 +12,10 @@ interface PopularSeasonProps {
     onWatchClick?: (anime: Anime) => void;
 
     onMouseEnter?: (anime: Anime) => void;
+    title?: string;
 }
 
-const PopularSeason: React.FC<PopularSeasonProps> = ({ animeList, isLoading = false, onAnimeClick, onWatchClick, onMouseEnter }) => {
+const PopularSeason: React.FC<PopularSeasonProps> = ({ animeList, isLoading = false, onAnimeClick, onWatchClick, onMouseEnter, title = "Popular This Season" }) => {
     const [emblaRef, emblaApi] = useEmblaCarousel({
         align: 'center',
         containScroll: 'trimSnaps',
@@ -57,7 +58,7 @@ const PopularSeason: React.FC<PopularSeasonProps> = ({ animeList, isLoading = fa
     return (
         <section className="relative z-20 mt-4 mb-12">
             <div className="flex items-center gap-4 mb-6">
-                <h2 className="text-xl sm:text-2xl font-black text-white tracking-wide uppercase leading-none whitespace-nowrap">Popular This Season</h2>
+                <h2 className="text-xl sm:text-2xl font-black text-white tracking-wide uppercase leading-none whitespace-nowrap">{title}</h2>
                 <div className="flex-1 h-px bg-white/10" />
 
                 <div className="flex items-center gap-4">
