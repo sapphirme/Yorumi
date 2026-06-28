@@ -25,12 +25,26 @@ router.get('/proxy', async (req, res) => {
            console.log(`[Image Proxy] Proxying non-allowlisted domain: ${urlObj.hostname}`);
         }
 
+        let referer = urlObj.origin;
+        let origin = urlObj.origin;
+
+        if (urlObj.hostname.includes('allanime') || urlObj.hostname.includes('youtube-anime')) {
+            referer = 'https://allmanga.to/';
+            origin = 'https://allmanga.to';
+        } else if (urlObj.hostname.includes('tnlycdn.com') || urlObj.hostname.includes('toonily.com')) {
+            referer = 'https://toonily.com/';
+            origin = 'https://toonily.com';
+        } else if (urlObj.hostname.includes('hanime-cdn')) {
+            referer = 'https://hanime.tv/';
+            origin = 'https://hanime.tv';
+        }
+
         const response = await axios.get(decodedUrl, {
             responseType: 'arraybuffer',
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-                'Referer': urlObj.hostname.includes('allanime') || urlObj.hostname.includes('youtube-anime') ? 'https://allmanga.to/' : urlObj.origin,
-                'Origin': urlObj.hostname.includes('allanime') || urlObj.hostname.includes('youtube-anime') ? 'https://allmanga.to' : urlObj.origin,
+                'Referer': referer,
+                'Origin': origin,
             },
             timeout: 10000,
         });
