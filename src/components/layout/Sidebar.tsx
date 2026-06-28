@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Search, Tv, BookOpen, Library, LogOut } from 'lucide-react';
 import SearchModal from '../shared/SearchModal';
@@ -6,6 +6,7 @@ import { useContinueReading } from '../../hooks/useContinueReading';
 import { useContinueWatching } from '../../hooks/useContinueWatching';
 import { useWatchList } from '../../hooks/useWatchList';
 import { useReadList } from '../../hooks/useReadList';
+import { useVault } from '../../context/VaultContext';
 import { getDirectScraperRouteId } from '../../utils/animeNavigation';
 import { slugify } from '../../utils/slugify';
 import type { ReadListItem, WatchListItem } from '../../utils/storage';
@@ -74,6 +75,40 @@ export default function Sidebar() {
     const { continueWatchingList } = useContinueWatching();
     const { continueReadingList } = useContinueReading();
 
+    // Vault Logic
+    const { isVaultUnlocked, unlockVault, lockVault } = useVault();
+    const clickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const [clickCount, setClickCount] = useState(0);
+
+    const handleLogoClickInternal = () => {
+        if (isVaultUnlocked) {
+            lockVault();
+            navigate('/');
+            return;
+        }
+
+        setClickCount((prev) => {
+            const newCount = prev + 1;
+            if (newCount >= 5) {
+                unlockVault();
+                navigate('/vault');
+                return 0;
+            }
+            if (newCount === 1) {
+                // Only navigate home on the first click, not every click
+                navigate('/');
+            }
+            return newCount;
+        });
+
+        if (clickTimeoutRef.current) {
+            clearTimeout(clickTimeoutRef.current);
+        }
+        clickTimeoutRef.current = setTimeout(() => {
+            setClickCount(0);
+        }, 1500);
+    };
+
     const savedItems: SavedSidebarItem[] = [
         ...watchList.map(item => ({ ...item, isManga: false as const })),
         ...readList.map(item => ({ ...item, isManga: true as const }))
@@ -125,7 +160,7 @@ export default function Sidebar() {
             <div className="flex flex-col items-center gap-3 w-full">
                 {/* Logo */}
                 <div 
-                    onClick={() => navigate('/')} 
+                    onClick={handleLogoClickInternal} 
                     className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer mb-4 hover:opacity-80 transition-opacity"
                     title="Home"
                 >
@@ -167,7 +202,7 @@ export default function Sidebar() {
                 <SidebarIcon icon={Library} title="Library" onClick={() => navigate('/library')} isActive={location.pathname === '/library'} />
             </div>
 
-            {savedItems.length > 0 && (
+            {(!isVaultUnlocked && savedItems.length > 0) && (
                 <div className="flex-1 w-full min-h-0 flex flex-col items-center mt-3 overflow-hidden">
                     <div className="w-8 h-px bg-white/10 mb-3 shrink-0" />
                     <div className="w-full flex-1 overflow-y-auto flex flex-col items-center gap-3 px-1 pb-4 scrollbar-thin scrollbar-thumb-transparent hover:scrollbar-thumb-blue-500 scrollbar-track-transparent">
