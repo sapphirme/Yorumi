@@ -36,11 +36,12 @@ const AnimeCard: React.FC<AnimeCardProps> = ({
     const totalEpisodeCount = isUnreleased ? null : anime.episodes;
     const displayTitle = getDisplayTitle(anime as unknown as Record<string, unknown>, language);
     const posterUrl = getDisplayImageUrl(anime.images.jpg.large_image_url || anime.images.jpg.image_url);
-    const studioName = anime.studios?.[0]?.name || anime.producers?.[0]?.name || null;
+    const isVault = anime.scraperId?.startsWith('vault-anime:');
+    const studioName = isVault ? anime.rating : (anime.studios?.[0]?.name || anime.producers?.[0]?.name || null);
     const displayType = formatDisplayType(anime.type);
     const hoverHeading = anime.nextAiringEpisode
         ? `Ep ${anime.nextAiringEpisode.episode} airing ${formatTimeUntil(anime.nextAiringEpisode.timeUntilAiring)}`
-        : formatSeasonLabel(anime, displayType);
+        : (isVault && anime.year) ? String(anime.year) : formatSeasonLabel(anime, displayType);
     const metaLine = [displayType, totalEpisodeCount ? `${totalEpisodeCount} episodes` : getStatusLabel(anime.status)].filter(Boolean);
 
     const updatePopupSide = React.useCallback(() => {
@@ -197,24 +198,24 @@ const AnimeCard: React.FC<AnimeCardProps> = ({
                         />
 
                         <div className="space-y-3">
-                            <p className="text-sm font-extrabold tracking-wide text-[#dbe8ff]">
+                            <p className="text-sm font-extrabold tracking-wide text-[#dbe8ff] uppercase">
                                 {hoverHeading}
                             </p>
 
                             {studioName && (
-                                <p className="text-sm font-bold text-[#7fd5ff]">
+                                <p className="text-sm font-bold text-[#7fd5ff] uppercase line-clamp-1">
                                     {studioName}
                                 </p>
                             )}
 
-                            <p className="text-sm font-semibold text-[#9fb5d5]">
+                            <p className="text-sm font-semibold text-[#9fb5d5] uppercase">
                                 {metaLine.join(' • ')}
                             </p>
 
                             {anime.genres && anime.genres.length > 0 && (
                                 <div className="flex flex-wrap gap-2 pt-1">
-                                    {anime.genres.slice(0, 2).map((genre) => (
-                                        <span key={genre.mal_id} className="rounded-full bg-[#22d3ee] px-3 py-1 text-[11px] font-extrabold lowercase tracking-wide text-[#083d49]">
+                                    {anime.genres.slice(0, 3).map((genre) => (
+                                        <span key={genre.mal_id} className="rounded-full bg-[#22d3ee] px-3 py-1 text-[11px] font-extrabold uppercase tracking-wide text-[#083d49]">
                                             {genre.name}
                                         </span>
                                     ))}
