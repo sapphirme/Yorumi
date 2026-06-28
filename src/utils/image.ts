@@ -11,6 +11,7 @@ const PROXY_HOST_PATTERNS = [
     /(^|\.)mangakatana\./i,
     /(^|\.)gojo\./i,
     /(^|\.)akamaized\.net$/i,
+    /(^|\.)hanime-cdn\./i,
 ];
 
 export const getDisplayImageUrl = (url?: string | null): string => {
