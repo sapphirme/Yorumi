@@ -67,7 +67,7 @@ function mapTmdbToAnilistMedia(item: any, isFullDetails = false) {
         },
         bannerImage: tmdbService.buildImageUrl(item.backdrop_path, 'w1280') || tmdbService.buildImageUrl(item.poster_path, 'w1280'),
         description: item.overview,
-        episodes: item.number_of_episodes || 12,
+        episodes: item.media_type === 'movie' ? 1 : item.number_of_episodes,
         status: mapTmdbStatus(item.status),
         season: getSeason(item.first_air_date || item.release_date),
         seasonYear: getYear(item.first_air_date || item.release_date),
@@ -76,7 +76,7 @@ function mapTmdbToAnilistMedia(item: any, isFullDetails = false) {
         averageScore: Math.round((item.vote_average || 0) * 10),
         meanScore: Math.round((item.vote_average || 0) * 10),
         popularity: Math.round(item.popularity || 0),
-        format: 'TV',
+        format: item.media_type === 'movie' ? 'MOVIE' : 'TV',
         isAdult: false,
         startDate: {
             year: getYear(item.first_air_date || item.release_date),
@@ -106,11 +106,18 @@ export const streambertAnimeService = {
     },
 
     async getMetadata(tmdbId: number) {
-        const cacheKey = `anime:tmdb:tv:${tmdbId}`;
+        const cacheKey = `anime:tmdb:meta:v2:${tmdbId}`;
         const cached = await cacheGet<any>(cacheKey);
         if (cached) return cached;
 
-        const payload = await tmdbService.get<any>(`/tv/${tmdbId}`, { append_to_response: 'credits,recommendations,similar' });
+        let payload = await tmdbService.get<any>(`/tv/${tmdbId}`, { append_to_response: 'credits,recommendations,similar' }).catch(() => null);
+        if (!payload) {
+            payload = await tmdbService.get<any>(`/movie/${tmdbId}`, { append_to_response: 'credits,recommendations,similar' }).catch(() => null);
+            if (payload) payload.media_type = 'movie';
+        } else {
+            payload.media_type = 'tv';
+        }
+
         if (!payload) return null;
 
         const media = mapTmdbToAnilistMedia(payload, true);
@@ -160,7 +167,7 @@ export const streambertAnimeService = {
         };
 
         if (filters.query) {
-            path = '/search/tv';
+            path = '/search/multi';
             params = {
                 query: filters.query,
                 page,
@@ -180,7 +187,7 @@ export const streambertAnimeService = {
             params['first_air_date.lte'] = lastDate;
         }
 
-        const cacheKey = `anime:tmdb:search:${Buffer.from(JSON.stringify({ path, params })).toString('base64url')}`;
+        const cacheKey = `anime:tmdb:search:v2:${Buffer.from(JSON.stringify({ path, params })).toString('base64url')}`;
         const cached = await cacheGet<any>(cacheKey);
         if (cached) return cached;
 
@@ -188,9 +195,15 @@ export const streambertAnimeService = {
         if (!payload || !payload.results) return { pageInfo: { total: 0, perPage: 20, currentPage: page, lastPage: 1, hasNextPage: false }, media: [] };
 
         let results = payload.results;
-        // In search, filter out non-anime if needed, but for now we just return the results.
         if (filters.query) {
-            results = results; // removed tmdbService.isAnimeContent filter
+            results = results.filter((item: any) => {
+                if (item.media_type === 'person') return false;
+                const lang = item.original_language;
+                const countries = item.origin_country || [];
+                const genreIds = item.genre_ids || [];
+                const hasAnimation = genreIds.includes(16);
+                return hasAnimation && (lang === 'ja' || countries.includes('JP'));
+            });
         }
 
         const res = {
@@ -212,7 +225,10 @@ export const streambertAnimeService = {
         const metadata = await this.getMetadata(tmdbId);
         if (!metadata) return null;
 
-        const thumbnailsMap = await tmdbService.resolveTvEpisodeThumbnails(tmdbId, { fetchAllSeasons: true }).catch(() => new Map<number, string>());
+        let thumbnailsMap = new Map<number, string>();
+        if (metadata.format !== 'MOVIE') {
+            thumbnailsMap = await tmdbService.resolveTvEpisodeThumbnails(tmdbId, { fetchAllSeasons: true }).catch(() => new Map<number, string>());
+        }
         
         // Construct basic episodes based on metadata count.
         const total = Number(metadata.episodes || 12);
