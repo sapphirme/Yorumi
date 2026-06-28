@@ -221,6 +221,7 @@ const MangaCard: React.FC<MangaCardProps> = ({ manga, onClick, onMouseEnter, inL
                         {/* Line 3: Type • Chapters */}
                         <p className="text-sm font-semibold text-[#b4a8d4]">
                             {manga.countryOfOrigin === 'KR' ? 'Manhwa' : manga.countryOfOrigin === 'CN' ? 'Manhua' : (manga.type || 'Manga')} {countDisplay ? ` • ${countDisplay}` : ''}
+                            {manga.views ? ` • ${manga.views} views` : ''}
                         </p>
 
                         {manga.genres && manga.genres.length > 0 && (
