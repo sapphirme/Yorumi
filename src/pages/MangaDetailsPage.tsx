@@ -348,15 +348,26 @@ export default function MangaDetailsPage() {
                                     {displayManga.score}
                                 </span>
                             )}
-                            {displayManga.published?.from && (
+                            {displayManga.views && (
+                                <span className="flex items-center gap-1 text-gray-300">
+                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                    {displayManga.views} Views
+                                </span>
+                            )}
+                            {displayManga.author && (
+                                <span className="text-gray-300 truncate max-w-[200px]" title={displayManga.author}>
+                                    {displayManga.author}
+                                </span>
+                            )}
+                            {!displayManga.views && displayManga.published?.from && (
                                 <span>{new Date(displayManga.published.from).getFullYear()}</span>
                             )}
-                            {(hasReadableChapters || metadataChapterCount > 0) && (
+                            {!displayManga.views && (hasReadableChapters || metadataChapterCount > 0) && (
                                 <span>
                                     {hasReadableChapters ? `${mangaChapters.length} Chapters` : `${metadataChapterCount} Chapters`}
                                 </span>
                             )}
-                            {displayManga.type && (
+                            {!displayManga.views && displayManga.type && (
                                 <span className="px-2 py-0.5 bg-white/10 rounded text-[10px] text-white">
                                     {displayManga.type}
                                 </span>
@@ -416,10 +427,24 @@ export default function MangaDetailsPage() {
                                         <div className="flex-1 h-px bg-white/10" />
                                     </div>
                                     {mangaChaptersLoading ? (
-                                        <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2 mt-6 animate-pulse">
-                                            {Array.from({ length: 30 }).map((_, idx) => (
-                                                <div key={idx} className="aspect-square rounded bg-white/10" />
-                                            ))}
+                                        <div className="mt-6 bg-[#111] rounded-2xl p-4 sm:p-6 shadow-xl ring-1 ring-white/5 animate-pulse">
+                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                                                <div className="h-7 w-32 bg-white/10 rounded-lg"></div>
+                                                <div className="h-9 w-28 bg-white/10 rounded-xl"></div>
+                                            </div>
+                                            <div className="mb-6">
+                                                <div className="h-[50px] w-full bg-white/10 rounded-xl border border-white/5"></div>
+                                            </div>
+                                            <div className="flex flex-col space-y-1">
+                                                {Array.from({ length: 10 }).map((_, idx) => (
+                                                    <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-4 rounded-xl border border-transparent">
+                                                        <div className="flex flex-col min-w-0">
+                                                            <div className="h-6 w-32 bg-white/10 rounded-md mb-1.5"></div>
+                                                            <div className="h-4 w-48 bg-white/5 rounded-md"></div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
                                         </div>
                                     ) : mangaChapters.length > 0 ? (
                                         <ChapterList
@@ -431,7 +456,7 @@ export default function MangaDetailsPage() {
                                         <div className="text-gray-500 text-center py-4 space-y-2">
                                             <div>
                                                 {hasResolvedChapterSource
-                                                    ? 'No readable chapters were returned from MangaKatana.'
+                                                    ? `No readable chapters were returned from ${String(displayManga?.scraper_id).startsWith('vault:') ? 'Toonily' : 'MangaKatana'}.`
                                                     : 'Chapter source for this title was not resolved yet.'}
                                             </div>
                                             {!hasResolvedChapterSource && metadataChapterCount > 0 && (
