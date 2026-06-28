@@ -441,13 +441,30 @@ export const mangaService = {
         }
 
         const fetchOnce = async () => {
-            const { data } = await apiClient.get('/manga/pages', {
-                params: { url: chapterUrl },
-            });
-            if (data?.pages && Array.isArray(data.pages)) {
-                chapterPagesCache.set(chapterUrl, { data, timestamp: Date.now() });
+            let resultData;
+            if (chapterUrl.includes('toonily.com')) {
+                const res = await fetch(`http://localhost:3001/api/vault/manga/pages?url=${encodeURIComponent(chapterUrl)}`);
+                const vaultData = await res.json();
+                
+                // Proxy Toonily images to avoid 403 Forbidden hotlink blocks
+                if (vaultData?.pages && Array.isArray(vaultData.pages)) {
+                    vaultData.pages = vaultData.pages.map((p: any) => ({
+                        ...p,
+                        imageUrl: `${API_BASE}/image/proxy?url=${encodeURIComponent(p.imageUrl)}`
+                    }));
+                }
+                resultData = vaultData;
+            } else {
+                const { data } = await apiClient.get('/manga/pages', {
+                    params: { url: chapterUrl },
+                });
+                resultData = data;
             }
-            return data;
+            
+            if (resultData?.pages && Array.isArray(resultData.pages)) {
+                chapterPagesCache.set(chapterUrl, { data: resultData, timestamp: Date.now() });
+            }
+            return resultData;
         };
 
         const request = (async () => {
