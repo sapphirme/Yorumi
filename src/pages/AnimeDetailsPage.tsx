@@ -8,6 +8,7 @@ import type { WatchListItem } from '../utils/storage';
 import { animeService } from '../services/animeService';
 import { tmdbService, type TmdbSeason, type TmdbEpisode } from '../services/tmdbService';
 import { setLocalStorageWithCleanup } from '../utils/localStorageQuota';
+import VaultAnimeDetailsPage from '../features/vault/components/VaultAnimeDetailsPage';
 
 // Feature Components
 import DetailsHero from '../features/anime/components/details/DetailsHero';
@@ -326,7 +327,7 @@ const readRouteSeasonChips = (value: unknown, activeId: number): SeasonChip[] =>
         .filter((item): item is SeasonChip => Boolean(item));
 };
 
-const DetailsPageSkeleton = () => (
+export const DetailsPageSkeleton = () => (
     <div className="min-h-screen bg-[#0a0a0a] pb-20 fade-in animate-in duration-300">
         {/* Banner Skeleton */}
         <div className="h-[40vh] md:h-[60vh] relative bg-white/5 animate-pulse">
@@ -361,7 +362,16 @@ const DetailsPageSkeleton = () => (
 
 export default function AnimeDetailsPage() {
     const { id } = useParams<{ id: string }>();
+    if (id?.startsWith('vault-anime:')) {
+        return <VaultAnimeDetailsPage id={id} />;
+    }
+    return <AnimeDetailsPageContent />;
+}
+
+function AnimeDetailsPageContent() {
+    const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
+
     const [searchParams, setSearchParams] = useSearchParams();
     const location = useLocation();
     const animeHook = useAnime();
@@ -389,6 +399,7 @@ export default function AnimeDetailsPage() {
         }
 
         if (!id) return;
+        if (id.startsWith('vault-anime:')) return;
 
         const routeAnime = (location.state?.anime && typeof location.state.anime === 'object')
             ? { ...(location.state.anime as Anime) }
@@ -400,12 +411,36 @@ export default function AnimeDetailsPage() {
                 navigate('/', { replace: true });
                 return;
             }
-            const seededAnilistId = Number.parseInt(tmdbId, 10);
-            handleAnimeClickRef.current({
-                ...(routeAnime || {}),
-                id: seededAnilistId,
-                mal_id: seededAnilistId
-            } as Anime);
+            const seededTmdbId = Number.parseInt(tmdbId, 10);
+            
+            if (routeAnime && routeAnime.title) {
+                handleAnimeClickRef.current({
+                    ...routeAnime,
+                    id: 0,
+                    mal_id: 0,
+                    tmdbId: seededTmdbId
+                } as unknown as Anime);
+            } else {
+                // If opened in new tab, try to fetch TMDB details to get the title
+                tmdbService.getTvDetailsForAnime({ tmdbId: seededTmdbId } as unknown as Anime)
+                    .then((details) => {
+                        if (details?.name || details?.original_name) {
+                            handleAnimeClickRef.current({
+                                title: details.name || details.original_name || 'Unknown',
+                                id: 0,
+                                mal_id: 0,
+                                tmdbId: seededTmdbId,
+                                year: details.first_air_date ? Number.parseInt(details.first_air_date.substring(0, 4), 10) : undefined,
+                                images: { jpg: { image_url: '', large_image_url: '' } }
+                            } as unknown as Anime);
+                        } else {
+                            navigate('/', { replace: true });
+                        }
+                    })
+                    .catch(() => {
+                        navigate('/', { replace: true });
+                    });
+            }
             return;
         }
 
@@ -484,7 +519,7 @@ export default function AnimeDetailsPage() {
         ? tmdbChips
         : virtualSeasonChips.length > 0
             ? virtualSeasonChips
-            : resolvedChips.length > 0 && !tmdbDetails
+            : resolvedChips.length > 0
                 ? resolvedChips
                 : hasCompleteRouteSeasonChips
                     ? routeSeasonChips
@@ -832,9 +867,13 @@ export default function AnimeDetailsPage() {
             .flat()
             .filter((value) => Number.isFinite(value) && value > 0)
     );
+
+    const firstTmdbEpNumber = tmdbEpisodesForDisplay[0]?.episode_number || 1;
+    const isTmdbAbsoluteNumbering = firstTmdbEpNumber > 1 && (activeChip?.offset || 0) > 0 && firstTmdbEpNumber >= (activeChip?.offset || 0) * 0.5;
+
     const tmdbInstantEpisodes: NormalizedEpisode[] = tmdbEpisodesForDisplay.map((episode, index) => {
         const displayNumber = activeChip?.isVirtual ? index + 1 : episode.episode_number;
-        const absoluteEpisodeNumber = activeChip?.isVirtual
+        const absoluteEpisodeNumber = activeChip?.isVirtual || isTmdbAbsoluteNumbering
             ? episode.episode_number
             : (activeChip?.offset || 0) + episode.episode_number;
         const playbackEpisodeNumber = scraperEpisodeNumbers.has(absoluteEpisodeNumber)
@@ -944,7 +983,7 @@ export default function AnimeDetailsPage() {
                             fallbackCoverImage={selectedAnime.images?.jpg?.large_image_url || selectedAnime.images?.jpg?.image_url || selectedAnime.anilist_cover_image || ''}
                             onSeasonClick={handleSeasonChipClick}
                             onEpisodeClick={(ep) => {
-                                const playbackEpisodeNumber = ep.playbackEpisodeNumber || Number(ep.episodeNumber);
+                                const playbackEpisodeNumber = ep._tmdbAbsolute || ep.playbackEpisodeNumber || Number(ep.episodeNumber);
                                 setSearchParams({ ep: String(playbackEpisodeNumber) });
 
                                 setTimeout(() => {
