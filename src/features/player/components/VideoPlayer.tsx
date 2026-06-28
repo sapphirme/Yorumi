@@ -302,6 +302,20 @@ export default function VideoPlayer(props: VideoPlayerProps) {
                     /* Also handle SVG strokes and fills */
                     [class*="stroke-\\[\\#e50914\\]"], [class*="stroke-\\[\\#ef4444\\]"], [class*="stroke-red-"] { stroke: #3DB4F2 !important; }
                     [class*="fill-\\[\\#e50914\\]"], [class*="fill-\\[\\#ef4444\\]"], [class*="fill-red-"] { fill: #3DB4F2 !important; }
+                    /* Pseudo-element tab active indicators (::before / ::after underlines) */
+                    [class*="red-"]::before, [class*="red-"]::after,
+                    [class*="rose-"]::before, [class*="rose-"]::after,
+                    [class*="primary"]::before, [class*="primary"]::after {
+                        background-color: #3DB4F2 !important;
+                        border-color: #3DB4F2 !important;
+                        color: #3DB4F2 !important;
+                    }
+                    /* Catch active/selected tab bottom border lines */
+                    [class*="border-b"][class*="red-"],
+                    [class*="border-b"][class*="rose-"],
+                    [class*="border-b"][class*="primary"] {
+                        border-bottom-color: #3DB4F2 !important;
+                    }
                 `);
 
                 // Deep JS mutation observer to forcefully recolor any dynamic or inline styles that are Netflix Red
@@ -353,50 +367,77 @@ export default function VideoPlayer(props: VideoPlayerProps) {
                         \`;
                         document.head.appendChild(style);
                         
-                        const isRed = (str) => str && (str.includes('229, 9, 20') || str.includes('229 9 20') || str.includes('239, 68, 68') || str.includes('239 68 68') || str.includes('220, 38, 38') || str.includes('220 38 38') || str.includes('185, 28, 28') || str.includes('185 28 28') || str.includes('#e50914') || str.includes('#E50914') || str.includes('#ef4444') || str.includes('#dc2626') || str.includes('#b91c1c'));
+                        const isRed = (str) => {
+                            if (!str) return false;
+                            const redRegex = /229,\\s*9,\\s*20|229\\s+9\\s+20|239,\\s*68,\\s*68|239\\s+68\\s+68|220,\\s*38,\\s*38|220\\s+38\\s+38|185,\\s*28,\\s*28|185\\s+28\\s+28|244,\\s*63,\\s*94|244\\s+63\\s+94|225,\\s*29,\\s*72|225\\s+29\\s+72|#e50914|#ef4444|#dc2626|#b91c1c|#f43f5e|#e11d48/gi;
+                            return !!str.match(redRegex);
+                        };
                         const toBlue = (str) => {
                             if (!str) return str;
-                            return str.replace(/229,\\s*9,\\s*20/g, '61, 180, 242')
-                                      .replace(/229\\s+9\\s+20/g, '61 180 242')
-                                      .replace(/239,\\s*68,\\s*68/g, '61, 180, 242')
-                                      .replace(/239\\s+68\\s+68/g, '61 180 242')
-                                      .replace(/220,\\s*38,\\s*38/g, '61, 180, 242')
-                                      .replace(/220\\s+38\\s+38/g, '61 180 242')
-                                      .replace(/185,\\s*28,\\s*28/g, '61, 180, 242')
-                                      .replace(/185\\s+28\\s+28/g, '61 180 242')
-                                      .replace(/#e50914|#ef4444|#dc2626|#b91c1c/gi, '#3DB4F2');
+                            return str.replace(/229,\\s*9,\\s*20|239,\\s*68,\\s*68|220,\\s*38,\\s*38|185,\\s*28,\\s*28|244,\\s*63,\\s*94|225,\\s*29,\\s*72/g, '61, 180, 242')
+                                      .replace(/229\\s+9\\s+20|239\\s+68\\s+68|220\\s+38\\s+38|185\\s+28\\s+28|244\\s+63\\s+94|225\\s+29\\s+72/g, '61 180 242')
+                                      .replace(/#e50914|#ef4444|#dc2626|#b91c1c|#f43f5e|#e11d48/gi, '#3DB4F2');
                         };
 
-                        // Force update all current inline styles globally and gracefully handle opacities
-                        const walk = (node) => {
-                            if (node.style) {
-                                if (isRed(node.style.color)) node.style.setProperty('color', toBlue(node.style.color), 'important');
-                                if (isRed(node.style.backgroundColor)) node.style.setProperty('background-color', toBlue(node.style.backgroundColor), 'important');
-                                if (isRed(node.style.borderColor)) node.style.setProperty('border-color', toBlue(node.style.borderColor), 'important');
-                                if (isRed(node.style.outlineColor)) node.style.setProperty('outline-color', toBlue(node.style.outlineColor), 'important');
-                                if (isRed(node.style.boxShadow)) node.style.setProperty('box-shadow', toBlue(node.style.boxShadow), 'important');
+                        // Bulletproof Computed Style Overrides
+                        let isWalkingComputed = false;
+                        const walkComputed = () => {
+                            if (isWalkingComputed) return;
+                            isWalkingComputed = true;
+                            
+                            const nodes = document.querySelectorAll('*');
+                            for (let i = 0; i < nodes.length; i++) {
+                                const node = nodes[i];
+                                const comp = window.getComputedStyle(node);
+                                
+                                const checkAndFix = (prop, cssProp) => {
+                                    const val = comp[prop];
+                                    if (val && val !== 'rgba(0, 0, 0, 0)' && val !== 'transparent' && val.includes('rgb')) {
+                                        const match = val.match(/rgba?\\((\\d+),\\s*(\\d+),\\s*(\\d+)(?:,\\s*([\\d.]+))?\\)/);
+                                        if (match) {
+                                            const r = parseInt(match[1]); const g = parseInt(match[2]); const b = parseInt(match[3]);
+                                            // Red detection: High red value, significantly higher than Green and Blue.
+                                            // r > g * 2 prevents orange. r > b * 1.5 includes rose.
+                                            if (r > 130 && r > g * 2 && r > b * 1.5) {
+                                                node.style.setProperty(cssProp, match[4] ? \`rgba(61, 180, 242, \${match[4]})\` : 'rgb(61, 180, 242)', 'important');
+                                            }
+                                        }
+                                    }
+                                };
+                                checkAndFix('backgroundColor', 'background-color');
+                                checkAndFix('color', 'color');
+                                checkAndFix('borderColor', 'border-color');
+                                checkAndFix('outlineColor', 'outline-color');
+                                checkAndFix('fill', 'fill');
+                                checkAndFix('stroke', 'stroke');
                             }
-                            if (node.childNodes && node.childNodes.length > 0) {
-                                for (let i = 0; i < node.childNodes.length; i++) {
-                                    walk(node.childNodes[i]);
-                                }
-                            }
+                            isWalkingComputed = false;
                         };
-                        
-                        const performPass = () => walk(document.body);
+
+                        const performPass = () => {
+                            // 1. Forcefully rewrite dynamically added style tags to prevent flashing
+                            document.querySelectorAll('style').forEach(style => {
+                                if (style.textContent && isRed(style.textContent)) {
+                                    style.textContent = toBlue(style.textContent);
+                                }
+                            });
+                            // 2. Walk computed styles for bulletproof override
+                            walkComputed();
+                        };
                         performPass();
                         
                         // Use mutation observer for high performance instead of setInterval if possible
                         const observer = new MutationObserver((mutations) => {
                             let shouldWalk = false;
                             for (const m of mutations) {
-                                if (m.addedNodes.length > 0 || m.attributeName === 'style' || m.attributeName === 'class') {
+                                if (m.addedNodes.length > 0 || m.attributeName === 'style' || m.attributeName === 'class' || m.target.nodeName.toLowerCase() === 'style') {
                                     shouldWalk = true;
                                     break;
                                 }
                             }
                             if (shouldWalk) performPass();
                         });
+                        observer.observe(document.head, { childList: true, subtree: true, characterData: true });
                         observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'class'] });
                         
                         // Failsafe
@@ -702,20 +743,14 @@ export default function VideoPlayer(props: VideoPlayerProps) {
                             </>
                         ) : (
                             <>
-                                <iframe
+                                <webview
+                                    ref={webviewRef as any}
                                     key={`${episodeSession ?? ''}::${resolvedStreamUrl ?? ''}`}
                                     src={resolvedStreamUrl}
                                     className="w-full h-full border-0 bg-black"
-                                    loading="eager"
+                                    allowpopups
                                     allowFullScreen
-                                    allow="autoplay; encrypted-media"
-                                    referrerPolicy="no-referrer"
-                                    title="Video Player"
-                                    onLoad={() => {
-                                        clearIframeLoadTimeout();
-                                        onLoadRef.current?.();
-                                        onPlaybackStateChange?.({ isPlaying: true });
-                                    }}
+                                    webpreferences="webSecurity=no"
                                 />
                                 {displayMode === 'mini' && (
                                     <div className="absolute inset-x-0 top-0 z-20 flex items-start justify-between p-2 bg-gradient-to-b from-black/55 to-transparent opacity-0 transition-opacity duration-200 group-hover:opacity-100">
@@ -746,7 +781,7 @@ export default function VideoPlayer(props: VideoPlayerProps) {
                     </div>
                     {displayMode !== 'mini' && !isFullscreen && (
                         <div 
-                            className={`absolute top-0 left-0 p-4 sm:p-6 transition-opacity duration-300 z-[2147483647] ${showServerMenu ? 'opacity-100 pointer-events-auto' : 'opacity-0 group-hover:opacity-100 pointer-events-none'}`}
+                            className={`absolute top-0 left-0 p-4 sm:p-6 transition-opacity duration-300 z-[2147483647] ${showServerMenu || !shouldUseNativeVideo ? 'opacity-100 pointer-events-auto' : 'opacity-0 group-hover:opacity-100 pointer-events-none'}`}
                         >
                             <div className="pointer-events-auto relative">
                                 <button
@@ -816,7 +851,7 @@ export default function VideoPlayer(props: VideoPlayerProps) {
             ) : (
                 <div className="w-full h-full flex flex-col items-center justify-center text-gray-500">
                     <span className="mb-2 text-6xl opacity-20">▶</span>
-                    <p>Select an episode</p>
+                    <p>Episode not found</p>
                 </div>
             )}
         </div>
