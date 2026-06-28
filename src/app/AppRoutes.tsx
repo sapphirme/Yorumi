@@ -1,5 +1,7 @@
 import { AnimatePresence, m } from 'framer-motion';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { lazy, Suspense } from 'react';
+import { useVault } from '../context/VaultContext';
 import AnimeDetailsPage from '../pages/AnimeDetailsPage';
 import AnimeFormatPage from '../pages/AnimeFormatPage';
 import ContinueWatchingPage from '../pages/ContinueWatchingPage';
@@ -32,8 +34,27 @@ const getTransitionKey = (pathname: string) => {
     return pathname;
 };
 
+// Stealth dynamic import
+const VaultApp = lazy(() => 
+    // @ts-ignore - Vault files are gitignored and might not exist locally
+    import('../features/vault/VaultApp').catch(() => ({ 
+    default: () => <div className="min-h-screen" />
+})));
+
 export function AppRoutes() {
     const location = useLocation();
+    const { isVaultUnlocked } = useVault();
+
+    const renderVaultOr = (Component: React.ElementType) => {
+        if (isVaultUnlocked) {
+            return (
+                <Suspense fallback={<div className="min-h-screen" />}>
+                    <VaultApp />
+                </Suspense>
+            );
+        }
+        return <Component />;
+    };
 
     return (
         <AnimatePresence mode="wait">
@@ -46,7 +67,7 @@ export function AppRoutes() {
                 className="relative z-10"
             >
                 <Routes location={location}>
-                    <Route path="/" element={<HomePage />} />
+                    <Route path="/" element={renderVaultOr(HomePage)} />
                     <Route path="/anime/popular" element={<AnimeFormatPage />} />
                     <Route path="/anime/movies" element={<AnimeFormatPage />} />
                     <Route path="/anime/tv" element={<AnimeFormatPage />} />
@@ -56,7 +77,7 @@ export function AppRoutes() {
                     <Route path="/anime/details/:id" element={<AnimeDetailsPage />} />
 
 
-                    <Route path="/manga" element={<MangaPage />} />
+                    <Route path="/manga" element={renderVaultOr(MangaPage)} />
                     <Route path="/manga/details/:id" element={<MangaDetailsPage />} />
                     <Route path="/manga/read/:title/:id/:chapter" element={<MangaReaderPage />} />
                     <Route path="/genre/:name" element={<GenrePage />} />
@@ -69,7 +90,7 @@ export function AppRoutes() {
                     <Route path="/manga/one-shot" element={<MangaFormatPage />} />
                     <Route path="/manga/specials" element={<MangaFormatPage />} />
 
-                    <Route path="/library" element={<LibraryPage />} />
+                    <Route path="/library" element={renderVaultOr(LibraryPage)} />
 
                     <Route path="/profile" element={<ProfilePage />} />
                     <Route path="/users" element={<UserSearchPage />} />
