@@ -22,7 +22,7 @@ const isQuotaError = (error: unknown) => {
 
 const estimateSize = (value: string | null) => (value ? value.length * 2 : 0);
 
-export const pruneVolatileLocalStorage = (protectedKey = '') => {
+const pruneVolatileLocalStorage = (protectedKey = '') => {
     if (typeof localStorage === 'undefined') return;
 
     const candidates: Array<{ key: string; size: number }> = [];
