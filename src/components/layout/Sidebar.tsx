@@ -70,13 +70,15 @@ export default function Sidebar() {
     const [searchType, setSearchType] = useState<'anime' | 'manga'>('anime');
     const [hoveredCard, setHoveredCard] = useState<{title: string, top: number} | null>(null);
 
-    const { watchList } = useWatchList();
-    const { readList } = useReadList();
-    const { continueWatchingList } = useContinueWatching();
-    const { continueReadingList } = useContinueReading();
-
     // Vault Logic
     const { isVaultUnlocked, unlockVault, lockVault } = useVault();
+    const { watchList: normalWatchList } = useWatchList({ isVault: false });
+    const { readList: normalReadList } = useReadList({ isVault: false });
+    const { watchList: vaultWatchList } = useWatchList({ isVault: true });
+    const { readList: vaultReadList } = useReadList({ isVault: true });
+    const { continueWatchingList } = useContinueWatching({ isVault: isVaultUnlocked });
+    const { continueReadingList } = useContinueReading({ isVault: isVaultUnlocked });
+
     const clickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [clickCount, setClickCount] = useState(0);
 
@@ -109,10 +111,21 @@ export default function Sidebar() {
         }, 1500);
     };
 
-    const savedItems: SavedSidebarItem[] = [
-        ...watchList.map(item => ({ ...item, isManga: false as const })),
-        ...readList.map(item => ({ ...item, isManga: true as const }))
-    ].sort((a, b) => new Date(b.addedAt || 0).getTime() - new Date(a.addedAt || 0).getTime());
+    const displaySavedItems: SavedSidebarItem[] = [
+        ...normalWatchList.map(item => ({ ...item, isManga: false as const })),
+        ...vaultWatchList.map(item => ({ ...item, isManga: false as const })),
+        ...normalReadList.map(item => ({ ...item, isManga: true as const })),
+        ...vaultReadList.map(item => ({ ...item, isManga: true as const }))
+    ]
+    .filter((item, index, self) => 
+        // deduplicate by ID across lists just in case
+        index === self.findIndex((t) => t.id === item.id)
+    )
+    .filter(item => {
+        const isVaultItem = String(item.id).startsWith('vault') || String(item.scraperId).startsWith('vault') || item.type === 'Vault Video';
+        return isVaultUnlocked ? isVaultItem : !isVaultItem;
+    })
+    .sort((a, b) => new Date(b.addedAt || 0).getTime() - new Date(a.addedAt || 0).getTime());
 
     const getMatchingWatchProgress = (item: WatchListItem) => {
         const ids = new Set([
@@ -140,9 +153,16 @@ export default function Sidebar() {
 
         const routeId = getAnimeRouteId(item);
         if (!routeId) return;
+        
+        const anime = buildAnimeRouteState(item);
+        
+        if (String(item.scraperId || '').startsWith('vault') || item.type === 'Vault Video') {
+            const vaultRouteId = item.scraperId || `vault-anime:hanime:${item.id}`;
+            navigate(`/anime/details/${vaultRouteId}`, { state: { anime } });
+            return;
+        }
 
         const progress = getMatchingWatchProgress(item);
-        const anime = buildAnimeRouteState(item);
         const resume = Number.isFinite(progress?.positionSeconds)
             ? Math.max(0, Math.floor(Number(progress?.positionSeconds)))
             : 0;
@@ -197,16 +217,16 @@ export default function Sidebar() {
                         setIsSearchOpen(true);
                     }} 
                 />
-                <SidebarIcon icon={Tv} title="Anime" onClick={() => navigate('/')} isActive={location.pathname === '/' || location.pathname.startsWith('/anime')} />
-                <SidebarIcon icon={BookOpen} title="Manga" onClick={() => navigate('/manga')} isActive={location.pathname === '/manga' || location.pathname.startsWith('/manga')} />
-                <SidebarIcon icon={Library} title="Library" onClick={() => navigate('/library')} isActive={location.pathname === '/library'} />
+                <SidebarIcon icon={Tv} title={isVaultUnlocked ? "Hentai" : "Anime"} onClick={() => navigate('/')} isActive={location.pathname === '/' || location.pathname.startsWith('/anime')} />
+                <SidebarIcon icon={BookOpen} title={isVaultUnlocked ? "Manhwa" : "Manga"} onClick={() => navigate('/manga')} isActive={location.pathname === '/manga' || location.pathname.startsWith('/manga')} />
+                <SidebarIcon icon={Library} title="Library" onClick={() => navigate(isVaultUnlocked ? '/vault/library' : '/library')} isActive={location.pathname === '/library' || location.pathname === '/vault/library'} />
             </div>
 
-            {(!isVaultUnlocked && savedItems.length > 0) && (
+            {displaySavedItems.length > 0 && (
                 <div className="flex-1 w-full min-h-0 flex flex-col items-center mt-3 overflow-hidden">
                     <div className="w-8 h-px bg-white/10 mb-3 shrink-0" />
                     <div className="w-full flex-1 overflow-y-auto flex flex-col items-center gap-3 px-1 pb-4 scrollbar-thin scrollbar-thumb-transparent hover:scrollbar-thumb-blue-500 scrollbar-track-transparent">
-                        {savedItems.map(item => (
+                        {displaySavedItems.map(item => (
                             <button
                                 key={`${item.isManga ? 'manga' : 'anime'}-${item.id}`}
                                 onClick={() => openSavedItem(item)}
