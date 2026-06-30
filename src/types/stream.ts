@@ -17,7 +17,7 @@ export interface StreamLink {
     thumbnails?: ThumbnailInfo;
 }
 
-export interface ThumbnailInfo {
+interface ThumbnailInfo {
     spriteUrl?: string;
     spriteGrid?: { columns: number; rows: number };
     thumbnailUrl?: string;
