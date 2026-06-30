@@ -63,7 +63,7 @@ function getOverrideLogo(tmdbId: number): string | null {
  * Resolve TMDB ID to TVDB ID using Fribb/anime-lists static database
  * More reliable than live APIs that frequently timeout
  */
-export async function getTVDBIdFromTMDB(tmdbId: number): Promise<string | null> {
+async function getTVDBIdFromTMDB(tmdbId: number): Promise<string | null> {
     // Check cache first
     if (tvdbMappingCache.has(tmdbId)) {
         const cached = tvdbMappingCache.get(tmdbId);
@@ -130,7 +130,7 @@ export async function getTVDBIdFromTMDB(tmdbId: number): Promise<string | null> 
 /**
  * Fetch logo from Fanart.tv using TVDB ID
  */
-export async function getFanartLogo(tvdbId: string): Promise<string | null> {
+async function getFanartLogo(tvdbId: string): Promise<string | null> {
     // Check cache first
     if (logoCache.has(tvdbId)) {
         const cached = logoCache.get(tvdbId);
@@ -228,7 +228,7 @@ export async function getAnimeLogo(tmdbId: number): Promise<{
  * Warmup the anime database cache on server startup
  * This reduces first-request latency significantly
  */
-export async function warmupAnimeDatabase(): Promise<void> {
+async function warmupAnimeDatabase(): Promise<void> {
     console.log('[Fanart] Pre-warming anime database...');
     try {
         const response = await axios.get(
