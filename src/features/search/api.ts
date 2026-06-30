@@ -17,6 +17,7 @@ export interface SearchPreviewItem {
     duration: string | null;
     score?: number;
     url: string;
+    manga?: any;
 }
 
 type PreviewAnime = Anime & {
@@ -65,6 +66,7 @@ export const searchApi = {
                 duration: item.duration || null,
                 score: item.score,
                 url: `/anime/details/${item.id || item.mal_id}`,
+                manga: item,
             })) as SearchPreviewItem[];
         }
 
@@ -92,6 +94,7 @@ export const searchApi = {
                 duration: null,
                 score: item.vote_average ? item.vote_average : undefined,
                 url: `/anime/details/tmdb-${item.id}`,
+                manga: item,
             };
         }) as SearchPreviewItem[];
     },
@@ -111,7 +114,8 @@ export const searchApi = {
                         type: item.type,
                         duration: null,
                         score: item.rating ? parseFloat(item.rating) : undefined,
-                        url: `/manga/details/${encodeURIComponent(item.scraperId)}`
+                        url: `/manga/details/${encodeURIComponent(item.scraperId)}`,
+                        manga: item,
                     }));
                 }
             } catch (e) {
@@ -132,6 +136,7 @@ export const searchApi = {
             duration: null,
             score: item.score,
             url: `/manga/details/${item.id || item.mal_id}`,
+            manga: item,
         })) as SearchPreviewItem[];
     },
 };
