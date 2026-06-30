@@ -8,16 +8,17 @@ interface VaultLatestUpdatesProps {
     items: any[];
     onMangaClick?: (manga: any) => void;
     loading?: boolean;
+    title?: string;
 }
 
-export default function VaultLatestUpdates({ items, onMangaClick, loading }: VaultLatestUpdatesProps) {
+export default function VaultLatestUpdates({ items, onMangaClick, loading, title = 'LATEST RELEASES' }: VaultLatestUpdatesProps) {
     if (!loading && (!items || items.length === 0)) return null;
 
     return (
         <section className="mb-12">
             <div className="flex items-center gap-4 mb-6">
                 <h2 className="text-xl sm:text-2xl font-black text-white tracking-wide uppercase leading-none whitespace-nowrap">
-                    LATEST RELEASES
+                    {title}
                 </h2>
                 <div className="flex-1 h-px bg-white/10" />
             </div>
