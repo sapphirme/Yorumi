@@ -745,7 +745,6 @@ export default function VideoPlayer(props: VideoPlayerProps) {
                             <>
                                 <webview
                                     ref={webviewRef as any}
-                                    key={`${episodeSession ?? ''}::${resolvedStreamUrl ?? ''}`}
                                     src={resolvedStreamUrl}
                                     className="w-full h-full border-0 bg-black"
                                     allowpopups
