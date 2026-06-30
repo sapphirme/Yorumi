@@ -265,23 +265,23 @@ const MangaSpotlight: React.FC<MangaSpotlightProps> = ({ onMangaClick }) => {
 
                                     {/* Middle Section: Chips */}
                                     <div className="w-full flex items-center flex-wrap gap-4 text-white select-none mb-4">
-                                        <span className="flex items-center justify-center gap-1.5 bg-white/10 px-3 h-8 rounded-lg backdrop-blur-sm text-sm font-bold">
-                                            <svg className="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" /></svg>
-                                            {(activeManga.score || 0).toFixed(1)}
-                                        </span>
-
-                                        {(activeManga.chapters || activeManga.volumes) ? (
-                                            <span className="flex items-center justify-center gap-1.5 bg-[#22c55e] text-white px-3 h-8 rounded-lg backdrop-blur-sm text-sm font-bold">
-                                                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M19 4H5a2 2 0 00-2 2v12a2 2 0 002 2h14a2 2 0 002-2V6a2 2 0 00-2-2zm-8 7H9.5v-.5h-2v3h2V13H11v2H6V9h5v2zm7 0h-1.5v-.5h-2v3h2V13H18v2h-5V9h5v2z" /></svg>
-                                                {activeManga.chapters || activeManga.volumes}
-                                            </span>
-                                        ) : (
+                                        {/* Author Chip */}
+                                        {activeManga.authors?.[0]?.name && activeManga.authors[0].name !== 'Unknown' && (
                                             <span className="flex items-center justify-center gap-1.5 bg-white/10 px-3 h-8 rounded-lg backdrop-blur-sm text-sm font-bold">
-                                                <span className={`w-2 h-2 rounded-full ${activeManga.status === 'RELEASING' || activeManga.status === 'Publishing' ? 'bg-green-500' : 'bg-gray-500'}`}></span>
-                                                {activeManga.status === 'RELEASING' ? 'Releasing' : activeManga.status}
+                                                <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                                                {activeManga.authors[0].name}
                                             </span>
                                         )}
 
+                                        {/* Latest Chapter Chip */}
+                                        {(activeManga.chapters || activeManga.volumes) && (
+                                            <span className="flex items-center justify-center gap-1.5 bg-[#22c55e] text-white px-3 h-8 rounded-lg backdrop-blur-sm text-sm font-bold">
+                                                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M19 4H5a2 2 0 00-2 2v12a2 2 0 002 2h14a2 2 0 002-2V6a2 2 0 00-2-2zm-8 7H9.5v-.5h-2v3h2V13H11v2H6V9h5v2zm7 0h-1.5v-.5h-2v3h2V13H18v2h-5V9h5v2z" /></svg>
+                                                Chapter {activeManga.chapters || activeManga.volumes}
+                                            </span>
+                                        )}
+
+                                        {/* Type/Origin Chip */}
                                         <span className="flex items-center justify-center px-3 h-8 rounded-lg bg-yorumi-manga/20 text-yorumi-manga text-sm font-bold border border-yorumi-manga/50 uppercase backdrop-blur-sm">
                                             {activeManga.countryOfOrigin === 'KR'
                                                 ? 'Manhwa'
