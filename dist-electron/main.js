@@ -2571,7 +2571,7 @@ app.whenReady().then(() => {
         if (fs.existsSync(backendPath)) {
             console.log("Starting backend from:", backendPath);
             const backendProcess = cp.fork(backendPath, [], {
-                env: { ...process.env, VERCEL: 'false', ELECTRON_RUN_AS_NODE: '1' },
+                env: { ...process.env, VERCEL: 'false', ELECTRON_RUN_AS_NODE: '1', YORUMI_USER_DATA_DIR: userDataPath },
                 stdio: ['ignore', 'pipe', 'pipe', 'ipc']
             });
             backendProcess.stdout.on('data', (data) => console.log(`Backend: ${data}`));
