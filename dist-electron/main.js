@@ -2551,6 +2551,13 @@ function createWindow() {
 }
 app.whenReady().then(() => {
     try {
+        const { autoUpdater } = __require('electron-updater');
+        autoUpdater.checkForUpdatesAndNotify();
+    } catch (e) {
+        console.error('Failed to check for updates:', e);
+    }
+
+    try {
         const cp = __require('child_process');
         const path = __require('path');
         const fs = __require('fs');
