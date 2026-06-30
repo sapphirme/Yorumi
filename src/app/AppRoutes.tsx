@@ -90,7 +90,8 @@ export function AppRoutes() {
                     <Route path="/manga/one-shot" element={<MangaFormatPage />} />
                     <Route path="/manga/specials" element={<MangaFormatPage />} />
 
-                    <Route path="/library" element={renderVaultOr(LibraryPage)} />
+                    <Route path="/library" element={<LibraryPage />} />
+                    <Route path="/vault/library" element={<LibraryPage />} />
 
                     <Route path="/profile" element={<ProfilePage />} />
                     <Route path="/users" element={<UserSearchPage />} />
