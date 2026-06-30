@@ -39,14 +39,26 @@ const readPersistedCache = (key: string, ttl: number) => {
 
 const writePersistedCache = (key: string, data: any, timestamp: number) => {
     try {
-        localStorage.setItem(
-            `${PERSISTED_CACHE_PREFIX}:${key}`,
-            JSON.stringify({ data, timestamp })
-        );
+        if (!key.startsWith('manga_details_') && !key.startsWith('chapters_') && !key.startsWith('manga-unified:')) {
+            localStorage.setItem(`${PERSISTED_CACHE_PREFIX}:${key}`, JSON.stringify({ data, timestamp }));
+        }
     } catch {
         // Ignore storage errors.
     }
 };
+
+// Auto-cleanup legacy manga-unified caches on load
+try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+        Object.keys(localStorage).forEach(k => {
+            if (k.includes('manga-unified:') || k.includes('manga-spotlight')) {
+                localStorage.removeItem(k);
+            }
+        });
+    }
+} catch (e) {
+    // Ignore
+}
 
 const getCached = (key: string, ttl: number) => {
     const cached = responseCache.get(key);
@@ -442,8 +454,8 @@ export const mangaService = {
 
         const fetchOnce = async () => {
             let resultData;
-            if (chapterUrl.includes('toonily.com')) {
-                const res = await fetch(`http://localhost:3001/api/vault/manga/pages?url=${encodeURIComponent(chapterUrl)}`);
+            if (chapterUrl.includes('toonily.com') || chapterUrl.includes('manhwaread.com')) {
+                const res = await fetch(`${API_BASE}/vault/manga/pages?url=${encodeURIComponent(chapterUrl)}`);
                 const vaultData = await res.json();
                 
                 // Proxy Toonily images to avoid 403 Forbidden hotlink blocks
