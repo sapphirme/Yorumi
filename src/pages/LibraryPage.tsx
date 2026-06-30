@@ -9,9 +9,13 @@ import { useReadList } from '../hooks/useReadList';
 import { useWatchList } from '../hooks/useWatchList';
 import { slugify } from '../utils/slugify';
 import type { WatchListItem } from '../utils/storage';
+import { useVault } from '../context/VaultContext';
 
 const getAnimeRouteId = (item: WatchListItem) => {
     const scraperId = item.scraperId;
+    if (String(scraperId || '').startsWith('vault') || item.type === 'Vault Video') {
+        return scraperId || `vault-anime:hanime:${item.id}`;
+    }
     if (scraperId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(scraperId.replace(/^s:/, ''))) {
         return `s:${scraperId.replace(/^s:/, '')}`;
     }
@@ -19,20 +23,30 @@ const getAnimeRouteId = (item: WatchListItem) => {
 };
 
 export default function LibraryPage() {
-    const { continueWatchingList, removeFromHistory: removeWatchingHistory } = useContinueWatching();
-    const { continueReadingList, removeFromHistory: removeReadingHistory } = useContinueReading();
-    const { watchList, removeFromWatchList } = useWatchList();
-    const { readList, removeFromReadList } = useReadList();
+    const { isVaultUnlocked } = useVault();
+    const { continueWatchingList, removeFromHistory: removeWatchingHistory } = useContinueWatching({ isVault: isVaultUnlocked });
+    const { continueReadingList, removeFromHistory: removeReadingHistory } = useContinueReading({ isVault: isVaultUnlocked });
+    const { watchList, removeFromWatchList } = useWatchList({ isVault: isVaultUnlocked });
+    const { readList, removeFromReadList } = useReadList({ isVault: isVaultUnlocked });
     const navigate = useNavigate();
 
-    const hasContent = continueWatchingList.length > 0 || continueReadingList.length > 0 || watchList.length > 0 || readList.length > 0;
+    const filteredWatching = continueWatchingList;
+    const filteredReading = continueReadingList;
+    const filteredWatchList = watchList;
+    const filteredReadList = readList;
+
+    const hasContent = filteredWatching.length > 0 || filteredReading.length > 0 || filteredWatchList.length > 0 || filteredReadList.length > 0;
 
     return (
         <div className="min-h-screen bg-[#0a0a0a] pt-12 pb-24">
             <div className="w-full max-w-7xl mx-auto px-8 md:px-14 relative">
                 <div className="mb-8">
-                    <h1 className="mb-2 text-2xl font-bold uppercase tracking-wider text-white">MY LIBRARY</h1>
-                    <p className="text-sm text-gray-400">Watch history, progress, and saved titles</p>
+                    <h1 className="mb-2 text-2xl font-bold uppercase tracking-wider text-white">
+                        {isVaultUnlocked ? '🔐 VAULT LIBRARY' : 'MY LIBRARY'}
+                    </h1>
+                    <p className="text-sm text-gray-400">
+                        {isVaultUnlocked ? 'Your secret vault history and saved titles' : 'Watch history, progress, and saved titles'}
+                    </p>
                 </div>
 
                 <div className="space-y-8 pb-12">
@@ -43,8 +57,8 @@ export default function LibraryPage() {
                     )}
 
                     <ContinueWatching
-                        title={`Continue Watching (${continueWatchingList.length})`}
-                        items={continueWatchingList}
+                        title={`Continue Watching (${filteredWatching.length})`}
+                        items={filteredWatching}
                         onRemove={removeWatchingHistory}
                         onWatchClick={(anime, episodeNumber, startSeconds) => {
                             const title = slugify(anime.title || 'anime');
@@ -55,8 +69,8 @@ export default function LibraryPage() {
                     />
 
                     <MangaContinueReading
-                        title={`Continue Reading (${continueReadingList.length})`}
-                        items={continueReadingList}
+                        title={`Continue Reading (${filteredReading.length})`}
+                        items={filteredReading}
                         onRemove={removeReadingHistory}
                         onReadClick={(mangaId, mangaTitle, chapterNumber) => {
                             const title = slugify(mangaTitle || 'manga');
@@ -64,9 +78,9 @@ export default function LibraryPage() {
                         }}
                     />
 
-                    {watchList.length > 0 && (
-                        <Carousel title={`Watchlist (${watchList.length})`} variant="portrait">
-                            {watchList.map((item) => (
+                    {filteredWatchList.length > 0 && (
+                        <Carousel title={`Watchlist (${filteredWatchList.length})`} variant="portrait">
+                            {filteredWatchList.map((item) => (
                                 <div
                                     key={item.id}
                                     className="relative group h-full cursor-pointer"
@@ -97,13 +111,16 @@ export default function LibraryPage() {
                         </Carousel>
                     )}
 
-                    {readList.length > 0 && (
-                        <Carousel title={`Readlist (${readList.length})`} variant="portrait">
-                            {readList.map((item) => (
+                    {filteredReadList.length > 0 && (
+                        <Carousel title={`Readlist (${filteredReadList.length})`} variant="portrait">
+                            {filteredReadList.map((item) => (
                                 <div
                                     key={item.id}
                                     className="relative group h-full cursor-pointer"
-                                    onClick={() => navigate(`/manga/details/${item.id}`)}
+                                    onClick={() => {
+                                        const mangaRouteId = String(item.scraperId || '').startsWith('vault') ? item.scraperId : item.id;
+                                        navigate(`/manga/details/${mangaRouteId}`);
+                                    }}
                                 >
                                     <div className="relative aspect-[3/4] rounded-xl overflow-hidden mb-3 shadow-lg border border-white/5 transition-colors cursor-pointer">
                                         {item.image && <img src={item.image} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />}
