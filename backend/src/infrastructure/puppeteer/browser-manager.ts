@@ -1,5 +1,6 @@
 import type { Browser } from 'puppeteer-core';
 import { logger } from '../../core/logger';
+import fs from 'fs';
 
 let browserInstance: Browser | null = null;
 let browserLaunchPromise: Promise<Browser> | null = null;
@@ -34,14 +35,31 @@ const launchBrowser = async (): Promise<Browser> => {
 
     localPuppeteer.use(StealthPlugin());
 
+    const getSystemBrowserPath = () => {
+        if (process.platform === 'win32') {
+            const paths = [
+                'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+                'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+                'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+                'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe'
+            ];
+            for (const p of paths) {
+                if (fs.existsSync(p)) return p;
+            }
+        } else if (process.platform === 'darwin') {
+            return '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+        } else if (process.platform === 'linux') {
+            return '/usr/bin/google-chrome';
+        }
+        return undefined;
+    };
+
     return localPuppeteer.launch({
         headless: true,
-        executablePath: process.env.ELECTRON_RUN_AS_NODE === '1' ? process.execPath : undefined,
+        executablePath: getSystemBrowserPath() || (process.env.ELECTRON_RUN_AS_NODE === '1' ? process.execPath : undefined),
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
-            '--disable-web-security',
-            '--disable-features=IsolateOrigins,site-per-process',
         ],
     }) as Promise<Browser>;
 };
