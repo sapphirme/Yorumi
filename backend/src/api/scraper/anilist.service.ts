@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { cacheGet, cacheSet } from '../../utils/redis-cache';
 
-export type AnilistSeasonResult = {
+type AnilistSeasonResult = {
     title: string;
     romaji: string | null;
     episodes: number | null;
