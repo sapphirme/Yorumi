@@ -61,11 +61,12 @@ export default function MangaReaderModal({
     const lastScrollY = useRef(0);
     const readerRootRef = useRef<HTMLDivElement>(null);
     const fullscreenAttemptedRef = useRef(false);
-    const { saveProgress } = useContinueReading();
+    const isVault = String(manga.scraper_id || manga.id || manga.mal_id).startsWith('vault');
+    const { saveProgress } = useContinueReading({ isVault });
 
     // Save progress on chapter change
     useEffect(() => {
-        if (currentChapter && manga) {
+        if (currentChapter && manga && manga.title && manga.title !== 'Unknown Title') {
             const match = currentChapter.title.match(/Chapter\s+(\d+[.]?\d*)/i);
             const chapterNum = match ? match[1] : '1';
             saveProgress(manga, {
