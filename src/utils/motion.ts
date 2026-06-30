@@ -30,7 +30,7 @@ export const cardItemVariants: Variants = {
     },
 };
 
-export const dropdownVariants: Variants = {
+const dropdownVariants: Variants = {
     initial: { opacity: 0, y: -6, scale: 0.98 },
     animate: {
         opacity: 1,
@@ -46,13 +46,13 @@ export const dropdownVariants: Variants = {
     },
 };
 
-export const modalBackdropVariants: Variants = {
+const modalBackdropVariants: Variants = {
     initial: { opacity: 0 },
     animate: { opacity: 1, transition: { duration: 0.2, ease: softEase } },
     exit: { opacity: 0, transition: { duration: 0.16, ease: softEase } },
 };
 
-export const modalPanelVariants: Variants = {
+const modalPanelVariants: Variants = {
     initial: { opacity: 0, y: 12, scale: 0.97 },
     animate: {
         opacity: 1,
@@ -68,7 +68,7 @@ export const modalPanelVariants: Variants = {
     },
 };
 
-export const listContainerVariants: Variants = {
+const listContainerVariants: Variants = {
     animate: {
         transition: {
             staggerChildren: 0.035,
