@@ -7,8 +7,11 @@ import AnimeCard from './AnimeCard';
 import AnimeCardSkeleton from './AnimeCardSkeleton';
 
 import TopTenSidebar from './TopTenSidebar';
+import ContinueWatching from './ContinueWatching';
 
 interface AnimeDashboardProps {
+    continueWatchingList?: any[];
+    onRemoveHistory?: (id: string | number) => void;
     spotlightAnime: Anime[];
     spotlightLoading?: boolean;
     latestUpdates: Anime[];
@@ -38,6 +41,8 @@ interface AnimeDashboardProps {
 }
 
 export default function AnimeDashboard({
+    continueWatchingList,
+    onRemoveHistory,
     spotlightAnime,
     spotlightLoading = false,
     latestUpdates,
@@ -80,6 +85,17 @@ export default function AnimeDashboard({
             )}
 
             <div className={`w-full max-w-7xl mx-auto px-8 md:px-14 z-10 relative ${compactCatalogMode ? '' : 'mt-8'}`}>
+
+                {!compactCatalogMode && continueWatchingList && continueWatchingList.length > 0 && (
+                    <div className="mb-8">
+                        <ContinueWatching
+                            title="Continue Watching"
+                            items={continueWatchingList}
+                            onRemove={onRemoveHistory || (() => {})}
+                            onWatchClick={(anime, ep, start) => onWatchClick(anime, ep, start)}
+                        />
+                    </div>
+                )}
 
                 {!compactCatalogMode && (
                     <TrendingNow
