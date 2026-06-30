@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { scrapeToonilyHome, scrapeToonilyDetails, scrapeToonilyPages, scrapeToonilySearch } from './toonily';
-import { scrapeHanimeHome, scrapeHanimeVideo, scrapeHanimeSearch } from './hanime';
+import { scrapeToonilyHome, scrapeToonilyDetails, scrapeToonilyPages, scrapeToonilySearch } from './vaultmanhwa';
+import { scrapeHanimeHome, scrapeHanimeVideo, scrapeHanimeSearch } from './vaultanime';
 
 const router = Router();
 
