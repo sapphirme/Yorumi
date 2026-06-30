@@ -136,7 +136,7 @@ const pickBestMangaMatch = (seedTitle: string, items: Manga[]) => {
     return ranked[0]?.score >= 60 ? ranked[0].item : items.find((item) => item.images?.jpg?.large_image_url || item.images?.jpg?.image_url);
 };
 
-export const extractRecommendationSeeds = (reply: string, limit = 6, mode: YumiChatMode = 'anime'): YumiRecommendationSeed[] => {
+const extractRecommendationSeeds = (reply: string, limit = 6, mode: YumiChatMode = 'anime'): YumiRecommendationSeed[] => {
     const seeds = new Map<string, YumiRecommendationSeed>();
     const blockName = mode === 'manga' ? 'MANGA' : 'ANIME';
     const addSeed = (rawTitle: string) => {
@@ -266,7 +266,7 @@ const resolveMangaSeed = (seed: YumiRecommendationSeed) => {
     const cached = mangaMatchCache.get(cacheKey);
     if (cached) return cached;
 
-    const request = mangaService.searchManga(searchTitle || seed.title, 1, 12)
+    const request = mangaService.searchMangaScraper(searchTitle || seed.title, 1, 12)
         .then((result) => pickBestMangaMatch(seed.title, (result.data || []) as Manga[]))
         .catch(() => undefined);
 
