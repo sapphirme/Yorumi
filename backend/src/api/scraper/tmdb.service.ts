@@ -28,7 +28,7 @@ type TmdbSearchResult = {
     popularity?: number;
 };
 
-export type TmdbMediaType = 'tv' | 'movie';
+type TmdbMediaType = 'tv' | 'movie';
 
 type TmdbWatchProvider = {
     provider_id: number;
@@ -46,7 +46,7 @@ type TmdbWatchProviderRegion = {
     buy?: TmdbWatchProvider[];
 };
 
-export type WatchProviderOption = {
+type WatchProviderOption = {
     id: number;
     name: string;
     logoUrl?: string;
@@ -54,7 +54,7 @@ export type WatchProviderOption = {
     displayPriority: number;
 };
 
-export type WatchProviderResult = {
+type WatchProviderResult = {
     tmdbId: number;
     mediaType: TmdbMediaType;
     country: string;
@@ -62,7 +62,7 @@ export type WatchProviderResult = {
     providers: WatchProviderOption[];
 };
 
-export type TmdbMediaTarget = {
+type TmdbMediaTarget = {
     tmdbId: number;
     mediaType: TmdbMediaType;
     title?: string;
