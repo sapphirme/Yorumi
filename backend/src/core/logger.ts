@@ -33,4 +33,4 @@ export const logger = {
     error: (message: string, meta?: unknown) => write('error', message, meta),
 };
 
-export type Logger = typeof logger;
+type Logger = typeof logger;
