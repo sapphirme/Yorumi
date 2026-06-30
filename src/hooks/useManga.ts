@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { Manga, MangaChapter, MangaPage } from '../types/manga';
 import { mangaService } from '../services/mangaService';
-import { token_set_ratio } from 'fuzzball';
+import { token_set_ratio, token_sort_ratio } from 'fuzzball';
 import { storage } from '../utils/storage';
 import { useReadList } from './useReadList';
 import { API_BASE } from '../config/api';
@@ -265,11 +265,11 @@ export function useManga() {
                 console.log(`[useManga] Extracted keywords for fallback: ${keywordSearches.join(', ')}`);
 
                 const titlesToTry = [
-                    ...shortTitles,               // 1. Shortened fallbacks (Highest success rate)
-                    ...baseTitles,                // 2. Full English/Romaji
-                    ...keywordSearches,           // 3. Single keyword searches (MangaKatana fallback)
-                    manga.title_native,           // 4. Native
-                    ...nonLatinSynonyms           // 5. Other
+                    ...baseTitles,                // 1. Full known titles and aliases
+                    manga.title_native,           // 2. Native exact title
+                    ...nonLatinSynonyms,          // 3. Other exact aliases
+                    ...shortTitles,               // 4. Shortened fallbacks
+                    ...keywordSearches,           // 5. Single keyword searches (last resort)
                 ].filter(Boolean) as string[];
 
                 // Remove duplicates while preserving order
@@ -396,7 +396,7 @@ export function useManga() {
                                 console.log(`[useManga] Found ALIAS match: ${bestMatch.title}`);
 
                                 // Auto-save alias matches as well since they are exact
-                                fetch(`${API_BASE}/mapping`, {
+                                fetch(`${API_BASE}/api/mapping`, {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify({
@@ -422,7 +422,7 @@ export function useManga() {
                                 // Find the best score against any of the original full titles
                                 let maxScoreForCandidate = 0;
                                 for (const origTitle of baseTitles) {
-                                    const score = token_set_ratio(origTitle, cTitle);
+                                    const score = token_sort_ratio(origTitle, cTitle);
                                     if (score > maxScoreForCandidate) {
                                         maxScoreForCandidate = score;
                                     }
@@ -434,19 +434,15 @@ export function useManga() {
                                     bestFuzzyScore = maxScoreForCandidate;
                                     bestFuzzyCandidate = candidate;
                                 }
-                            }
 
-                            if (bestFuzzyCandidate) {
-                                // "Check" Step: Best match score < 75 -> Flag
-                                if (bestFuzzyScore >= 75) {
-                                    // Threshold >= 75: Accept (lowered from 85 to handle translation variations)
-                                    bestMatch = { id: bestFuzzyCandidate.id, title: bestFuzzyCandidate.title };
+                                // Threshold >= 75: Auto-Accept
+                                if (bestFuzzyScore >= 75 && bestFuzzyCandidate) {
+                                    bestMatch = { id: (bestFuzzyCandidate as any).id, title: (bestFuzzyCandidate as any).title };
                                     console.log(`[useManga] Found FUZZY match: ${bestMatch.title} (Score: ${bestFuzzyScore})`);
-
-                                    // AUTO-SAVE HIGH CONFIDENCE MATCHES
-                                    if (bestFuzzyScore > 85) {
-                                        console.log(`[useManga] High confidence match (>85). Saving mapping...`);
-                                        fetch(`${API_BASE}/mapping`, {
+                                    
+                                    // Save mapping silently
+                                    if (bestMatch && manga.mal_id) {
+                                        fetch(`${API_BASE}/api/mapping`, {
                                             method: 'POST',
                                             headers: { 'Content-Type': 'application/json' },
                                             body: JSON.stringify({
@@ -460,7 +456,7 @@ export function useManga() {
                                     break;
                                 } else {
                                     // Threshold < 75: Flag for Manual Review
-                                    console.warn(`[useManga] FLAGGED Fuzzy Match: ${bestFuzzyCandidate.title} (Score: ${bestFuzzyScore}) - Below 0.75 threshold. Needs Review.`);
+                                    console.warn(`[useManga] FLAGGED Fuzzy Match: ${bestFuzzyCandidate ? (bestFuzzyCandidate as any).title : 'none'} (Score: ${bestFuzzyScore}) - Below 0.75 threshold. Needs Review.`);
                                     // Do NOT auto-accept. Continue trying other title variations if any.
                                 }
                             }
@@ -470,11 +466,6 @@ export function useManga() {
                     } catch (e) {
                         // Ignore search errors for individual titles
                     }
-                }
-
-                if (!bestMatch && fallbackCandidate) {
-                    bestMatch = { id: fallbackCandidate.id, title: fallbackCandidate.title };
-                    console.warn(`[useManga] Fallback match used: ${fallbackCandidate.title} (Ch: ${fallbackCandidate.chapterCount})`);
                 }
 
                 if (bestMatch) {
@@ -739,12 +730,14 @@ export function useManga() {
                     const vaultRes = await fetch(`${API_BASE}/vault/manga/details/${encodeURIComponent(String(id))}${queryUrl}`);
                     const vaultJson = await vaultRes.json();
                     if (vaultJson.success && vaultJson.data?.chapters) {
+                        const resolvedTitle = seedManga?.title || vaultJson.data.title || '';
+                        const resolvedImage = seedManga?.images?.jpg?.large_image_url || vaultJson.data.image || '';
                         const hydrated = {
                             mal_id: id,
                             id: id,
                             scraper_id: id,
-                            title: seedManga?.title || 'Unknown Title',
-                            images: seedManga?.images || { jpg: { large_image_url: '' } },
+                            title: resolvedTitle,
+                            images: { jpg: { large_image_url: resolvedImage, image_url: resolvedImage } },
                             type: 'Manga',
                             synopsis: vaultJson.data.synopsis || seedManga?.synopsis || '',
                             score: parseFloat(vaultJson.data.rating) || seedManga?.score || 0,
@@ -755,6 +748,20 @@ export function useManga() {
                         setSelectedManga(hydrated);
                         if (vaultJson.data.chapters.length > 0) {
                             setMangaChapters(vaultJson.data.chapters);
+                        }
+                        // Retroactively patch any stored continue-reading entries missing title/image
+                        if (resolvedTitle && resolvedImage) {
+                            const { storage } = await import('../utils/storage');
+                            const existing = storage.getContinueReading();
+                            const mangaIdStr = String(id);
+                            const patched = existing.map(entry =>
+                                entry.mangaId === mangaIdStr && (!entry.mangaTitle || entry.mangaTitle === 'Unknown Title' || !entry.mangaImage)
+                                    ? { ...entry, mangaTitle: resolvedTitle, mangaImage: resolvedImage, mangaPoster: resolvedImage }
+                                    : entry
+                            );
+                            if (patched.some((e, i) => e !== existing[i])) {
+                                storage.setContinueReading(patched);
+                            }
                         }
                     }
                 } catch (e) {
