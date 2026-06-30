@@ -11,6 +11,7 @@ import { useNavbarSearch } from './features/search/hooks/useNavbarSearch';
 import { PersistentPlayerProvider } from './features/player/context/PersistentPlayerContext';
 import { gentleTransition } from './utils/motion';
 import { tmdbService } from './services/tmdbService';
+import ScrollRestoration from './components/layout/ScrollRestoration';
 
 function App() {
     const location = useLocation();
@@ -72,6 +73,7 @@ function App() {
 
                     <div className="ml-[70px] flex-1 flex flex-col w-[calc(100%-70px)] relative min-h-screen">
                         <PersistentPlayerProvider>
+                            <ScrollRestoration />
                             <AppRoutes />
                         </PersistentPlayerProvider>
 
