@@ -1587,7 +1587,7 @@ const MangaFavoriteBoard = () => {
     );
 };
 
-export const MangaReadListCarousel = () => {
+const MangaReadListCarousel = () => {
     const { readList, loading, removeFromReadList } = useReadList();
     const navigate = useNavigate();
     const [emblaRef, emblaApi] = useEmblaCarousel({
@@ -1935,7 +1935,7 @@ const OverallGenreOverview = ({ theme }: { theme: 'anime' | 'manga' | 'both' }) 
     );
 };
 
-export const MangaContinueReadingHighlights = ({ showSeeAll = false }: { showSeeAll?: boolean }) => {
+const MangaContinueReadingHighlights = ({ showSeeAll = false }: { showSeeAll?: boolean }) => {
     const { continueReadingList: history } = useContinueReading();
     const navigate = useNavigate();
     // Deduplicate by title (keep first/most-recent occurrence per title)
@@ -2219,7 +2219,7 @@ const FavoriteAnimeBoard = () => {
     );
 };
 
-export const AnimeWatchListCarousel = () => {
+const AnimeWatchListCarousel = () => {
     const { watchList, loading, removeFromWatchList } = useWatchList();
     const navigate = useNavigate();
     const [emblaRef, emblaApi] = useEmblaCarousel({
@@ -2297,7 +2297,7 @@ export const AnimeWatchListCarousel = () => {
     );
 };
 
-export const AnimeContinueWatchingHighlights = ({ showSeeAll = false }: { showSeeAll?: boolean }) => {
+const AnimeContinueWatchingHighlights = ({ showSeeAll = false }: { showSeeAll?: boolean }) => {
     const { continueWatchingList: history } = useContinueWatching();
     const navigate = useNavigate();
     const formatClock = (seconds?: number) => {
