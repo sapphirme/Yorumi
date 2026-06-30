@@ -2,8 +2,9 @@ import * as mangakatana from '../../scraper/mangakatana';
 import { mappingService } from '../mapping/mapping.service';
 import { cacheGet, cacheSet } from '../../utils/redis-cache';
 import { createHash } from 'crypto';
+import { anilistService } from '../anilist/anilist.service';
 
-export interface MangaSearchResult extends mangakatana.MangaSearchResult {
+interface MangaSearchResult extends mangakatana.MangaSearchResult {
     source: 'mangakatana';
 }
 
@@ -13,10 +14,10 @@ const SEARCH_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const CHAPTER_LIST_CACHE_KEY_PREFIX = 'manga:chapters:';
 const CHAPTER_PAGES_CACHE_KEY_PREFIX = 'manga:pages:';
 const SEARCH_CACHE_KEY_PREFIX = 'manga:search:';
-const HYDRATED_DETAILS_CACHE_KEY_PREFIX = 'manga:details-hydrated:';
+const HYDRATED_DETAILS_CACHE_KEY_PREFIX = 'manga:details-hydrated:v2:';
 
 const hashKey = (input: string) => createHash('sha1').update(input).digest('hex');
-const MANGA_RESOLVE_CACHE_PREFIX = 'manga:resolve:';
+const MANGA_RESOLVE_CACHE_PREFIX = 'manga:resolve:v2:';
 
 const hydratedDetailsCache = new Map<string, { data: HydratedMangaDetails; timestamp: number }>();
 const hydratedDetailsInFlight = new Map<string, Promise<HydratedMangaDetails>>();
@@ -64,13 +65,17 @@ const scoreSearchResult = (candidate: any, titleCandidates: string[]) => {
         const normalized = normalizeTitle(title);
         if (!normalized) continue;
         if (candidateTitle === normalized) return 100;
-        if (candidateTitle.includes(normalized) || normalized.includes(candidateTitle)) {
+        const candidateWords = new Set(candidateTitle.split(' ').filter(Boolean));
+        const titleWords = normalized.split(' ').filter(Boolean);
+        const shorterWordCount = Math.min(candidateWords.size, titleWords.length);
+        const shorterLength = Math.min(candidateTitle.length, normalized.length);
+        const longerLength = Math.max(candidateTitle.length, normalized.length);
+        const isMeaningfulPartial = shorterWordCount >= 3 && shorterLength / longerLength >= 0.6;
+        if (isMeaningfulPartial && (candidateTitle.includes(normalized) || normalized.includes(candidateTitle))) {
             bestScore = Math.max(bestScore, 90);
             continue;
         }
 
-        const candidateWords = new Set(candidateTitle.split(' ').filter(Boolean));
-        const titleWords = normalized.split(' ').filter(Boolean);
         const overlap = titleWords.filter((word) => candidateWords.has(word)).length;
         if (overlap > 0) {
             const ratio = overlap / Math.max(titleWords.length, candidateWords.size || 1);
@@ -81,8 +86,17 @@ const scoreSearchResult = (candidate: any, titleCandidates: string[]) => {
     return bestScore;
 };
 
-async function resolveScraperIdFromTitle(title: string): Promise<string | null> {
-    const titleCandidates = [title];
+const scoreMangaDetails = (details: any, titleCandidates: string[]) => {
+    const sourceTitles = [
+        details?.title,
+        ...(Array.isArray(details?.altNames) ? details.altNames : []),
+    ];
+
+    return sourceTitles.reduce((best, title) => Math.max(best, scoreSearchResult({ title }, titleCandidates)), 0);
+};
+
+async function resolveScraperIdFromTitles(titles: string[]): Promise<string | null> {
+    const titleCandidates = [...new Set(titles.map((title) => String(title || '').trim()).filter(Boolean))];
     if (titleCandidates.length === 0) {
         return null;
     }
@@ -91,7 +105,10 @@ async function resolveScraperIdFromTitle(title: string): Promise<string | null> 
         const resolveCacheKey = `${MANGA_RESOLVE_CACHE_PREFIX}${normalizeTitle(title)}`;
         const cached = await cacheGet<string>(resolveCacheKey).catch(() => null);
         if (cached) {
-            return cached;
+            const cachedDetails = await getMangaDetails(cached).catch(() => null);
+            if (cachedDetails && scoreMangaDetails(cachedDetails, titleCandidates) >= 90) {
+                return cached;
+            }
         }
 
         const searchResults = await searchManga(title);
@@ -104,13 +121,47 @@ async function resolveScraperIdFromTitle(title: string): Promise<string | null> 
             .sort((a, b) => b.score - a.score);
 
         const best = ranked[0];
-        if (best && best.score >= 60) {
+        if (best && best.score >= 90) {
             await cacheSet(resolveCacheKey, best.item.id, 7 * 24 * 60 * 60).catch(() => undefined);
             return best.item.id;
         }
     }
 
     return null;
+}
+
+async function resolveAnilistMangaSource(anilistId: string) {
+    const media = await anilistService.getMangaById(Number(anilistId)).catch(() => null);
+    const titleCandidates = media ? getTitleCandidates(media) : [];
+    const mapped = await mappingService.getMapping(anilistId).catch(() => null);
+    const mappedId = mapped?.id ? stripMangaKatanaPrefix(mapped.id) : '';
+
+    if (mappedId && titleCandidates.length > 0) {
+        const mappedDetails = await getMangaDetails(mappedId).catch(() => null);
+        if (mappedDetails && scoreMangaDetails(mappedDetails, titleCandidates) >= 90) {
+            return { media, scraperId: mappedId, details: mappedDetails };
+        }
+
+        await mappingService.deleteMapping(anilistId).catch(() => undefined);
+    }
+
+    const resolvedId = await resolveScraperIdFromTitles(titleCandidates);
+    if (!resolvedId) {
+        return { media, scraperId: null, details: null };
+    }
+
+    const details = await getMangaDetails(resolvedId);
+    if (scoreMangaDetails(details, titleCandidates) < 90) {
+        return { media, scraperId: null, details: null };
+    }
+
+    await mappingService.saveMapping(
+        anilistId,
+        resolvedId,
+        String(details.title || titleCandidates[0] || '')
+    ).catch(() => undefined);
+
+    return { media, scraperId: stripMangaKatanaPrefix(resolvedId), details };
 }
 
 /**
@@ -207,8 +258,22 @@ export async function getMangaDetailsWithChapters(id: string): Promise<HydratedM
 
     const request = (async () => {
         try {
-            const details = await getMangaDetails(normalizedId);
-            const candidateScraperId = (details as any)?.scraperId || details?.id;
+            let details: any;
+            let resolvedScraperId: string | null = null;
+
+            if (/^\d+$/.test(normalizedId)) {
+                const resolved = await resolveAnilistMangaSource(normalizedId);
+                details = resolved.details || resolved.media;
+                resolvedScraperId = resolved.scraperId;
+            } else {
+                details = await getMangaDetails(normalizedId);
+            }
+
+            if (!details) {
+                throw new Error(`Manga details not found: ${normalizedId}`);
+            }
+
+            const candidateScraperId = resolvedScraperId || (details as any)?.scraperId || details?.id;
             const scraperId = stripMangaKatanaPrefix(candidateScraperId);
             const chapters = scraperId ? await getChapterList(scraperId).catch((error) => {
                 console.warn(`[getMangaDetailsWithChapters] Chapter hydration failed for ${scraperId}:`, error);
@@ -524,25 +589,54 @@ export async function getEnrichedSpotlight() {
         console.log('Using Hot Updates for Spotlight');
         const hotUpdates = await getHotUpdates();
 
-        // Map Hot Updates
-        const mappedManga = hotUpdates.slice(0, 8).map((update: any) => ({
-            id: update.id, // String ID (mk:...)
-            title: {
-                english: update.title,
-                romaji: update.title,
-                native: update.title
-            },
-            description: `Latest chapter: ${update.chapter}. (Source: MangaKatana)`,
-            coverImage: {
-                extraLarge: update.thumbnail,
-                large: update.thumbnail
-            },
-            format: 'MANGA',
-            chapters: parseFloat(update.chapter) || 0,
-            status: 'RELEASING',
-            averageScore: 0,
-            genres: ['Manga'],
-            countryOfOrigin: 'JP'
+        // Map Hot Updates with full details
+        const topUpdates = hotUpdates.slice(0, 8);
+        const mappedManga = await Promise.all(topUpdates.map(async (update: any) => {
+            try {
+                // Try to fetch full details for author and synopsis
+                const details = await getMangaDetails(update.id);
+                return {
+                    id: update.id, // String ID (mk:...)
+                    title: {
+                        english: details.title || update.title,
+                        romaji: details.title || update.title,
+                        native: details.title || update.title
+                    },
+                    description: details.synopsis || `Latest chapter: ${update.chapter}. (Source: MangaKatana)`,
+                    coverImage: {
+                        extraLarge: details.coverImage || update.thumbnail,
+                        large: details.coverImage || update.thumbnail
+                    },
+                    format: 'MANGA',
+                    chapters: parseFloat(update.chapter) || 0,
+                    status: details.status?.toUpperCase() || 'RELEASING',
+                    averageScore: 0,
+                    genres: details.genres?.length ? details.genres : ['Manga'],
+                    countryOfOrigin: 'JP',
+                    staff: details.author ? { edges: [{ role: 'Story & Art', node: { name: { full: details.author } } }] } : undefined
+                };
+            } catch (err) {
+                // Fallback to basic hot update data if details fetch fails
+                return {
+                    id: update.id,
+                    title: {
+                        english: update.title,
+                        romaji: update.title,
+                        native: update.title
+                    },
+                    description: `Latest chapter: ${update.chapter}. (Source: MangaKatana)`,
+                    coverImage: {
+                        extraLarge: update.thumbnail,
+                        large: update.thumbnail
+                    },
+                    format: 'MANGA',
+                    chapters: parseFloat(update.chapter) || 0,
+                    status: 'RELEASING',
+                    averageScore: 0,
+                    genres: ['Manga'],
+                    countryOfOrigin: 'JP'
+                };
+            }
         }));
 
         spotlightCache = mappedManga;
