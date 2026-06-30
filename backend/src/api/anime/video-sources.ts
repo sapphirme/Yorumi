@@ -54,23 +54,37 @@ class VideasySource implements VideoSource {
     async getStream(anilistId: number, episode: number): Promise<StreamResponse | null> {
         const baseUrl = String(process.env.VIDEASY_BASE_URL || 'https://player.videasy.to').replace(/\/+$/, '');
         const playerUrl = `${baseUrl}/anime/${anilistId}/${episode}`;
-        const response = await axios.get<string>(playerUrl, {
-            headers: {
-                'User-Agent': USER_AGENT,
-                Referer: 'https://videasy.to',
-                Accept: 'text/html,application/xhtml+xml',
-            },
-            timeout: 15_000,
-        });
-        const html = String(response.data || '');
-        const match = html.match(/(?:file|src)\s*[:=]\s*["']([^"']+\.m3u8[^"']*)["']/i);
-        if (!match?.[1]) return null;
-
-        const m3u8Url = absoluteUrl(match[1], baseUrl);
+        
+        try {
+            const response = await axios.get<string>(playerUrl, {
+                headers: {
+                    'User-Agent': USER_AGENT,
+                    Referer: 'https://videasy.to',
+                    Accept: 'text/html,application/xhtml+xml',
+                },
+                timeout: 15_000,
+            });
+            const html = String(response.data || '');
+            const match = html.match(/(?:file|src)\s*[:=]\s*["']([^"']+\.m3u8[^"']*)["']/i);
+            
+            if (match?.[1]) {
+                const m3u8Url = absoluteUrl(match[1], baseUrl);
+                return {
+                    m3u8: `/api/scraper/proxy?url=${encodeURIComponent(m3u8Url)}&referer=${encodeURIComponent(baseUrl)}`,
+                    subtitles: extractSubtitles(html, baseUrl),
+                    source: this.id,
+                    episode,
+                    title: await getEpisodeTitle(anilistId, episode),
+                    referer: baseUrl,
+                };
+            }
+        } catch (error) {
+            // Ignore extraction errors and fallback to iframe
+        }
 
         return {
-            m3u8: `/api/scraper/proxy?url=${encodeURIComponent(m3u8Url)}&referer=${encodeURIComponent(baseUrl)}`,
-            subtitles: extractSubtitles(html, baseUrl),
+            m3u8: playerUrl,
+            subtitles: [],
             source: this.id,
             episode,
             title: await getEpisodeTitle(anilistId, episode),
@@ -84,19 +98,35 @@ class EmbedSource implements VideoSource {
 
     async getStream(anilistId: number, episode: number): Promise<StreamResponse | null> {
         const playerUrl = `${this.baseUrl.replace(/\/+$/, '')}/anime/${anilistId}/${episode}`;
-        const response = await axios.get<string>(playerUrl, {
-            headers: {
-                'User-Agent': USER_AGENT,
-                Referer: this.baseUrl,
-            },
-            timeout: 15_000,
-        });
-        const html = String(response.data || '');
-        const match = html.match(/(?:file|src)\s*[:=]\s*["']([^"']+\.m3u8[^"']*)["']/i);
-        if (!match?.[1]) return null;
+        
+        try {
+            const response = await axios.get<string>(playerUrl, {
+                headers: {
+                    'User-Agent': USER_AGENT,
+                    Referer: this.baseUrl,
+                },
+                timeout: 15_000,
+            });
+            const html = String(response.data || '');
+            const match = html.match(/(?:file|src)\s*[:=]\s*["']([^"']+\.m3u8[^"']*)["']/i);
+            
+            if (match?.[1]) {
+                return {
+                    m3u8: absoluteUrl(match[1], this.baseUrl),
+                    subtitles: extractSubtitles(html, this.baseUrl),
+                    source: this.id,
+                    episode,
+                    title: await getEpisodeTitle(anilistId, episode),
+                    referer: this.baseUrl,
+                };
+            }
+        } catch (error) {
+            // Ignore extraction errors and fallback to iframe
+        }
+
         return {
-            m3u8: absoluteUrl(match[1], this.baseUrl),
-            subtitles: extractSubtitles(html, this.baseUrl),
+            m3u8: playerUrl,
+            subtitles: [],
             source: this.id,
             episode,
             title: await getEpisodeTitle(anilistId, episode),
