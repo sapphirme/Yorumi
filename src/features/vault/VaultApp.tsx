@@ -8,25 +8,42 @@ import SpotlightSkeleton from '../anime/components/SpotlightSkeleton';
 import { API_BASE } from '../../config/api';
 import AnimeDashboard from '../anime/components/AnimeDashboard';
 import type { Anime } from '../../types/anime';
+import { useContinueWatching } from '../../hooks/useContinueWatching';
+import { useContinueReading } from '../../hooks/useContinueReading';
+import MangaContinueReading from '../manga/components/MangaContinueReading';
+
+const vaultCache: Record<string, { data: any; timestamp: number }> = {};
+const CACHE_TTL = 15 * 60 * 1000; // 15 minutes frontend cache
 
 export default function VaultApp() {
     const location = useLocation();
     const navigate = useNavigate();
     const isManga = location.pathname.startsWith('/manga');
+    const { continueWatchingList, removeFromHistory: removeWatchingHistory } = useContinueWatching({ isVault: true });
+    const { continueReadingList, removeFromHistory: removeReadingHistory } = useContinueReading({ isVault: true });
     
-    const [data, setData] = useState<any>(null);
-    const [loading, setLoading] = useState(true);
+    const endpoint = isManga ? `${API_BASE}/vault/manga/home` : `${API_BASE}/vault/anime/home`;
+    
+    // Initialize state with cache if available
+    const cachedEntry = vaultCache[endpoint];
+    const isCachedValid = cachedEntry && (Date.now() - cachedEntry.timestamp < CACHE_TTL);
+
+    const [data, setData] = useState<any>(isCachedValid ? cachedEntry.data : null);
+    const [loading, setLoading] = useState(!isCachedValid);
     const [fetchError, setFetchError] = useState<string | null>(null);
 
     useEffect(() => {
+        if (isCachedValid && data) {
+            return; // Skip fetch if we have valid cached data
+        }
+
         setLoading(true);
-        const endpoint = isManga ? `${API_BASE}/vault/manga/home` : `${API_BASE}/vault/anime/home`;
-        
         fetch(endpoint)
             .then(res => res.json().catch(() => ({ success: false, message: 'Invalid JSON response from server' })))
             .then(json => {
                 if (json.success) {
                     setData(json.data);
+                    vaultCache[endpoint] = { data: json.data, timestamp: Date.now() };
                 } else {
                     setFetchError(json.message || 'Server returned success: false');
                 }
@@ -37,7 +54,7 @@ export default function VaultApp() {
                 setFetchError(err.message || 'Network fetch failed');
                 setLoading(false);
             });
-    }, [isManga]);
+    }, [endpoint, isCachedValid, data]);
 
     if (loading) {
         if (isManga) {
@@ -45,7 +62,8 @@ export default function VaultApp() {
                 <div className="min-h-screen pb-20 bg-[#050000]">
                     <SpotlightSkeleton />
                     <div className="w-full max-w-7xl mx-auto px-8 md:px-14 z-10 relative mt-8">
-                        <VaultLatestUpdates items={[]} loading={true} />
+                        <VaultLatestUpdates items={[]} loading={true} title="NEW MANHWA" />
+                        <VaultLatestUpdates items={[]} loading={true} title="LATEST RELEASES" />
                     </div>
                 </div>
             );
@@ -57,7 +75,7 @@ export default function VaultApp() {
         );
     }
 
-    if (fetchError || !data || (isManga && !data.spotlight?.length && !data.latest?.length) || (!isManga && data.length === 0)) {
+    if (fetchError || !data || (isManga && !data.spotlight?.length && !data.latest?.length && !data.newManhwa?.length) || (!isManga && data.length === 0)) {
         return (
             <div className="min-h-screen flex flex-col items-center justify-center text-red-500 bg-[#050000]">
                 <p className="font-semibold tracking-widest text-sm">FAILED TO FETCH DATA (NO CONTENT)</p>
@@ -81,7 +99,9 @@ export default function VaultApp() {
             <div className="min-h-screen pb-20 bg-[#050000]">
                 <VaultSpotlight items={data.spotlight || []} onMangaClick={handleMangaClick} />
                 <div className="w-full max-w-7xl mx-auto px-8 md:px-14 z-10 relative mt-8">
-                    <VaultLatestUpdates items={data.latest || []} onMangaClick={handleMangaClick} />
+
+                    <VaultLatestUpdates items={data.newManhwa || []} title="NEW MANHWA" onMangaClick={handleMangaClick} />
+                    <VaultLatestUpdates items={data.latest || []} title="LATEST RELEASES" onMangaClick={handleMangaClick} />
                 </div>
             </div>
         );
@@ -138,6 +158,8 @@ export default function VaultApp() {
     return (
         <div className="min-h-screen pb-20 bg-[#0a0a0a]">
             <AnimeDashboard
+                continueWatchingList={[]}
+                onRemoveHistory={() => {}}
                 hideTopTen={true}
                 hideTopAnime={true}
                 spotlightAnime={finalSpotlight}
