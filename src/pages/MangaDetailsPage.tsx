@@ -155,7 +155,8 @@ export default function MangaDetailsPage() {
         readChapters
     } = useManga();
 
-    const { isInReadList, addToReadList, removeFromReadList } = useReadList();
+    const isVault = id?.startsWith('vault:') || id?.startsWith('vault-manga:');
+    const { isInReadList, addToReadList, removeFromReadList } = useReadList({ isVault });
     const { language } = useTitleLanguage();
 
     const currentRouteId = normalizeMangaRouteId(id);
@@ -183,7 +184,7 @@ export default function MangaDetailsPage() {
         const title = slugify(displayManga.title || 'manga');
         const chapterMatch = chapter.title.match(/Chapter\s+(\d+)/i);
         const chapterNum = chapterMatch ? chapterMatch[1] : '1';
-        navigate(`/manga/read/${title}/${id}/c${chapterNum}`);
+        navigate(`/manga/read/${title}/${id}/c${chapterNum}`, { state: { manga: displayManga } });
     }, [displayManga, id, navigate]);
 
     // Fetch details on mount or ID change
@@ -409,7 +410,7 @@ export default function MangaDetailsPage() {
                             </div>
 
                             <button
-                                onClick={() => window.history.back()}
+                                onClick={() => navigate(-1)}
                                 className="h-10 px-6 bg-[#1a1a1a] hover:bg-white/10 text-white text-sm font-bold rounded-xl transition-colors flex items-center gap-2 whitespace-nowrap"
                             >
                                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
