@@ -37,6 +37,9 @@ router.get('/proxy', async (req, res) => {
         } else if (urlObj.hostname.includes('hanime-cdn')) {
             referer = 'https://hanime.tv/';
             origin = 'https://hanime.tv';
+        } else if (urlObj.hostname.includes('manread.xyz') || urlObj.hostname.includes('mancover.xyz') || urlObj.hostname.includes('manhwaread.com')) {
+            referer = 'https://manhwaread.com/';
+            origin = 'https://manhwaread.com';
         }
 
         const response = await axios.get(decodedUrl, {
