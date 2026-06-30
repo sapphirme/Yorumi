@@ -36,7 +36,7 @@ type StreamLookupMetadata = {
 
 export type StreamServerKey = 'auto' | 'allmanga' | 'videasy';
 
-export const STREAM_SERVER_OPTIONS: Array<{ key: StreamServerKey; label: string }> = [
+const STREAM_SERVER_OPTIONS: Array<{ key: StreamServerKey; label: string }> = [
     { key: 'videasy', label: 'Videasy (Fastest)' },
     { key: 'auto', label: 'Default (AllManga)' },
 ];
