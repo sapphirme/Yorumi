@@ -4,13 +4,13 @@ type LocalAuthShim = {
     } | null;
 };
 
-export const app = null;
-export const analytics = null;
-export const auth: LocalAuthShim = {
+const app = null;
+const analytics = null;
+const auth: LocalAuthShim = {
     currentUser: {
         uid: 'local-desktop-user'
     }
 };
 export const db = null;
-export const googleProvider = null;
+const googleProvider = null;
 export const isFirebaseEnabled = false;
