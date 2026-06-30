@@ -879,7 +879,7 @@ function AnimeDetailsPageContent() {
         const playbackEpisodeNumber = scraperEpisodeNumbers.has(absoluteEpisodeNumber)
             ? absoluteEpisodeNumber
             : displayNumber;
-        const thumbnail = tmdbService.imgUrl(episode.still_path, 'w300');
+        const thumbnail = tmdbService.imgUrl(episode.still_path, 'original');
 
         return {
             session: `tmdb:${tmdbDetails?.tmdbId || 'unknown'}:${requestedTmdbSeasonNumber || 1}:${displayNumber}`,
@@ -914,6 +914,10 @@ function AnimeDetailsPageContent() {
             );
         }) || null
         : null;
+
+    const activeIndex = activeVisibleEpisode ? visibleEpisodes.indexOf(activeVisibleEpisode) : -1;
+    const prevVisibleEpisode = activeIndex > 0 ? visibleEpisodes[activeIndex - 1] : null;
+    const nextVisibleEpisode = activeIndex >= 0 && activeIndex < visibleEpisodes.length - 1 ? visibleEpisodes[activeIndex + 1] : null;
     const activePlayableEpisode = activeEpParam
         ? episodes.find((episode) => {
             const playbackEpisodeNumber = Number(episode._tmdbAbsolute || episode.episodeNumber);
@@ -963,6 +967,8 @@ function AnimeDetailsPageContent() {
                             isWatched={watchedEpisodes.has(Number(activeEpParam))}
                             isResolvingEpisode={isPlayerResolvingEpisode}
                             fallbackEpisode={activeVisibleEpisode}
+                            prevEpisode={prevVisibleEpisode}
+                            nextEpisode={nextVisibleEpisode}
                             onMarkWatched={() => {
                                 const epNum = Number(activeEpParam);
                                 if (Number.isFinite(epNum) && epNum > 0) {
