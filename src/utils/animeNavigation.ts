@@ -9,13 +9,13 @@ const toPositiveNumber = (value: unknown): number => {
     return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 };
 
-export const isAnimePaheSessionId = (value: unknown): boolean =>
+const isAnimePaheSessionId = (value: unknown): boolean =>
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(value || '').trim());
 
-export const isGenericScraperSessionId = (value: unknown): boolean =>
+const isGenericScraperSessionId = (value: unknown): boolean =>
     /^[a-z0-9-]+$/i.test(String(value || '').trim());
 
-export const isProviderScraperSessionId = (value: unknown): boolean =>
+const isProviderScraperSessionId = (value: unknown): boolean =>
     /^consumet:[a-z0-9-]+:.+/i.test(String(value || '').trim());
 
 export const isSupportedScraperSessionId = (value: unknown): boolean => {
