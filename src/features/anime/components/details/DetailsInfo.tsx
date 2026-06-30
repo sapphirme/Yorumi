@@ -1,5 +1,6 @@
 import { Play, Plus, Check } from 'lucide-react';
 import { AnimatePresence, m } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import type { Anime } from '../../../../types/anime';
 import { useTitleLanguage } from '../../../../context/TitleLanguageContext';
 import { getDisplayTitle } from '../../../../utils/titleLanguage';
@@ -18,6 +19,7 @@ interface DetailsInfoProps {
 }
 
 export default function DetailsInfo({ anime, episodesCount, isLoading = false, inList, inFavorites = false, onWatch, onToggleList, onToggleFavorite, statusPicker, children }: DetailsInfoProps) {
+    const navigate = useNavigate();
     const { language } = useTitleLanguage();
     const displayTitle = getDisplayTitle(anime as unknown as Record<string, unknown>, language);
     // ... helper ...
@@ -145,7 +147,7 @@ export default function DetailsInfo({ anime, episodesCount, isLoading = false, i
                             </div>
 
                             <button
-                                onClick={() => window.history.back()}
+                                onClick={() => navigate(-1)}
                                 className="h-10 px-6 bg-[#1a1a1a] hover:bg-white/10 text-white text-sm font-bold rounded-xl transition-colors flex items-center gap-2 whitespace-nowrap"
                             >
                                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
