@@ -166,15 +166,15 @@ export async function fetchSkipTimestamps(
     return [];
 }
 
-export function getIntroSkipTimestamp(skipTimestamps: SkipTimestamp[]): SkipTimestamp | null {
+function getIntroSkipTimestamp(skipTimestamps: SkipTimestamp[]): SkipTimestamp | null {
     return skipTimestamps.find((ts) => ts.skipType === 'intro') || null;
 }
 
-export function getOutroSkipTimestamp(skipTimestamps: SkipTimestamp[]): SkipTimestamp | null {
+function getOutroSkipTimestamp(skipTimestamps: SkipTimestamp[]): SkipTimestamp | null {
     return skipTimestamps.find((ts) => ts.skipType === 'outro') || null;
 }
 
-export function isInSkipRange(currentTime: number, skipTimestamp: SkipTimestamp | null, threshold: number = 1): boolean {
+function isInSkipRange(currentTime: number, skipTimestamp: SkipTimestamp | null, threshold: number = 1): boolean {
     if (!skipTimestamp) return false;
     return currentTime >= skipTimestamp.start - threshold && currentTime <= skipTimestamp.end + threshold;
 }
