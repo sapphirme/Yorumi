@@ -2,10 +2,12 @@ import { useNavigate } from 'react-router-dom';
 import { useContinueReading } from '../hooks/useContinueReading';
 import { slugify } from '../utils/slugify';
 import MangaContinueReading from '../features/manga/components/MangaContinueReading';
+import { useVault } from '../context/VaultContext';
 
 export default function MangaContinueReadingPage() {
     const navigate = useNavigate();
-    const { continueReadingList, removeFromHistory } = useContinueReading();
+    const { isVaultUnlocked } = useVault();
+    const { continueReadingList, removeFromHistory } = useContinueReading({ isVault: isVaultUnlocked });
 
     const handleReadClick = (mangaId: string, mangaTitle: string, chapterNumber: string) => {
         const titleSlug = slugify(mangaTitle || 'manga');
