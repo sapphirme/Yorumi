@@ -16,7 +16,7 @@ export interface AvatarItem {
     tags: AvatarCategory[];
 }
 
-export const AVATAR_DATA: AvatarItem[] = [
+const AVATAR_DATA: AvatarItem[] = [
     // Bocchi The Rock
     { id: 'bocchi_hitori', path: 'bocchitherock/hitori.jpg', tags: ['BocchiTheRock'] },
     { id: 'bocchi_kita', path: 'bocchitherock/kita.jpg', tags: ['BocchiTheRock'] },
@@ -70,7 +70,7 @@ export const getAllCategories = (): AvatarCategory[] => {
     return Array.from(tags).sort();
 };
 
-export const getRandomAvatar = () => {
+const getRandomAvatar = () => {
     const randomItem = AVATAR_DATA[Math.floor(Math.random() * AVATAR_DATA.length)];
     return getCloudinaryAvatarUrl(randomItem.path) || `/avatars/${randomItem.path}`;
 };
