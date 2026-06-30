@@ -1,6 +1,8 @@
 import { collection, query, where, orderBy, limit, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db, isFirebaseEnabled } from './firebase';
 
+type EpisodeHistoryMap = Record<string, Array<number | string>>;
+
 export interface PublicUserProfile {
     uid: string;
     displayName: string;
@@ -14,7 +16,7 @@ export interface PublicUserProfile {
     readList: any[];
     continueWatching: any[];
     continueReading: any[];
-    episodeHistory: Record<string, number[]>;
+    episodeHistory: EpisodeHistoryMap;
     chapterHistory: Record<string, string[]>;
     animeWatchTime: Record<string, number>;
     animeWatchTimeTotalSeconds: number;

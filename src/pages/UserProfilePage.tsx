@@ -344,6 +344,8 @@ const parseEpisodeNumber = (value: unknown): number => {
     const raw = String(value ?? '').trim();
     const direct = Number(raw);
     if (Number.isFinite(direct)) return direct;
+    const keyedMatch = raw.match(/^ep:(\d+(?:\.\d+)?)$/i) || raw.match(/:e(\d+(?:\.\d+)?)$/i);
+    if (keyedMatch) return Number(keyedMatch[1]);
     const match = raw.match(/(\d+(?:\.\d+)?)/);
     return match ? Number(match[1]) : NaN;
 };
@@ -508,7 +510,7 @@ const applyMangaCompletionSnapshot = (
 const countCompletedAnimeGroups = (
     animeGroups: Map<string, Set<string>>,
     animeGroupProgress: Map<string, Set<number>>,
-    episodeHistory: Record<string, number[]>,
+    episodeHistory: Record<string, Array<number | string>>,
     completionMeta: Map<string, CompletionMeta>
 ) => Array.from(animeGroups.entries()).reduce((sum, [key, ids]) => {
     const meta = completionMeta.get(key);

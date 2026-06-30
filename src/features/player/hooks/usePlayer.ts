@@ -4,6 +4,7 @@ import { useAnime } from '../../../hooks/useAnime';
 import { useStreams } from '../../../hooks/useStreams';
 import type { Anime, Episode } from '../../../types/anime';
 import { storage } from '../../../utils/storage';
+import { getEpisodeWatchKey } from '../../../utils/episodeWatchKey';
 import { fetchSkipTimestamps, type SkipTimestamp } from '../../../services/skipTimestamps';
 
 const AUTO_NEXT_STORAGE_KEY = 'yorumi:auto-next-enabled';
@@ -333,9 +334,8 @@ export function usePlayer(animeId: string | undefined, animeSlugTitle?: string, 
                 autoLoadAttemptKeyRef.current = attemptKey;
 
                 const targetEpisodeNumber = getPlaybackEpisodeNumber(targetEp);
-                if (Number.isFinite(targetEpisodeNumber) && targetEpisodeNumber > 0) {
-                    markEpisodeComplete(targetEpisodeNumber);
-                }
+                const targetWatchKey = getEpisodeWatchKey(targetEp);
+                if (targetWatchKey) markEpisodeComplete(targetWatchKey);
                 // Update URL if we defaulted to a different episode or resolved 'latest'
                 if (String(targetEpisodeNumber) !== epNumParam) {
                     setSearchParams({ ep: String(targetEpisodeNumber) }, { replace: true });
@@ -349,10 +349,8 @@ export function usePlayer(animeId: string | undefined, animeSlugTitle?: string, 
     // Episode-change bookkeeping.
     useEffect(() => {
         if (!selectedAnime || !currentEpisode) return;
-        const episodeNumber = getPlaybackEpisodeNumber(currentEpisode);
-        if (Number.isFinite(episodeNumber) && episodeNumber > 0) {
-            markEpisodeComplete(episodeNumber);
-        }
+        const episodeWatchKey = getEpisodeWatchKey(currentEpisode);
+        if (episodeWatchKey) markEpisodeComplete(episodeWatchKey);
         saveProgress(selectedAnime, currentEpisode, {
             positionSeconds: Math.max(0, Math.floor(startAtOverrideSeconds ?? resumeAtSeconds ?? 0)),
             durationSeconds: Math.max(0, Math.floor(lastDurationSecondRef.current || 0))
@@ -607,9 +605,8 @@ export function usePlayer(animeId: string | undefined, animeSlugTitle?: string, 
         persistLatestProgress();
         autoLoadAttemptKeyRef.current = '';
         const episodeNumber = getPlaybackEpisodeNumber(ep);
-        if (Number.isFinite(episodeNumber) && episodeNumber > 0) {
-            markEpisodeComplete(episodeNumber);
-        }
+        const episodeWatchKey = getEpisodeWatchKey(ep);
+        if (episodeWatchKey) markEpisodeComplete(episodeWatchKey);
         resetEpisodePlaybackState(false);
         setSearchParams({ ep: String(episodeNumber) });
         loadStream(ep);

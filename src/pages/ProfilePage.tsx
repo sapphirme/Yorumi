@@ -10,7 +10,7 @@ import { useReadList } from '../hooks/useReadList';
 import { useFavoriteAnime } from '../hooks/useFavoriteAnime';
 import { useFavoriteManga } from '../hooks/useFavoriteManga';
 import { slugify } from '../utils/slugify';
-import { storage, type AnimeCompletionSnapshot, type MangaCompletionSnapshot, type ReadListItem, type ReadProgress, type WatchListItem, type WatchProgress } from '../utils/storage';
+import { normalizeEpisodeHistoryKey, storage, type AnimeCompletionSnapshot, type EpisodeHistoryKey, type MangaCompletionSnapshot, type ReadListItem, type ReadProgress, type WatchListItem, type WatchProgress } from '../utils/storage';
 import { animeService } from '../services/animeService';
 import { mangaService } from '../services/mangaService';
 import useEmblaCarousel from 'embla-carousel-react';
@@ -602,13 +602,14 @@ type ImportExportPanel = 'import' | 'export';
 type ExportFormat = 'json' | 'text' | 'mal-xml';
 type ImportMode = 'merge' | 'replace';
 type ImportSource = 'mal' | 'al' | 'file';
+type EpisodeHistoryMap = Record<string, Array<number | string>>;
 
 type YorumiBackupLibrary = {
     watchList?: WatchListItem[];
     readList?: ReadListItem[];
     continueWatching?: WatchProgress[];
     continueReading?: ReadProgress[];
-    episodeHistory?: Record<string, number[]>;
+    episodeHistory?: EpisodeHistoryMap;
     chapterHistory?: Record<string, string[]>;
     animeWatchTime?: Record<string, number>;
     animeWatchTimeTotalSeconds?: number;
@@ -628,13 +629,13 @@ type YorumiBackupPayload = {
 
 type ImportedAnimeListResult = {
     items: WatchListItem[];
-    episodeHistory: Record<string, number[]>;
+    episodeHistory: EpisodeHistoryMap;
 };
 
 type ImportedAnilistLibraryResult = {
     watchList: WatchListItem[];
     readList: ReadListItem[];
-    episodeHistory: Record<string, number[]>;
+    episodeHistory: EpisodeHistoryMap;
     chapterHistory: Record<string, string[]>;
     favoriteAnime: FavoriteAnimeItem[];
     favoriteManga: FavoriteMangaItem[];
@@ -675,12 +676,23 @@ const mergeByKey = <T,>(current: T[], incoming: T[], getKey: (item: T) => string
     return getTime ? values.sort((a, b) => getTime(b) - getTime(a)) : values;
 };
 
-const mergeNumberHistory = (current: Record<string, number[]>, incoming: Record<string, number[]>) => {
-    const merged: Record<string, number[]> = { ...current };
+const mergeEpisodeHistory = (current: EpisodeHistoryMap, incoming: EpisodeHistoryMap) => {
+    const merged: Record<string, EpisodeHistoryKey[]> = {};
+    Object.entries(current || {}).forEach(([id, values]) => {
+        if (!Array.isArray(values)) return;
+        merged[id] = values
+            .map((value) => normalizeEpisodeHistoryKey(value))
+            .filter((value): value is EpisodeHistoryKey => Boolean(value));
+    });
     Object.entries(incoming || {}).forEach(([id, values]) => {
         if (!Array.isArray(values)) return;
-        const next = new Set([...(merged[id] || []), ...values.map((value) => Number(value)).filter(Number.isFinite)]);
-        merged[id] = Array.from(next).sort((a, b) => a - b);
+        const next = new Set([
+            ...(merged[id] || []),
+            ...values
+                .map((value) => normalizeEpisodeHistoryKey(value))
+                .filter((value): value is EpisodeHistoryKey => Boolean(value))
+        ]);
+        merged[id] = Array.from(next).sort();
     });
     return merged;
 };
@@ -750,7 +762,7 @@ const fetchMalAnimeList = async (username: string): Promise<ImportedAnimeListRes
     }
     const payload = await res.json();
     const data = (Array.isArray(payload?.data) ? payload.data : []) as Record<string, unknown>[];
-    const episodeHistory: Record<string, number[]> = {};
+    const episodeHistory: EpisodeHistoryMap = {};
     const items = data.map((entry: Record<string, unknown>, index: number): WatchListItem | null => {
         const id = String(entry.anime_id || '').trim();
         const title = String(entry.anime_title || entry.anime_title_eng || '').trim();
@@ -924,7 +936,7 @@ const fetchAnilistLibrary = async (username: string): Promise<ImportedAnilistLib
         fetchAnilistMediaCollection(username, 'MANGA'),
         fetchAnilistFavorites(username)
     ]);
-    const episodeHistory: Record<string, number[]> = {};
+    const episodeHistory: EpisodeHistoryMap = {};
     const chapterHistory: Record<string, string[]> = {};
 
     const watchList = animeEntries.map((entry, index): WatchListItem | null => {
@@ -1104,7 +1116,7 @@ const ImportExportTab = () => {
         storage.setReadList(replace ? importedReadList : mergeByKey(storage.getReadList(), importedReadList, (item) => item.id, (item) => item.addedAt || 0));
         storage.setContinueWatching(replace ? importedContinueWatching : mergeByKey(storage.getContinueWatching(), importedContinueWatching, (item) => item.animeId, (item) => item.lastWatched || item.timestamp || 0));
         storage.setContinueReading(replace ? importedContinueReading : mergeByKey(storage.getContinueReading(), importedContinueReading, (item) => item.mangaId, (item) => item.lastRead || item.timestamp || 0));
-        storage.setEpisodeHistory(replace ? (incoming.episodeHistory || {}) : mergeNumberHistory(storage.getEpisodeHistory(), incoming.episodeHistory || {}));
+        storage.setEpisodeHistory(replace ? (incoming.episodeHistory || {}) : mergeEpisodeHistory(storage.getEpisodeHistory(), incoming.episodeHistory || {}));
         storage.setChapterHistory(replace ? (incoming.chapterHistory || {}) : mergeStringHistory(storage.getChapterHistory(), incoming.chapterHistory || {}));
         storage.setAnimeWatchTime(replace ? (incoming.animeWatchTime || {}) : mergeNumberMap(storage.getAnimeWatchTime(), incoming.animeWatchTime || {}));
         storage.setAnimeWatchTimeTotalSeconds(
@@ -1419,10 +1431,21 @@ const applyMangaCompletionSnapshot = (
     });
 };
 
+const parseWatchedEpisodeNumber = (value: unknown): number => {
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    const raw = String(value ?? '').trim();
+    const direct = Number(raw);
+    if (Number.isFinite(direct)) return direct;
+    const keyedMatch = raw.match(/^ep:(\d+(?:\.\d+)?)$/i) || raw.match(/:e(\d+(?:\.\d+)?)$/i);
+    if (keyedMatch) return Number(keyedMatch[1]);
+    const match = raw.match(/(\d+(?:\.\d+)?)/);
+    return match ? Number(match[1]) : NaN;
+};
+
 const countCompletedAnimeGroups = (
     animeGroups: Map<string, Set<string>>,
     groupProgressEpisodes: Map<string, Set<number>>,
-    episodeHistory: Record<string, number[]>,
+    episodeHistory: EpisodeHistoryMap,
     completionMeta: Map<string, CompletionMeta>
 ) => Array.from(animeGroups.entries()).reduce((sum, [groupKey, ids]) => {
     const meta = completionMeta.get(groupKey);
@@ -1431,7 +1454,7 @@ const countCompletedAnimeGroups = (
     const uniqueEpisodes = new Set<number>();
     ids.forEach((id) => {
         (episodeHistory[id] || []).forEach((ep) => {
-            const n = typeof ep === 'number' ? ep : Number(ep);
+            const n = parseWatchedEpisodeNumber(ep);
             if (Number.isFinite(n) && n > 0) uniqueEpisodes.add(n);
         });
     });
@@ -2020,13 +2043,15 @@ const AnimeStatsOverview = () => {
     }, []);
 
     const episodeHistory = React.useMemo(() => {
-        const merged: Record<string, unknown[]> = {};
+        const merged: EpisodeHistoryMap = {};
 
         const mergeParsedHistory = (parsed: Record<string, unknown[]>) => {
             Object.entries(parsed || {}).forEach(([id, episodes]) => {
                 if (!Array.isArray(episodes)) return;
                 if (!merged[id]) merged[id] = [];
-                merged[id].push(...episodes);
+                merged[id].push(...episodes.filter((episode): episode is string | number => (
+                    typeof episode === 'string' || typeof episode === 'number'
+                )));
             });
         };
 
@@ -2081,6 +2106,8 @@ const AnimeStatsOverview = () => {
         const raw = String(value ?? '').trim();
         const direct = Number(raw);
         if (Number.isFinite(direct)) return direct;
+        const keyedMatch = raw.match(/^ep:(\d+(?:\.\d+)?)$/i) || raw.match(/:e(\d+(?:\.\d+)?)$/i);
+        if (keyedMatch) return Number(keyedMatch[1]);
         const match = raw.match(/(\d+(?:\.\d+)?)/);
         return match ? Number(match[1]) : NaN;
     };
@@ -2162,7 +2189,7 @@ const AnimeStatsOverview = () => {
         Object.keys(animeWatchTime || {}).length > 0;
     const valueClassName = hasAccountAnimeHistory ? 'text-[#3cb6ff]' : 'text-gray-400';
 
-    const completedAnime = countCompletedAnimeGroups(animeGroups, groupProgressEpisodes, episodeHistory as Record<string, number[]>, animeCompletionMeta);
+    const completedAnime = countCompletedAnimeGroups(animeGroups, groupProgressEpisodes, episodeHistory, animeCompletionMeta);
     const fmt = new Intl.NumberFormat('en-US');
 
     return (

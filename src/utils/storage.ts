@@ -42,6 +42,20 @@ export interface MangaCompletionSnapshot {
     mediaStatus?: string;
 }
 
+export type EpisodeHistoryKey = string;
+
+export const normalizeEpisodeHistoryKey = (value: number | string): EpisodeHistoryKey | null => {
+    if (typeof value === 'number') {
+        return Number.isFinite(value) && value > 0 ? `ep:${value}` : null;
+    }
+
+    const raw = String(value || '').trim();
+    if (!raw) return null;
+    const numeric = Number(raw);
+    if (Number.isFinite(numeric) && numeric > 0) return `ep:${numeric}`;
+    return raw;
+};
+
 export interface WatchListItem {
     id: string;
     anilistId?: string;
@@ -483,12 +497,14 @@ export const storage = {
     },
 
     // Episode History (Watched Episodes)
-    markEpisodeAsWatched: (animeId: string, episodeNumber: number) => {
+    markEpisodeAsWatched: (animeId: string, episodeKey: number | string) => {
         try {
+            const normalizedKey = normalizeEpisodeHistoryKey(episodeKey);
+            if (!normalizedKey) return;
             const history = storage.getEpisodeHistory();
             if (!history[animeId]) history[animeId] = [];
-            if (!history[animeId].includes(episodeNumber)) {
-                history[animeId].push(episodeNumber);
+            if (!history[animeId].includes(normalizedKey)) {
+                history[animeId].push(normalizedKey);
                 setScopedItem(STORAGE_KEYS.EPISODE_HISTORY, JSON.stringify(history));
                 emitStorageUpdated();
             }
@@ -497,11 +513,13 @@ export const storage = {
         }
     },
 
-    unmarkEpisodeAsWatched: (animeId: string, episodeNumber: number) => {
+    unmarkEpisodeAsWatched: (animeId: string, episodeKey: number | string) => {
         try {
+            const normalizedKey = normalizeEpisodeHistoryKey(episodeKey);
+            if (!normalizedKey) return;
             const history = storage.getEpisodeHistory();
-            if (history[animeId] && history[animeId].includes(episodeNumber)) {
-                history[animeId] = history[animeId].filter(ep => ep !== episodeNumber);
+            if (history[animeId] && history[animeId].includes(normalizedKey)) {
+                history[animeId] = history[animeId].filter(ep => ep !== normalizedKey);
                 setScopedItem(STORAGE_KEYS.EPISODE_HISTORY, JSON.stringify(history));
                 emitStorageUpdated();
             }
@@ -510,25 +528,45 @@ export const storage = {
         }
     },
 
-    getEpisodeHistory: (): Record<string, number[]> => {
+    getEpisodeHistory: (): Record<string, EpisodeHistoryKey[]> => {
         try {
             const data = getScopedItem(STORAGE_KEYS.EPISODE_HISTORY);
-            return data ? JSON.parse(data) : {};
+            const parsed = data ? JSON.parse(data) : {};
+            if (!parsed || typeof parsed !== 'object') return {};
+
+            return Object.entries(parsed).reduce<Record<string, EpisodeHistoryKey[]>>((acc, [animeId, entries]) => {
+                if (!Array.isArray(entries)) return acc;
+                acc[animeId] = Array.from(new Set(
+                    entries
+                        .map((entry) => normalizeEpisodeHistoryKey(entry as number | string))
+                        .filter((entry): entry is EpisodeHistoryKey => Boolean(entry))
+                ));
+                return acc;
+            }, {});
         } catch {
             return {};
         }
     },
 
-    setEpisodeHistory: (history: Record<string, number[]>) => {
+    setEpisodeHistory: (history: Record<string, Array<number | string>>) => {
         try {
-            setScopedItem(STORAGE_KEYS.EPISODE_HISTORY, JSON.stringify(history || {}));
+            const normalizedHistory = Object.entries(history || {}).reduce<Record<string, EpisodeHistoryKey[]>>((acc, [animeId, entries]) => {
+                if (!Array.isArray(entries)) return acc;
+                acc[animeId] = Array.from(new Set(
+                    entries
+                        .map((entry) => normalizeEpisodeHistoryKey(entry))
+                        .filter((entry): entry is EpisodeHistoryKey => Boolean(entry))
+                ));
+                return acc;
+            }, {});
+            setScopedItem(STORAGE_KEYS.EPISODE_HISTORY, JSON.stringify(normalizedHistory));
             emitStorageUpdated();
         } catch (error) {
             console.error('Failed to set episode history:', error);
         }
     },
 
-    getWatchedEpisodes: (animeId: string): number[] => {
+    getWatchedEpisodes: (animeId: string): EpisodeHistoryKey[] => {
         const history = storage.getEpisodeHistory();
         return history[animeId] || [];
     },

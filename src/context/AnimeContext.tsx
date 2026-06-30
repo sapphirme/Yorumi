@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useRef, useEffect, type ReactNode 
 import type { Anime, Episode } from '../types/anime';
 import { animeService } from '../services/animeService';
 import { useContinueWatching } from '../hooks/useContinueWatching';
-import { storage } from '../utils/storage';
+import { normalizeEpisodeHistoryKey, storage, type EpisodeHistoryKey } from '../utils/storage';
 import { preloadLogos } from '../components/anime/AnimeLogoImage';
 import { useAuth } from './AuthContext';
 import { getDisplayImageUrl } from '../utils/image';
@@ -78,10 +78,10 @@ interface AnimeContextType {
     removeFromHistory: (malId: number | string) => void;
 
     // Episode Tracking
-    watchedEpisodes: Set<number>;
-    markEpisodeComplete: (episodeNumber: number) => void;
-    unmarkEpisodeComplete: (episodeNumber: number) => void;
-    toggleEpisodeComplete: (episodeNumber: number) => void;
+    watchedEpisodes: Set<EpisodeHistoryKey>;
+    markEpisodeComplete: (episodeKey: number | string) => void;
+    unmarkEpisodeComplete: (episodeKey: number | string) => void;
+    toggleEpisodeComplete: (episodeKey: number | string) => void;
 }
 
 const AnimeContext = createContext<AnimeContextType | undefined>(undefined);
@@ -133,7 +133,7 @@ export function AnimeProvider({ children }: { children: ReactNode }) {
     const [topTenWeek, setTopTenWeek] = useState<Anime[]>(cachedTopTenInit?.week ?? []);
     const [topTenMonth, setTopTenMonth] = useState<Anime[]>(cachedTopTenInit?.month ?? []);
     const [selectedAnime, setSelectedAnime] = useState<Anime | null>(null);
-    const [watchedEpisodes, setWatchedEpisodes] = useState<Set<number>>(new Set());
+    const [watchedEpisodes, setWatchedEpisodes] = useState<Set<EpisodeHistoryKey>>(new Set());
 
     // UI State (Modals - Kept for compatibility but might not be used in page router mainly)
     const [showAnimeDetails, setShowAnimeDetails] = useState(false);
@@ -1394,8 +1394,8 @@ export function AnimeProvider({ children }: { children: ReactNode }) {
 
         const history = storage.getEpisodeHistory();
         const mergedEpisodes = Array.from(new Set(
-            aliasIds.flatMap((id) => (history[id] || []).map((episode) => Number(episode)).filter((episode) => Number.isFinite(episode) && episode > 0))
-        )).sort((a, b) => a - b);
+            aliasIds.flatMap((id) => history[id] || [])
+        )).sort();
 
         const hadAliasData = aliasIds.some((id) => id !== canonicalId && Array.isArray(history[id]) && history[id].length > 0);
         if (!hadAliasData) return;
@@ -1432,35 +1432,41 @@ export function AnimeProvider({ children }: { children: ReactNode }) {
         return () => window.removeEventListener('yorumi-storage-updated', handleStorageUpdated);
     }, [selectedAnime, user?.uid]);
 
-    const markEpisodeComplete = (episodeNumber: number) => {
+    const markEpisodeComplete = (episodeKey: number | string) => {
         if (!selectedAnime) return;
+        const normalizedKey = normalizeEpisodeHistoryKey(episodeKey);
+        if (!normalizedKey) return;
         const canonicalId = getCanonicalAnimeHistoryId(selectedAnime);
         if (canonicalId) {
-            storage.markEpisodeAsWatched(canonicalId, episodeNumber);
+            storage.markEpisodeAsWatched(canonicalId, normalizedKey);
         }
 
-        setWatchedEpisodes(prev => new Set(prev).add(episodeNumber));
+        setWatchedEpisodes(prev => new Set(prev).add(normalizedKey));
     };
 
-    const unmarkEpisodeComplete = (episodeNumber: number) => {
+    const unmarkEpisodeComplete = (episodeKey: number | string) => {
         if (!selectedAnime) return;
+        const normalizedKey = normalizeEpisodeHistoryKey(episodeKey);
+        if (!normalizedKey) return;
         const canonicalId = getCanonicalAnimeHistoryId(selectedAnime);
         if (canonicalId) {
-            storage.unmarkEpisodeAsWatched(canonicalId, episodeNumber);
+            storage.unmarkEpisodeAsWatched(canonicalId, normalizedKey);
         }
 
         setWatchedEpisodes(prev => {
             const next = new Set(prev);
-            next.delete(episodeNumber);
+            next.delete(normalizedKey);
             return next;
         });
     };
 
-    const toggleEpisodeComplete = (episodeNumber: number) => {
-        if (watchedEpisodes.has(episodeNumber)) {
-            unmarkEpisodeComplete(episodeNumber);
+    const toggleEpisodeComplete = (episodeKey: number | string) => {
+        const normalizedKey = normalizeEpisodeHistoryKey(episodeKey);
+        if (!normalizedKey) return;
+        if (watchedEpisodes.has(normalizedKey)) {
+            unmarkEpisodeComplete(normalizedKey);
         } else {
-            markEpisodeComplete(episodeNumber);
+            markEpisodeComplete(normalizedKey);
         }
     };
 

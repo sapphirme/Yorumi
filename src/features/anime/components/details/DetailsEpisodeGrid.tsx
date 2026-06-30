@@ -1,6 +1,7 @@
 import { memo, useState } from 'react';
 import { CircleCheckBig } from 'lucide-react';
 import type { Episode, Anime } from '../../../../types/anime';
+import { getEpisodeWatchKey } from '../../../../utils/episodeWatchKey';
 
 export type NormalizedEpisode = Episode & {
     title: string;
@@ -50,7 +51,7 @@ function EpisodeThumbnail({ src, label }: { src?: string; label: string }) {
 
 interface DetailsEpisodeGridProps {
     episodes: NormalizedEpisode[];
-    watchedEpisodes: Set<number>;
+    watchedEpisodes: Set<string>;
     activeEpParam: string | null;
     seasonChips?: SeasonChip[];
     isLoading?: boolean;
@@ -171,7 +172,7 @@ export default function DetailsEpisodeGrid({ episodes, watchedEpisodes, activeEp
                         Array.from({ length: skeletonCount }).map((_, index) => <EpisodeCardSkeleton key={`episode-skeleton-${index}`} />)
                     ) : episodes.length > 0 ? (
                         episodes.map((ep) => {
-                            const watchedKey = ep.playbackEpisodeNumber || Number(ep.episodeNumber);
+                            const watchedKey = getEpisodeWatchKey(ep);
                             const isWatched = watchedEpisodes.has(watchedKey);
                             const activeNumbers = [
                                 String(ep.episodeNumber),

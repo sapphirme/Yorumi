@@ -8,6 +8,7 @@ import type { WatchListItem } from '../utils/storage';
 import { animeService } from '../services/animeService';
 import { tmdbService, type TmdbSeason, type TmdbEpisode } from '../services/tmdbService';
 import { setLocalStorageWithCleanup } from '../utils/localStorageQuota';
+import { getEpisodeWatchKey, getPlaybackEpisodeNumber } from '../utils/episodeWatchKey';
 import VaultAnimeDetailsPage from '../features/vault/components/VaultAnimeDetailsPage';
 
 // Feature Components
@@ -861,13 +862,6 @@ function AnimeDetailsPageContent() {
     const tmdbEpisodesForDisplay = activeChip?.isVirtual && activeChip.offset !== undefined && activeChip.count !== undefined
         ? tmdbEpisodes.slice(activeChip.offset, activeChip.offset + activeChip.count)
         : tmdbEpisodes;
-    const scraperEpisodeNumbers = new Set(
-        episodes
-            .map((episode) => [Number(episode.episodeNumber), Number(episode._tmdbAbsolute)])
-            .flat()
-            .filter((value) => Number.isFinite(value) && value > 0)
-    );
-
     const firstTmdbEpNumber = tmdbEpisodesForDisplay[0]?.episode_number || 1;
     const isTmdbAbsoluteNumbering = firstTmdbEpNumber > 1 && (activeChip?.offset || 0) > 0 && firstTmdbEpNumber >= (activeChip?.offset || 0) * 0.5;
 
@@ -876,9 +870,7 @@ function AnimeDetailsPageContent() {
         const absoluteEpisodeNumber = activeChip?.isVirtual || isTmdbAbsoluteNumbering
             ? episode.episode_number
             : (activeChip?.offset || 0) + episode.episode_number;
-        const playbackEpisodeNumber = scraperEpisodeNumbers.has(absoluteEpisodeNumber)
-            ? absoluteEpisodeNumber
-            : displayNumber;
+        const playbackEpisodeNumber = absoluteEpisodeNumber;
         const thumbnail = tmdbService.imgUrl(episode.still_path, 'original');
 
         return {
@@ -927,12 +919,13 @@ function AnimeDetailsPageContent() {
             );
         })
         : null;
+    const activeEpisodeWatchKey = getEpisodeWatchKey(activeVisibleEpisode || activePlayableEpisode);
     const isPlayerResolvingEpisode = Boolean(activeEpParam) && (
         epLoading ||
         detailsLoading ||
-        episodesBackgroundLoading ||
-        !episodesResolved ||
-        (!activePlayableEpisode && hasEpisodes)
+        (!hasTmdbMetadataSource && episodesBackgroundLoading) ||
+        (!hasTmdbMetadataSource && !episodesResolved) ||
+        (!activePlayableEpisode && !activeVisibleEpisode && hasEpisodes)
     );
     const expectedEpisodeCount = activeChip?.count || Number(selectedAnime.episodes || 0);
     const episodeSkeletonCount = Math.min(
@@ -964,16 +957,13 @@ function AnimeDetailsPageContent() {
                             animeId={animeId} 
                             animeTitle={selectedAnime.title} 
                             onClose={() => setSearchParams({})} 
-                            isWatched={watchedEpisodes.has(Number(activeEpParam))}
+                            isWatched={Boolean(activeEpisodeWatchKey && watchedEpisodes.has(activeEpisodeWatchKey))}
                             isResolvingEpisode={isPlayerResolvingEpisode}
                             fallbackEpisode={activeVisibleEpisode}
                             prevEpisode={prevVisibleEpisode}
                             nextEpisode={nextVisibleEpisode}
                             onMarkWatched={() => {
-                                const epNum = Number(activeEpParam);
-                                if (Number.isFinite(epNum) && epNum > 0) {
-                                    toggleEpisodeComplete(epNum);
-                                }
+                                if (activeEpisodeWatchKey) toggleEpisodeComplete(activeEpisodeWatchKey);
                             }}
                         />
                     ) : null}
@@ -989,7 +979,7 @@ function AnimeDetailsPageContent() {
                             fallbackCoverImage={selectedAnime.images?.jpg?.large_image_url || selectedAnime.images?.jpg?.image_url || selectedAnime.anilist_cover_image || ''}
                             onSeasonClick={handleSeasonChipClick}
                             onEpisodeClick={(ep) => {
-                                const playbackEpisodeNumber = ep._tmdbAbsolute || ep.playbackEpisodeNumber || Number(ep.episodeNumber);
+                                const playbackEpisodeNumber = getPlaybackEpisodeNumber(ep);
                                 setSearchParams({ ep: String(playbackEpisodeNumber) });
 
                                 setTimeout(() => {
