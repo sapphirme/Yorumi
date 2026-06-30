@@ -13,7 +13,7 @@ type StreamProviderOptions = {
     episodeNumber?: number;
 };
 
-export class ScraperService {
+class ScraperService {
     private allMangaScraper: AllMangaScraper;
 
     private cache = new Map<string, { expiresAt: number; value: any }>();
