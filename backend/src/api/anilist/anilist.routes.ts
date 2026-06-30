@@ -439,7 +439,7 @@ const refreshHomeFastCache = async () => {
     return homeFastRefreshPromise;
 };
 
-export const warmHomeFastCache = async () => refreshHomeFastCache();
+const warmHomeFastCache = async () => refreshHomeFastCache();
 
 router.get('/home-fast', async (_req, res) => {
     try {
