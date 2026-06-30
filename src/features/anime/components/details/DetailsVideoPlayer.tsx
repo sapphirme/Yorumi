@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useSearchParams } from 'react-router-dom';
 import { usePersistentPlayer } from '../../../player/context/PersistentPlayerContext';
 import { usePlayer } from '../../../player/hooks/usePlayer';
 import type { Episode } from '../../../../types/anime';
@@ -12,11 +12,26 @@ interface DetailsVideoPlayerProps {
     onMarkWatched?: () => void;
     isResolvingEpisode?: boolean;
     fallbackEpisode?: Episode | null;
+    prevEpisode?: any;
+    nextEpisode?: any;
 }
 
-export default function DetailsVideoPlayer({ animeId, animeTitle, onClose, isWatched, onMarkWatched, isResolvingEpisode = false, fallbackEpisode = null }: DetailsVideoPlayerProps) {
+export default function DetailsVideoPlayer({ animeId, animeTitle, onClose, isWatched, onMarkWatched, isResolvingEpisode = false, fallbackEpisode = null, prevEpisode = null, nextEpisode = null }: DetailsVideoPlayerProps) {
     const location = useLocation();
+    const [searchParams, setSearchParams] = useSearchParams();
     const { registerPlayer, setInlinePlayerElement } = usePersistentPlayer();
+
+    const goToPrevEp = () => {
+        if (!prevEpisode) return;
+        const num = prevEpisode._tmdbAbsolute || prevEpisode.playbackEpisodeNumber || prevEpisode.episodeNumber;
+        if (num) setSearchParams({ ep: String(num) });
+    };
+
+    const goToNextEp = () => {
+        if (!nextEpisode) return;
+        const num = nextEpisode._tmdbAbsolute || nextEpisode.playbackEpisodeNumber || nextEpisode.episodeNumber;
+        if (num) setSearchParams({ ep: String(num) });
+    };
 
     const {
         currentEpisode,
@@ -149,11 +164,6 @@ export default function DetailsVideoPlayer({ animeId, animeTitle, onClose, isWat
                         E{epNum}
                     </span>
                     <div className="flex flex-col">
-                        {animeTitle && (
-                            <span className="text-sm font-medium text-gray-400 truncate max-w-xl">
-                                {animeTitle}
-                            </span>
-                        )}
                         <h2 className="text-xl font-bold text-white truncate max-w-xl">
                             {cleanCurrentTitle || `Episode ${epNum}`}
                         </h2>
@@ -189,9 +199,53 @@ export default function DetailsVideoPlayer({ animeId, animeTitle, onClose, isWat
                 </div>
             </div>
 
-            {/* Video Container */}
-            <div className="w-full aspect-video rounded-2xl overflow-hidden shadow-2xl border border-white/10 bg-black">
-                <div ref={setInlinePlayerElement} className="w-full h-full bg-black" />
+            {/* Video Container Layout */}
+            <div className="relative w-full flex items-center justify-center mt-4 py-4 md:py-8 overflow-visible">
+                
+                {/* Previous Episode Background (Left) */}
+                {prevEpisode && (
+                    <div 
+                        className="absolute -left-4 md:-left-12 lg:-left-20 xl:-left-24 z-10 w-[85%] aspect-video cursor-pointer overflow-hidden group/prev rounded-3xl opacity-60 hover:opacity-100 transition-all duration-300"
+                        onClick={goToPrevEp}
+                        title={`Previous: ${prevEpisode.title}`}
+                    >
+                        <div 
+                            className="absolute inset-0 bg-cover bg-center transition-all duration-300"
+                            style={{ backgroundImage: `url(${prevEpisode.thumbnail || prevEpisode.snapshot})` }}
+                        />
+                        <div className="absolute inset-0 bg-black/60 group-hover/prev:bg-black/20 transition-all duration-300" />
+                        <div className="absolute inset-0 flex items-center justify-start pl-2 md:pl-4 lg:pl-6">
+                            <svg className="w-8 h-8 md:w-10 md:h-10 lg:w-12 lg:h-12 text-white opacity-0 group-hover/prev:opacity-100 transition-all transform -translate-x-4 group-hover/prev:translate-x-0 duration-300 drop-shadow-2xl" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" />
+                            </svg>
+                        </div>
+                    </div>
+                )}
+
+                {/* Next Episode Background (Right) */}
+                {nextEpisode && (
+                    <div 
+                        className="absolute -right-4 md:-right-12 lg:-right-20 xl:-right-24 z-10 w-[85%] aspect-video cursor-pointer overflow-hidden group/next rounded-3xl opacity-60 hover:opacity-100 transition-all duration-300"
+                        onClick={goToNextEp}
+                        title={`Next: ${nextEpisode.title}`}
+                    >
+                        <div 
+                            className="absolute inset-0 bg-cover bg-center transition-all duration-300"
+                            style={{ backgroundImage: `url(${nextEpisode.thumbnail || nextEpisode.snapshot})` }}
+                        />
+                        <div className="absolute inset-0 bg-black/60 group-hover/next:bg-black/20 transition-all duration-300" />
+                        <div className="absolute inset-0 flex items-center justify-end pr-2 md:pr-4 lg:pr-6">
+                            <svg className="w-8 h-8 md:w-10 md:h-10 lg:w-12 lg:h-12 text-white opacity-0 group-hover/next:opacity-100 transition-all transform translate-x-4 group-hover/next:translate-x-0 duration-300 drop-shadow-2xl" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
+                            </svg>
+                        </div>
+                    </div>
+                )}
+
+                {/* Main Video */}
+                <div className="relative z-20 w-full aspect-video rounded-2xl overflow-hidden bg-black transition-all duration-300">
+                    <div ref={setInlinePlayerElement} className="w-full h-full bg-black" />
+                </div>
             </div>
         </div>
     );
