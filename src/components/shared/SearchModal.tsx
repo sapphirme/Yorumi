@@ -4,6 +4,7 @@ import { Search, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useTitleLanguage } from '../../context/TitleLanguageContext';
 import { useNavbarSearch } from '../../features/search/hooks/useNavbarSearch';
+import { useVault } from '../../context/VaultContext';
 import type { SearchPreviewItem } from '../../features/search/api';
 
 interface SearchModalProps {
@@ -23,18 +24,20 @@ export default function SearchModal({ isOpen, onClose, type }: SearchModalProps)
     const inputRef = useRef<HTMLInputElement>(null);
     const [recentSearches, setRecentSearches] = useState<string[]>([]);
 
+    const { isVaultUnlocked } = useVault();
+    const storageKey = `yorumi_recent_searches_${type}${isVaultUnlocked ? '_vault' : ''}`;
+
     useEffect(() => {
         // Load recent searches from local storage
-        const key = `yorumi_recent_searches_${type}`;
         try {
-            const saved = localStorage.getItem(key);
+            const saved = localStorage.getItem(storageKey);
             if (saved) {
                 setRecentSearches(JSON.parse(saved));
             }
         } catch (e) {
             console.error('Failed to parse recent searches', e);
         }
-    }, [type]);
+    }, [type, storageKey]);
 
     useEffect(() => {
         if (isOpen) {
@@ -62,11 +65,10 @@ export default function SearchModal({ isOpen, onClose, type }: SearchModalProps)
         const trimmed = query.trim();
         if (!trimmed) return;
         
-        const key = `yorumi_recent_searches_${type}`;
         const updated = [trimmed, ...recentSearches.filter(s => s.toLowerCase() !== trimmed.toLowerCase())].slice(0, 10);
         setRecentSearches(updated);
         try {
-            localStorage.setItem(key, JSON.stringify(updated));
+            localStorage.setItem(storageKey, JSON.stringify(updated));
         } catch (e) {
             console.error('Failed to save recent searches', e);
         }
@@ -75,20 +77,19 @@ export default function SearchModal({ isOpen, onClose, type }: SearchModalProps)
     const clearRecentSearches = () => {
         setRecentSearches([]);
         try {
-            localStorage.removeItem(`yorumi_recent_searches_${type}`);
+            localStorage.removeItem(storageKey);
         } catch (e) {}
     };
 
     const removeRecentSearch = (e: React.MouseEvent, termToRemove: string) => {
         e.stopPropagation();
-        const key = `yorumi_recent_searches_${type}`;
         const updated = recentSearches.filter(s => s !== termToRemove);
         setRecentSearches(updated);
         try {
             if (updated.length > 0) {
-                localStorage.setItem(key, JSON.stringify(updated));
+                localStorage.setItem(storageKey, JSON.stringify(updated));
             } else {
-                localStorage.removeItem(key);
+                localStorage.removeItem(storageKey);
             }
         } catch (e) {}
     };
@@ -96,7 +97,7 @@ export default function SearchModal({ isOpen, onClose, type }: SearchModalProps)
     const handleResultClick = (item: SearchPreviewItem) => {
         saveRecentSearch(item.title);
         onClose();
-        navigate(item.url);
+        navigate(item.url, { state: { manga: item.manga } });
     };
 
     const handleRecentSearchClick = (term: string) => {
@@ -145,7 +146,7 @@ export default function SearchModal({ isOpen, onClose, type }: SearchModalProps)
                         animate={{ opacity: 1, scale: 1, y: 0, x: "-50%" }}
                         exit={{ opacity: 0, scale: 0.95, y: -20, x: "-50%" }}
                         transition={{ duration: 0.2, ease: "easeOut" }}
-                        className="fixed top-[15vh] left-1/2 w-[90%] max-w-[640px] z-[9999] flex flex-col bg-[#141414] border border-white/10 rounded-lg shadow-[0_20px_60px_rgba(0,0,0,0.8)] overflow-hidden"
+                        className="fixed top-[15vh] left-1/2 w-[90%] max-w-[640px] z-[9999] flex flex-col bg-[#141414] border border-white/10 rounded-lg overflow-hidden"
                     >
                         {/* Header / Input Area */}
                         <form onSubmit={handleFormSubmit} className="relative flex items-center p-4 border-b border-white/10">
