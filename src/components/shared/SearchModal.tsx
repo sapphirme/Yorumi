@@ -4,7 +4,6 @@ import { Search, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useTitleLanguage } from '../../context/TitleLanguageContext';
 import { useNavbarSearch } from '../../features/search/hooks/useNavbarSearch';
-import { useVault } from '../../context/VaultContext';
 import type { SearchPreviewItem } from '../../features/search/api';
 
 interface SearchModalProps {
@@ -24,8 +23,7 @@ export default function SearchModal({ isOpen, onClose, type }: SearchModalProps)
     const inputRef = useRef<HTMLInputElement>(null);
     const [recentSearches, setRecentSearches] = useState<string[]>([]);
 
-    const { isVaultUnlocked } = useVault();
-    const storageKey = `yorumi_recent_searches_${type}${isVaultUnlocked ? '_vault' : ''}`;
+    const storageKey = `yorumi_recent_searches_${type}`;
 
     useEffect(() => {
         // Load recent searches from local storage

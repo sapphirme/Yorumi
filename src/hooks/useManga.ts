@@ -155,13 +155,7 @@ export function useManga() {
         setChapterPages([]);
         setCurrentMangaChapter(null);
 
-        let isVault = false;
         try {
-            if (String(manga.scraper_id || manga.mal_id).startsWith('vault:')) {
-                isVault = true;
-                // Do not perform MangaKatana resolution for Vault items.
-                return;
-            }
 
             let mangakatanaId: string | null = null;
 
@@ -494,9 +488,7 @@ export function useManga() {
         } catch (error) {
             console.error('Failed to fetch chapters', error);
         } finally {
-            if (!isVault) {
-                setMangaChaptersLoading(false);
-            }
+            setMangaChaptersLoading(false);
         }
     }, []);
 
@@ -724,52 +716,7 @@ export function useManga() {
                 setSelectedManga(null);
             }
 
-            if (String(id).startsWith('vault:')) {
-                try {
-                    const queryUrl = (seedManga as any)?.url ? `?url=${encodeURIComponent((seedManga as any).url)}` : '';
-                    const vaultRes = await fetch(`${API_BASE}/vault/manga/details/${encodeURIComponent(String(id))}${queryUrl}`);
-                    const vaultJson = await vaultRes.json();
-                    if (vaultJson.success && vaultJson.data?.chapters) {
-                        const resolvedTitle = seedManga?.title || vaultJson.data.title || '';
-                        const resolvedImage = seedManga?.images?.jpg?.large_image_url || vaultJson.data.image || '';
-                        const hydrated = {
-                            mal_id: id,
-                            id: id,
-                            scraper_id: id,
-                            title: resolvedTitle,
-                            images: { jpg: { large_image_url: resolvedImage, image_url: resolvedImage } },
-                            type: 'Manga',
-                            synopsis: vaultJson.data.synopsis || seedManga?.synopsis || '',
-                            score: parseFloat(vaultJson.data.rating) || seedManga?.score || 0,
-                            views: vaultJson.data.views || '',
-                            author: vaultJson.data.author || '',
-                            artist: vaultJson.data.artist || ''
-                        } as any;
-                        setSelectedManga(hydrated);
-                        if (vaultJson.data.chapters.length > 0) {
-                            setMangaChapters(vaultJson.data.chapters);
-                        }
-                        // Retroactively patch any stored continue-reading entries missing title/image
-                        if (resolvedTitle && resolvedImage) {
-                            const { storage } = await import('../utils/storage');
-                            const existing = storage.getContinueReading();
-                            const mangaIdStr = String(id);
-                            const patched = existing.map(entry =>
-                                entry.mangaId === mangaIdStr && (!entry.mangaTitle || entry.mangaTitle === 'Unknown Title' || !entry.mangaImage)
-                                    ? { ...entry, mangaTitle: resolvedTitle, mangaImage: resolvedImage, mangaPoster: resolvedImage }
-                                    : entry
-                            );
-                            if (patched.some((e, i) => e !== existing[i])) {
-                                storage.setContinueReading(patched);
-                            }
-                        }
-                    }
-                } catch (e) {
-                    console.error('[Vault] Error fetching details:', e);
-                }
-                setMangaChaptersLoading(false);
-                return;
-            }
+            
 
             const data = await mangaService.getUnifiedMangaDetails(id);
             if (!data || !data.mal_id) {

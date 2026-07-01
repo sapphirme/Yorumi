@@ -5,8 +5,6 @@ import AnimeCard from '../features/anime/components/AnimeCard';
 import { useWatchList } from '../hooks/useWatchList';
 import { slugify } from '../utils/slugify';
 import type { WatchListItem } from '../utils/storage';
-import { useVault } from '../context/VaultContext';
-
 const isAnimeSessionId = (value: string) =>
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 
@@ -106,8 +104,7 @@ const WatchListSection = ({
 
 export default function WatchListPage() {
     const navigate = useNavigate();
-    const { isVaultUnlocked } = useVault();
-    const { watchList, removeFromWatchList, loading } = useWatchList({ isVault: isVaultUnlocked });
+    const { watchList, removeFromWatchList, loading } = useWatchList();
     const [activeClassification, setActiveClassification] = useState<WatchClassification>('all');
     const groupedWatchList = useMemo(() => {
         return watchList.reduce<Record<WatchListItem['status'], WatchListItem[]>>((groups, item) => {

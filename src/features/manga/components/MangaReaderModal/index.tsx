@@ -61,8 +61,7 @@ export default function MangaReaderModal({
     const lastScrollY = useRef(0);
     const readerRootRef = useRef<HTMLDivElement>(null);
     const fullscreenAttemptedRef = useRef(false);
-    const isVault = String(manga.scraper_id || manga.id || manga.mal_id).startsWith('vault');
-    const { saveProgress } = useContinueReading({ isVault });
+    const { saveProgress } = useContinueReading();
 
     // Save progress on chapter change
     useEffect(() => {

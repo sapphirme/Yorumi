@@ -1,14 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { storage, type ReadListItem } from '../utils/storage';
 
-export function useReadList(options: { isVault?: boolean } = {}) {
-    const { isVault } = options;
-    const [readList, setReadList] = useState<ReadListItem[]>(() => storage.getReadList(isVault));
+export function useReadList() {
+    const [readList, setReadList] = useState<ReadListItem[]>(() => storage.getReadList());
     const [loading] = useState(false);
 
     const reload = useCallback(() => {
-        setReadList(storage.getReadList(isVault));
-    }, [isVault]);
+        setReadList(storage.getReadList());
+    }, []);
 
     useEffect(() => {
         window.addEventListener('yorumi-storage-updated', reload);
@@ -16,12 +15,12 @@ export function useReadList(options: { isVault?: boolean } = {}) {
     }, [reload]);
 
     const addToReadList = useCallback((item: Omit<ReadListItem, 'addedAt'>) => {
-        storage.addToReadList(item, item.status || 'reading', isVault);
-    }, [isVault]);
+        storage.addToReadList(item, item.status || 'reading');
+    }, []);
 
     const removeFromReadList = useCallback((id: string) => {
-        storage.removeFromReadList(id, isVault);
-    }, [isVault]);
+        storage.removeFromReadList(id);
+    }, []);
 
     const isInReadList = useCallback((id: string) => {
         return readList.some(item => item.id === id);

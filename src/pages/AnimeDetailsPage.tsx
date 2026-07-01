@@ -9,8 +9,6 @@ import { animeService } from '../services/animeService';
 import { tmdbService, type TmdbSeason, type TmdbEpisode } from '../services/tmdbService';
 import { setLocalStorageWithCleanup } from '../utils/localStorageQuota';
 import { getEpisodeWatchKey, getPlaybackEpisodeNumber } from '../utils/episodeWatchKey';
-import VaultAnimeDetailsPage from '../features/vault/components/VaultAnimeDetailsPage';
-
 // Feature Components
 import DetailsHero from '../features/anime/components/details/DetailsHero';
 import DetailsInfo from '../features/anime/components/details/DetailsInfo';
@@ -328,44 +326,8 @@ const readRouteSeasonChips = (value: unknown, activeId: number): SeasonChip[] =>
         .filter((item): item is SeasonChip => Boolean(item));
 };
 
-export const DetailsPageSkeleton = () => (
-    <div className="min-h-screen bg-[#0a0a0a] pb-20 fade-in animate-in duration-300">
-        {/* Banner Skeleton */}
-        <div className="h-[40vh] md:h-[60vh] relative bg-white/5 animate-pulse">
-            <div className="absolute inset-x-0 top-[72px] z-10 px-4 md:px-10">
-                <div className="h-5 w-64 bg-white/10 rounded" />
-            </div>
-        </div>
-        
-        {/* Content Skeleton */}
-        <div className="max-w-7xl mx-auto px-8 md:px-14 -mt-24 md:-mt-32 relative z-10">
-            <div className="flex flex-col md:flex-row gap-8 lg:gap-12">
-                {/* Poster Skeleton */}
-                <div className="w-48 sm:w-52 md:w-56 lg:w-60 shrink-0 bg-white/10 rounded-xl shadow-2xl border border-white/10 animate-pulse aspect-[2/3] self-center md:self-start" />
-                <div className="flex-1 space-y-4">
-                    <div className="h-8 w-3/4 bg-white/10 rounded animate-pulse" />
-                    <div className="flex gap-4">
-                        <div className="h-4 w-20 bg-white/10 rounded animate-pulse" />
-                        <div className="h-4 w-20 bg-white/10 rounded animate-pulse" />
-                    </div>
-                    <div className="space-y-2 pt-4">
-                        <div className="h-4 w-full bg-white/5 rounded animate-pulse" />
-                        <div className="h-4 w-full bg-white/5 rounded animate-pulse" />
-                        <div className="h-4 w-2/3 bg-white/5 rounded animate-pulse" />
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-);
-
-
-
 export default function AnimeDetailsPage() {
     const { id } = useParams<{ id: string }>();
-    if (id?.startsWith('vault-anime:')) {
-        return <VaultAnimeDetailsPage id={id} />;
-    }
     return <AnimeDetailsPageContent />;
 }
 

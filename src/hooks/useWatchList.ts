@@ -1,14 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { storage, type WatchListItem } from '../utils/storage';
 
-export function useWatchList(options: { isVault?: boolean } = {}) {
-    const { isVault } = options;
-    const [watchList, setWatchList] = useState<WatchListItem[]>(() => storage.getWatchList(isVault));
+export function useWatchList() {
+    const [watchList, setWatchList] = useState<WatchListItem[]>(() => storage.getWatchList());
     const [loading] = useState(false);
 
     const reload = useCallback(() => {
-        setWatchList(storage.getWatchList(isVault));
-    }, [isVault]);
+        setWatchList(storage.getWatchList());
+    }, []);
 
     useEffect(() => {
         window.addEventListener('yorumi-storage-updated', reload);
@@ -16,12 +15,12 @@ export function useWatchList(options: { isVault?: boolean } = {}) {
     }, [reload]);
 
     const addToWatchList = useCallback((item: Omit<WatchListItem, 'addedAt'>) => {
-        storage.addToWatchList(item, item.status || 'watching', isVault);
-    }, [isVault]);
+        storage.addToWatchList(item, item.status || 'watching');
+    }, []);
 
     const removeFromWatchList = useCallback((id: string) => {
-        storage.removeFromWatchList(id, isVault);
-    }, [isVault]);
+        storage.removeFromWatchList(id);
+    }, []);
 
     const isInWatchList = useCallback((id: string) => {
         return watchList.some(item => item.id === id);

@@ -4,8 +4,6 @@ import { useNavigate } from 'react-router-dom';
 import MangaCard from '../features/manga/components/MangaCard';
 import { useReadList } from '../hooks/useReadList';
 import type { ReadListItem } from '../utils/storage';
-import { useVault } from '../context/VaultContext';
-
 type MangaClassification = 'all' | ReadListItem['status'];
 
 const MANGA_CLASSIFICATIONS: Array<{
@@ -86,8 +84,7 @@ const MangaReadListSection = ({
 
 export default function MangaReadListPage() {
     const navigate = useNavigate();
-    const { isVaultUnlocked } = useVault();
-    const { readList, removeFromReadList, loading } = useReadList({ isVault: isVaultUnlocked });
+    const { readList, removeFromReadList, loading } = useReadList();
     const [activeClassification, setActiveClassification] = useState<MangaClassification>('all');
     const groupedReadList = useMemo(() => {
         return readList.reduce<Record<ReadListItem['status'], ReadListItem[]>>((groups, item) => {

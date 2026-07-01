@@ -9,8 +9,6 @@ import { useReadList } from '../hooks/useReadList';
 import { useWatchList } from '../hooks/useWatchList';
 import { slugify } from '../utils/slugify';
 import type { WatchListItem } from '../utils/storage';
-import { useVault } from '../context/VaultContext';
-
 const getAnimeRouteId = (item: WatchListItem) => {
     const scraperId = item.scraperId;
     if (String(scraperId || '').startsWith('vault') || item.type === 'Vault Video') {
@@ -23,11 +21,10 @@ const getAnimeRouteId = (item: WatchListItem) => {
 };
 
 export default function LibraryPage() {
-    const { isVaultUnlocked } = useVault();
-    const { continueWatchingList, removeFromHistory: removeWatchingHistory } = useContinueWatching({ isVault: isVaultUnlocked });
-    const { continueReadingList, removeFromHistory: removeReadingHistory } = useContinueReading({ isVault: isVaultUnlocked });
-    const { watchList, removeFromWatchList } = useWatchList({ isVault: isVaultUnlocked });
-    const { readList, removeFromReadList } = useReadList({ isVault: isVaultUnlocked });
+    const { continueWatchingList, removeFromHistory: removeWatchingHistory } = useContinueWatching();
+    const { continueReadingList, removeFromHistory: removeReadingHistory } = useContinueReading();
+    const { watchList, removeFromWatchList } = useWatchList();
+    const { readList, removeFromReadList } = useReadList();
     const navigate = useNavigate();
 
     const filteredWatching = continueWatchingList;
@@ -42,10 +39,10 @@ export default function LibraryPage() {
             <div className="w-full max-w-7xl mx-auto px-8 md:px-14 relative">
                 <div className="mb-8">
                     <h1 className="mb-2 text-2xl font-bold uppercase tracking-wider text-white">
-                        {isVaultUnlocked ? '🔐 VAULT LIBRARY' : 'MY LIBRARY'}
+                        'MY LIBRARY'
                     </h1>
                     <p className="text-sm text-gray-400">
-                        {isVaultUnlocked ? 'Your secret vault history and saved titles' : 'Watch history, progress, and saved titles'}
+                        'Watch history, progress, and saved titles'
                     </p>
                 </div>
 

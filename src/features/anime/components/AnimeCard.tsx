@@ -36,12 +36,11 @@ const AnimeCard: React.FC<AnimeCardProps> = ({
     const totalEpisodeCount = isUnreleased ? null : anime.episodes;
     const displayTitle = getDisplayTitle(anime as unknown as Record<string, unknown>, language);
     const posterUrl = getDisplayImageUrl(anime.images.jpg.large_image_url || anime.images.jpg.image_url);
-    const isVault = anime.scraperId?.startsWith('vault-anime:');
-    const studioName = isVault ? anime.rating : (anime.studios?.[0]?.name || anime.producers?.[0]?.name || null);
+    const studioName = anime.studios?.[0]?.name || anime.producers?.[0]?.name || null;
     const displayType = formatDisplayType(anime.type);
     const hoverHeading = anime.nextAiringEpisode
         ? `Ep ${anime.nextAiringEpisode.episode} airing ${formatTimeUntil(anime.nextAiringEpisode.timeUntilAiring)}`
-        : (isVault && anime.year) ? String(anime.year) : formatSeasonLabel(anime, displayType);
+        : formatSeasonLabel(anime, displayType);
     const metaLine = [displayType, totalEpisodeCount ? `${totalEpisodeCount} episodes` : getStatusLabel(anime.status)].filter(Boolean);
 
     const updatePopupSide = React.useCallback(() => {

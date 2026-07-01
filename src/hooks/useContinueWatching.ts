@@ -8,14 +8,13 @@ interface PlaybackProgress {
     durationSeconds?: number;
 }
 
-export function useContinueWatching(options: { isVault?: boolean } = {}) {
-    const { isVault } = options;
+export function useContinueWatching() {
     const { recordActivity } = useActivityHistory();
-    const [continueWatchingList, setContinueWatchingList] = useState<WatchProgress[]>(() => storage.getContinueWatching(isVault));
+    const [continueWatchingList, setContinueWatchingList] = useState<WatchProgress[]>(() => storage.getContinueWatching());
 
     const reload = useCallback(() => {
-        setContinueWatchingList(storage.getContinueWatching(isVault));
-    }, [isVault]);
+        setContinueWatchingList(storage.getContinueWatching());
+    }, []);
 
     useEffect(() => {
         window.addEventListener('yorumi-storage-updated', reload);
@@ -61,18 +60,18 @@ export function useContinueWatching(options: { isVault?: boolean } = {}) {
         };
 
         // storage.saveProgress syncs to the cloud document field automatically
-        storage.saveProgress(progress, isVault);
+        storage.saveProgress(progress);
 
         try {
             await recordActivity(`anime:${validId}:ep:${progress.episodeNumber}`);
         } catch (error) {
             console.error('Failed to record activity:', error);
         }
-    }, [recordActivity, isVault]);
+    }, [recordActivity]);
 
     const removeFromHistory = useCallback(async (malId: number | string) => {
-        storage.removeFromContinueWatching(malId.toString(), isVault);
-    }, [isVault]);
+        storage.removeFromContinueWatching(malId.toString());
+    }, []);
 
     return {
         continueWatchingList,

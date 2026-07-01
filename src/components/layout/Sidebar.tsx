@@ -6,7 +6,6 @@ import { useContinueReading } from '../../hooks/useContinueReading';
 import { useContinueWatching } from '../../hooks/useContinueWatching';
 import { useWatchList } from '../../hooks/useWatchList';
 import { useReadList } from '../../hooks/useReadList';
-import { useVault } from '../../context/VaultContext';
 import { getDirectScraperRouteId } from '../../utils/animeNavigation';
 import { slugify } from '../../utils/slugify';
 import type { ReadListItem, WatchListItem } from '../../utils/storage';
@@ -70,30 +69,21 @@ export default function Sidebar() {
     const [searchType, setSearchType] = useState<'anime' | 'manga'>('anime');
     const [hoveredCard, setHoveredCard] = useState<{title: string, top: number} | null>(null);
 
-    // Vault Logic
-    const { isVaultUnlocked, unlockVault, lockVault } = useVault();
-    const { watchList: normalWatchList } = useWatchList({ isVault: false });
-    const { readList: normalReadList } = useReadList({ isVault: false });
-    const { watchList: vaultWatchList } = useWatchList({ isVault: true });
-    const { readList: vaultReadList } = useReadList({ isVault: true });
-    const { continueWatchingList } = useContinueWatching({ isVault: isVaultUnlocked });
-    const { continueReadingList } = useContinueReading({ isVault: isVaultUnlocked });
+    const { watchList: normalWatchList } = useWatchList();
+    const { readList: normalReadList } = useReadList();
+    const { continueWatchingList } = useContinueWatching();
+    const { continueReadingList } = useContinueReading();
 
     const clickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [clickCount, setClickCount] = useState(0);
 
     const handleLogoClickInternal = () => {
-        if (isVaultUnlocked) {
-            lockVault();
-            navigate('/');
-            return;
-        }
-
         setClickCount((prev) => {
             const newCount = prev + 1;
             if (newCount >= 5) {
-                unlockVault();
-                navigate('/vault');
+                // Must navigate to the Vault interface (\/\ or \/manga\) per guidelines
+                const isManga = location.pathname.startsWith('/manga');
+                navigate(isManga ? '/manga' : '/');
                 return 0;
             }
             if (newCount === 1) {
@@ -113,18 +103,12 @@ export default function Sidebar() {
 
     const displaySavedItems: SavedSidebarItem[] = [
         ...normalWatchList.map(item => ({ ...item, isManga: false as const })),
-        ...vaultWatchList.map(item => ({ ...item, isManga: false as const })),
-        ...normalReadList.map(item => ({ ...item, isManga: true as const })),
-        ...vaultReadList.map(item => ({ ...item, isManga: true as const }))
+        ...normalReadList.map(item => ({ ...item, isManga: true as const }))
     ]
     .filter((item, index, self) => 
         // deduplicate by ID across lists just in case
         index === self.findIndex((t) => t.id === item.id)
     )
-    .filter(item => {
-        const isVaultItem = String(item.id).startsWith('vault') || String(item.scraperId).startsWith('vault') || item.type === 'Vault Video';
-        return isVaultUnlocked ? isVaultItem : !isVaultItem;
-    })
     .sort((a, b) => new Date(b.addedAt || 0).getTime() - new Date(a.addedAt || 0).getTime());
 
     const getMatchingWatchProgress = (item: WatchListItem) => {
@@ -155,12 +139,6 @@ export default function Sidebar() {
         if (!routeId) return;
         
         const anime = buildAnimeRouteState(item);
-        
-        if (String(item.scraperId || '').startsWith('vault') || item.type === 'Vault Video') {
-            const vaultRouteId = item.scraperId || `vault-anime:hanime:${item.id}`;
-            navigate(`/anime/details/${vaultRouteId}`, { state: { anime } });
-            return;
-        }
 
         const progress = getMatchingWatchProgress(item);
         const resume = Number.isFinite(progress?.positionSeconds)
@@ -217,9 +195,9 @@ export default function Sidebar() {
                         setIsSearchOpen(true);
                     }} 
                 />
-                <SidebarIcon icon={Tv} title={isVaultUnlocked ? "Hentai" : "Anime"} onClick={() => navigate('/')} isActive={location.pathname === '/' || location.pathname.startsWith('/anime')} />
-                <SidebarIcon icon={BookOpen} title={isVaultUnlocked ? "Manhwa" : "Manga"} onClick={() => navigate('/manga')} isActive={location.pathname === '/manga' || location.pathname.startsWith('/manga')} />
-                <SidebarIcon icon={Library} title="Library" onClick={() => navigate(isVaultUnlocked ? '/vault/library' : '/library')} isActive={location.pathname === '/library' || location.pathname === '/vault/library'} />
+                <SidebarIcon icon={Tv} title="Anime" onClick={() => navigate('/')} isActive={location.pathname === '/' || location.pathname.startsWith('/anime')} />
+                <SidebarIcon icon={BookOpen} title="Manga" onClick={() => navigate('/manga')} isActive={location.pathname === '/manga' || location.pathname.startsWith('/manga')} />
+                <SidebarIcon icon={Library} title="Library" onClick={() => navigate('/library')} isActive={location.pathname === '/library'} />
             </div>
 
             {displaySavedItems.length > 0 && (

@@ -23,14 +23,13 @@ interface Chapter {
     title?: string;
 }
 
-export function useContinueReading(options: { isVault?: boolean } = {}) {
-    const { isVault } = options;
+export function useContinueReading() {
     const { recordActivity } = useActivityHistory();
-    const [continueReadingList, setContinueReadingList] = useState<ReadProgress[]>(() => storage.getContinueReading(isVault));
+    const [continueReadingList, setContinueReadingList] = useState<ReadProgress[]>(() => storage.getContinueReading());
 
     const reload = useCallback(() => {
-        setContinueReadingList(storage.getContinueReading(isVault));
-    }, [isVault]);
+        setContinueReadingList(storage.getContinueReading());
+    }, []);
 
     // Subscribe to local storage updates
     useEffect(() => {
@@ -54,18 +53,18 @@ export function useContinueReading(options: { isVault?: boolean } = {}) {
             mediaStatus: manga.status
         };
 
-        storage.saveReadingProgress(progress, isVault);
+        storage.saveReadingProgress(progress);
 
         try {
             await recordActivity(`manga:${mangaId}:ch:${progress.chapterNumber}`);
         } catch (error) {
             console.error("Failed to record read activity:", error);
         }
-    }, [recordActivity, isVault]);
+    }, [recordActivity]);
 
     const removeFromHistory = useCallback(async (mangaId: string) => {
-        storage.removeFromContinueReading(mangaId.toString(), isVault);
-    }, [isVault]);
+        storage.removeFromContinueReading(mangaId.toString());
+    }, []);
 
     return {
         continueReadingList,

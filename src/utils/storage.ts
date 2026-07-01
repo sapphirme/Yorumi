@@ -275,12 +275,12 @@ const removePendingDeleteId = (key: string, id: string) => {
 
 export const storage = {
     // Continue Watching
-    saveProgress: (progress: Omit<WatchProgress, 'lastWatched'>, isVault?: boolean) => {
-        const key = isVault ? STORAGE_KEYS.VAULT_CONTINUE_WATCHING : STORAGE_KEYS.CONTINUE_WATCHING;
-        const delKey = isVault ? STORAGE_KEYS.VAULT_CONTINUE_WATCHING_PENDING_DELETES : STORAGE_KEYS.CONTINUE_WATCHING_PENDING_DELETES;
+    saveProgress: (progress: Omit<WatchProgress, 'lastWatched'>) => {
+        const key = STORAGE_KEYS.CONTINUE_WATCHING;
+        const delKey = STORAGE_KEYS.CONTINUE_WATCHING_PENDING_DELETES;
         try {
             removePendingDeleteId(delKey, progress.animeId);
-            const current = storage.getContinueWatching(isVault);
+            const current = storage.getContinueWatching();
             const updated = [
                 { ...progress, lastWatched: Date.now() },
                 ...current.filter(item => item.animeId !== progress.animeId)
@@ -293,8 +293,8 @@ export const storage = {
         }
     },
 
-    getContinueWatching: (isVault?: boolean): WatchProgress[] => {
-        const key = isVault ? STORAGE_KEYS.VAULT_CONTINUE_WATCHING : STORAGE_KEYS.CONTINUE_WATCHING;
+    getContinueWatching: (): WatchProgress[] => {
+        const key = STORAGE_KEYS.CONTINUE_WATCHING;
         try {
             const data = getScopedItem(key);
             return data ? JSON.parse(data) : [];
@@ -304,8 +304,8 @@ export const storage = {
         }
     },
 
-    setContinueWatching: (items: WatchProgress[], isVault?: boolean) => {
-        const key = isVault ? STORAGE_KEYS.VAULT_CONTINUE_WATCHING : STORAGE_KEYS.CONTINUE_WATCHING;
+    setContinueWatching: (items: WatchProgress[]) => {
+        const key = STORAGE_KEYS.CONTINUE_WATCHING;
         try {
             setScopedItem(key, JSON.stringify(Array.isArray(items) ? items : []));
             emitStorageUpdated();
@@ -314,12 +314,12 @@ export const storage = {
         }
     },
 
-    removeFromContinueWatching: (animeId: string, isVault?: boolean) => {
-        const key = isVault ? STORAGE_KEYS.VAULT_CONTINUE_WATCHING : STORAGE_KEYS.CONTINUE_WATCHING;
-        const delKey = isVault ? STORAGE_KEYS.VAULT_CONTINUE_WATCHING_PENDING_DELETES : STORAGE_KEYS.CONTINUE_WATCHING_PENDING_DELETES;
+    removeFromContinueWatching: (animeId: string) => {
+        const key = STORAGE_KEYS.CONTINUE_WATCHING;
+        const delKey = STORAGE_KEYS.CONTINUE_WATCHING_PENDING_DELETES;
         try {
             addPendingDeleteId(delKey, animeId);
-            const current = storage.getContinueWatching(isVault);
+            const current = storage.getContinueWatching();
             const updated = current.filter(item => item.animeId !== animeId);
             setScopedItem(key, JSON.stringify(updated));
             emitStorageUpdated();
@@ -329,12 +329,12 @@ export const storage = {
     },
 
     // Continue Reading
-    saveReadingProgress: (progress: Omit<ReadProgress, 'lastRead'>, isVault?: boolean) => {
-        const key = isVault ? STORAGE_KEYS.VAULT_CONTINUE_READING : STORAGE_KEYS.CONTINUE_READING;
-        const delKey = isVault ? STORAGE_KEYS.VAULT_CONTINUE_READING_PENDING_DELETES : STORAGE_KEYS.CONTINUE_READING_PENDING_DELETES;
+    saveReadingProgress: (progress: Omit<ReadProgress, 'lastRead'>) => {
+        const key = STORAGE_KEYS.CONTINUE_READING;
+        const delKey = STORAGE_KEYS.CONTINUE_READING_PENDING_DELETES;
         try {
             removePendingDeleteId(delKey, progress.mangaId);
-            const current = storage.getContinueReading(isVault);
+            const current = storage.getContinueReading();
             const updated = [
                 { ...progress, lastRead: Date.now() },
                 ...current.filter(item => item.mangaId !== progress.mangaId)
@@ -347,8 +347,8 @@ export const storage = {
         }
     },
 
-    getContinueReading: (isVault?: boolean): ReadProgress[] => {
-        const key = isVault ? STORAGE_KEYS.VAULT_CONTINUE_READING : STORAGE_KEYS.CONTINUE_READING;
+    getContinueReading: (): ReadProgress[] => {
+        const key = STORAGE_KEYS.CONTINUE_READING;
         try {
             const data = getScopedItem(key);
             return data ? JSON.parse(data) : [];
@@ -358,8 +358,8 @@ export const storage = {
         }
     },
 
-    setContinueReading: (items: ReadProgress[], isVault?: boolean) => {
-        const key = isVault ? STORAGE_KEYS.VAULT_CONTINUE_READING : STORAGE_KEYS.CONTINUE_READING;
+    setContinueReading: (items: ReadProgress[]) => {
+        const key = STORAGE_KEYS.CONTINUE_READING;
         try {
             setScopedItem(key, JSON.stringify(Array.isArray(items) ? items : []));
             emitStorageUpdated();
@@ -368,12 +368,12 @@ export const storage = {
         }
     },
 
-    removeFromContinueReading: (mangaId: string, isVault?: boolean) => {
-        const key = isVault ? STORAGE_KEYS.VAULT_CONTINUE_READING : STORAGE_KEYS.CONTINUE_READING;
-        const delKey = isVault ? STORAGE_KEYS.VAULT_CONTINUE_READING_PENDING_DELETES : STORAGE_KEYS.CONTINUE_READING_PENDING_DELETES;
+    removeFromContinueReading: (mangaId: string) => {
+        const key = STORAGE_KEYS.CONTINUE_READING;
+        const delKey = STORAGE_KEYS.CONTINUE_READING_PENDING_DELETES;
         try {
             addPendingDeleteId(delKey, mangaId);
-            const current = storage.getContinueReading(isVault);
+            const current = storage.getContinueReading();
             const updated = current.filter(item => item.mangaId !== mangaId);
             setScopedItem(key, JSON.stringify(updated));
             emitStorageUpdated();
@@ -383,10 +383,10 @@ export const storage = {
     },
 
     // Watch List
-    addToWatchList: (item: Omit<WatchListItem, 'addedAt' | 'status'>, status: WatchListItem['status'] = 'watching', isVault?: boolean) => {
-        const key = isVault ? STORAGE_KEYS.VAULT_WATCH_LIST : STORAGE_KEYS.WATCH_LIST;
+    addToWatchList: (item: Omit<WatchListItem, 'addedAt' | 'status'>, status: WatchListItem['status'] = 'watching') => {
+        const key = STORAGE_KEYS.WATCH_LIST;
         try {
-            const current = storage.getWatchList(isVault);
+            const current = storage.getWatchList();
             if (current.some(i => i.id === item.id)) return; // Already in list
 
             const updated = [
@@ -401,10 +401,10 @@ export const storage = {
         }
     },
 
-    removeFromWatchList: (animeId: string, isVault?: boolean) => {
-        const key = isVault ? STORAGE_KEYS.VAULT_WATCH_LIST : STORAGE_KEYS.WATCH_LIST;
+    removeFromWatchList: (animeId: string) => {
+        const key = STORAGE_KEYS.WATCH_LIST;
         try {
-            const current = storage.getWatchList(isVault);
+            const current = storage.getWatchList();
             const updated = current.filter(item => item.id !== animeId);
             setScopedItem(key, JSON.stringify(updated));
             emitStorageUpdated();
@@ -413,8 +413,8 @@ export const storage = {
         }
     },
 
-    getWatchList: (isVault?: boolean): WatchListItem[] => {
-        const key = isVault ? STORAGE_KEYS.VAULT_WATCH_LIST : STORAGE_KEYS.WATCH_LIST;
+    getWatchList: (): WatchListItem[] => {
+        const key = STORAGE_KEYS.WATCH_LIST;
         try {
             const data = getScopedItem(key);
             return data ? JSON.parse(data) : [];
@@ -424,8 +424,8 @@ export const storage = {
         }
     },
 
-    setWatchList: (items: WatchListItem[], isVault?: boolean) => {
-        const key = isVault ? STORAGE_KEYS.VAULT_WATCH_LIST : STORAGE_KEYS.WATCH_LIST;
+    setWatchList: (items: WatchListItem[]) => {
+        const key = STORAGE_KEYS.WATCH_LIST;
         try {
             setScopedItem(key, JSON.stringify(Array.isArray(items) ? items : []));
             emitStorageUpdated();
@@ -434,16 +434,16 @@ export const storage = {
         }
     },
 
-    isInWatchList: (animeId: string, isVault?: boolean): boolean => {
-        const list = storage.getWatchList(isVault);
+    isInWatchList: (animeId: string): boolean => {
+        const list = storage.getWatchList();
         return list.some(item => item.id === animeId);
     },
 
     // Read List
-    addToReadList: (item: Omit<ReadListItem, 'addedAt' | 'status'>, status: ReadListItem['status'] = 'reading', isVault?: boolean) => {
-        const key = isVault ? STORAGE_KEYS.VAULT_READ_LIST : STORAGE_KEYS.READ_LIST;
+    addToReadList: (item: Omit<ReadListItem, 'addedAt' | 'status'>, status: ReadListItem['status'] = 'reading') => {
+        const key = STORAGE_KEYS.READ_LIST;
         try {
-            const current = storage.getReadList(isVault);
+            const current = storage.getReadList();
             if (current.some(i => i.id === item.id)) return;
 
             const updated = [
@@ -458,10 +458,10 @@ export const storage = {
         }
     },
 
-    removeFromReadList: (mangaId: string, isVault?: boolean) => {
-        const key = isVault ? STORAGE_KEYS.VAULT_READ_LIST : STORAGE_KEYS.READ_LIST;
+    removeFromReadList: (mangaId: string) => {
+        const key = STORAGE_KEYS.READ_LIST;
         try {
-            const current = storage.getReadList(isVault);
+            const current = storage.getReadList();
             const updated = current.filter(item => item.id !== mangaId);
             setScopedItem(key, JSON.stringify(updated));
             emitStorageUpdated();
@@ -470,8 +470,8 @@ export const storage = {
         }
     },
 
-    getReadList: (isVault?: boolean): ReadListItem[] => {
-        const key = isVault ? STORAGE_KEYS.VAULT_READ_LIST : STORAGE_KEYS.READ_LIST;
+    getReadList: (): ReadListItem[] => {
+        const key = STORAGE_KEYS.READ_LIST;
         try {
             const data = getScopedItem(key);
             return data ? JSON.parse(data) : [];
@@ -481,8 +481,8 @@ export const storage = {
         }
     },
 
-    setReadList: (items: ReadListItem[], isVault?: boolean) => {
-        const key = isVault ? STORAGE_KEYS.VAULT_READ_LIST : STORAGE_KEYS.READ_LIST;
+    setReadList: (items: ReadListItem[]) => {
+        const key = STORAGE_KEYS.READ_LIST;
         try {
             setScopedItem(key, JSON.stringify(Array.isArray(items) ? items : []));
             emitStorageUpdated();
@@ -491,8 +491,8 @@ export const storage = {
         }
     },
 
-    isInReadList: (mangaId: string, isVault?: boolean): boolean => {
-        const list = storage.getReadList(isVault);
+    isInReadList: (mangaId: string): boolean => {
+        const list = storage.getReadList();
         return list.some(item => item.id === mangaId);
     },
 

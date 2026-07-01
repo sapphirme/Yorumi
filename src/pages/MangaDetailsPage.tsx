@@ -155,8 +155,7 @@ export default function MangaDetailsPage() {
         readChapters
     } = useManga();
 
-    const isVault = id?.startsWith('vault:') || id?.startsWith('vault-manga:');
-    const { isInReadList, addToReadList, removeFromReadList } = useReadList({ isVault });
+    const { isInReadList, addToReadList, removeFromReadList } = useReadList();
     const { language } = useTitleLanguage();
 
     const currentRouteId = normalizeMangaRouteId(id);

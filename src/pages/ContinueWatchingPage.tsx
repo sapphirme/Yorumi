@@ -3,12 +3,9 @@ import { useContinueWatching } from '../hooks/useContinueWatching';
 import { slugify } from '../utils/slugify';
 import ContinueWatching from '../features/anime/components/ContinueWatching';
 import type { Anime } from '../types/anime';
-import { useVault } from '../context/VaultContext';
-
 export default function ContinueWatchingPage() {
     const navigate = useNavigate();
-    const { isVaultUnlocked } = useVault();
-    const { continueWatchingList, removeFromHistory } = useContinueWatching({ isVault: isVaultUnlocked });
+    const { continueWatchingList, removeFromHistory } = useContinueWatching();
     const isAnimePaheSession = (value: unknown) =>
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(value || '').trim());
 
