@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  PlayCircle,
   Monitor,
   Globe,
   Sun,
@@ -9,9 +8,7 @@ import {
   Tv,
   BookOpen,
   Library,
-  ArrowRight,
-  ChevronLeft,
-  ChevronRight
+  ArrowRight
 } from 'lucide-react';
 import { motion, useScroll, useTransform, AnimatePresence } from 'framer-motion';
 import type { Variants } from 'framer-motion';
@@ -92,7 +89,7 @@ function HeroSlider() {
               drag={state === 'active' ? "x" : false}
               dragConstraints={{ left: 0, right: 0 }}
               dragElastic={0.2}
-              onDragEnd={(e, { offset }) => {
+              onDragEnd={(_, { offset }) => {
                 if (offset.x < -50) handleNext();
                 if (offset.x > 50) handlePrev();
               }}
