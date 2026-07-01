@@ -174,8 +174,8 @@ function App() {
         className={`fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 lg:px-12 py-4 transition-all duration-300 ${isScrolled ? 'bg-yorumi-bg/80 backdrop-blur-xl border-b border-yorumi-text/5 shadow-sm' : 'bg-transparent'}`}
       >
         <div className="flex items-center gap-3 group cursor-pointer">
-          <img src="/yorumi-app-icon.png" alt="Yorumi" className="w-10 h-10 group-hover:scale-110 group-active:scale-95 transition-transform duration-300 rounded-lg" />
-          <span className="text-xl font-display font-bold tracking-wide text-yorumi-text">Yorumi</span>
+          <img src="/yorumi-app-icon.png" alt="Yorumi" className="w-8 h-8 group-hover:scale-110 group-active:scale-95 transition-transform duration-300 rounded-md" />
+          <span className="text-lg font-display font-bold tracking-wide text-yorumi-text">Yorumi</span>
         </div>
 
         <div className="flex items-center gap-6">
