@@ -243,7 +243,7 @@ function App() {
             
             <motion.div variants={itemVariants} className="flex flex-wrap items-center gap-4 pt-6">
               <a 
-                href="https://github.com/davenarchives/Yorumi/archive/refs/heads/main.zip" 
+                href="https://github.com/davenarchives/Yorumi/releases/latest/download/Yorumi.exe" 
                 className="group relative flex items-center justify-center gap-2 bg-yorumi-main text-white px-6 py-3 rounded-xl font-semibold text-base overflow-hidden transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-yorumi-main/20"
               >
                 <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out" />
