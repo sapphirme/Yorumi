@@ -37,7 +37,7 @@ type StreamLookupMetadata = {
 export type StreamServerKey = 'auto' | 'allmanga' | 'videasy';
 
 const STREAM_SERVER_OPTIONS: Array<{ key: StreamServerKey; label: string }> = [
-    { key: 'videasy', label: 'Videasy (Fastest)' },
+    { key: 'videasy', label: 'Videasy' },
     { key: 'auto', label: 'Default (AllManga)' },
 ];
 
@@ -68,12 +68,28 @@ export function useStreams(scraperSession: string | null, animeTitle?: string, a
         return normalized;
     };
 
+    const metadataYear = animeMetadata?.year;
+    const metadataFormat = animeMetadata?.format;
+    const metadataTitlesKey = animeMetadata?.titlesKey || '';
+
     // Canonical cache key for a (server, episode) pair.
     // Must be consistent across ensureStreamDataForServer, loadStream, bustEpisodeCache, handleServerChange.
     const getEpisodeCacheKey = useCallback((server: StreamServerKey, episode: Episode) => {
         const epKey = String(episode.session || episode.episodeNumber || episode._tmdbAbsolute || 'ep');
-        return `${server}:${epKey}`;
-    }, []);
+        const isMovieLookup = String(metadataFormat || '').toUpperCase() === 'MOVIE';
+        const metadataKey = server === 'videasy' || isMovieLookup
+            ? [
+                animeTitle,
+                metadataTitlesKey,
+                metadataYear,
+                metadataFormat,
+            ]
+                .map((value) => String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''))
+                .filter(Boolean)
+                .join(':')
+            : '';
+        return `${server}:${epKey}${metadataKey ? `:${metadataKey}` : ''}`;
+    }, [animeTitle, metadataTitlesKey, metadataYear, metadataFormat]);
 
     const normalizeAudio = (value: string) => {
         const lower = String(value || '').trim().toLowerCase();
@@ -95,15 +111,12 @@ export function useStreams(scraperSession: string | null, animeTitle?: string, a
             + quality;
     }, []);
 
-    const metadataYear = animeMetadata?.year;
-    const metadataFormat = animeMetadata?.format;
-    const metadataTitlesKey = animeMetadata?.titlesKey || '';
     const ensureStreamDataForServer = useCallback((episode: Episode, server: StreamServerKey): Promise<StreamLink[]> => {
         const activeSession = normalizeDirectScraperSession(scraperSession);
         // Videasy resolves via TMDB (title + episode), so it doesn't need a real scraper session.
         // For all other providers, bail if we have no session.
-        const isVideasy = server === 'videasy';
-        const effectiveSession = activeSession || (isVideasy ? 'videasy' : '');
+        const isTmdbProvider = server === 'videasy';
+        const effectiveSession = activeSession || (isTmdbProvider ? server : '');
         if (!effectiveSession) return Promise.resolve([]);
         const cacheKey = getEpisodeCacheKey(server, episode);
         if (!streamCache.current.has(cacheKey)) {
@@ -326,7 +339,10 @@ export function useStreams(scraperSession: string | null, animeTitle?: string, a
         streamCache.current.delete(normalizedSession);
         streamCache.current.delete(`${selectedServer}:${normalizedSession}`);
         for (const key of streamCache.current.keys()) {
-            if (key.endsWith(`:${normalizedSession}`)) {
+            if (
+                key.endsWith(`:${normalizedSession}`) ||
+                key.includes(`:${normalizedSession}:`)
+            ) {
                 streamCache.current.delete(key);
             }
         }
