@@ -25,6 +25,7 @@ export default function DetailsInfo({ anime, episodesCount, isLoading = false, i
     // ... helper ...
     const getLatestEpisode = () => {
         if (anime.status === 'NOT_YET_RELEASED') return null;
+        if (String(anime.type || '').toUpperCase() === 'MOVIE') return null;
         if (anime.latestEpisode) return anime.latestEpisode;
         if (episodesCount > 0) return episodesCount;
         if (anime.episodes) return anime.episodes;

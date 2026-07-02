@@ -15,6 +15,9 @@ import DetailsInfo from '../features/anime/components/details/DetailsInfo';
 import DetailsEpisodeGrid, { type NormalizedEpisode, type SeasonChip } from '../features/anime/components/details/DetailsEpisodeGrid';
 import DetailsVideoPlayer from '../features/anime/components/details/DetailsVideoPlayer';
 
+const isMovieAnime = (anime: Partial<Anime> | null | undefined) =>
+    String(anime?.type || '').toUpperCase() === 'MOVIE';
+
 const buildInstantEpisodes = (anime: Anime | null): NormalizedEpisode[] => {
     if (!anime) return [];
 
@@ -34,6 +37,18 @@ const buildInstantEpisodes = (anime: Anime | null): NormalizedEpisode[] => {
             playbackEpisodeNumber: Number(episodeNumber),
         };
     });
+    if (isMovieAnime(anime)) {
+        const movieMeta = metadataEpisodes[0] || {};
+        return [{
+            session: movieMeta.session || `movie:1`,
+            episodeNumber: '1',
+            title: anime.title_english || anime.title || anime.title_romaji || anime.title_japanese || 'Movie',
+            thumbnail: movieMeta.thumbnail || anime.images?.jpg?.large_image_url || anime.images?.jpg?.image_url || anime.anilist_cover_image,
+            snapshot: movieMeta.snapshot || anime.images?.jpg?.large_image_url || anime.images?.jpg?.image_url || anime.anilist_cover_image,
+            playbackEpisodeNumber: 1,
+        }];
+    }
+
     const latestEpisode = Number(anime.latestEpisode || 0);
     const totalEpisodes = Number(anime.episodes || 0);
     const expectedCount = Math.min(
@@ -51,9 +66,17 @@ const buildInstantEpisodes = (anime: Anime | null): NormalizedEpisode[] => {
     return Array.from({ length: expectedCount }, (_, index) => {
         const episodeNumber = String(index + 1);
         return byEpisodeNumber.get(episodeNumber) || {
-            session: `instant:${episodeNumber}`,
+            session: isMovieAnime(anime) ? `movie:${episodeNumber}` : `instant:${episodeNumber}`,
             episodeNumber,
-            title: `Episode ${episodeNumber}`,
+            title: isMovieAnime(anime)
+                ? anime.title_english || anime.title || anime.title_romaji || anime.title_japanese || 'Movie'
+                : `Episode ${episodeNumber}`,
+            thumbnail: isMovieAnime(anime)
+                ? anime.images?.jpg?.large_image_url || anime.images?.jpg?.image_url || anime.anilist_cover_image
+                : undefined,
+            snapshot: isMovieAnime(anime)
+                ? anime.images?.jpg?.large_image_url || anime.images?.jpg?.image_url || anime.anilist_cover_image
+                : undefined,
             playbackEpisodeNumber: index + 1,
         };
     });
@@ -349,6 +372,14 @@ function AnimeDetailsPageContent() {
     };
     const isAnimePaheSession = (value: unknown) =>
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(value || '').trim());
+    const updateSearchParams = (params: Record<string, string>) => {
+        setSearchParams(params, { state: location.state });
+    };
+    const getTmdbRouteId = (anime: Partial<Anime> | null | undefined) => {
+        const tmdbAnime = anime as (Partial<Anime> & { tmdbId?: unknown; tmdb_id?: unknown }) | null | undefined;
+        const tmdbId = toPositiveNumber(tmdbAnime?.tmdbId ?? tmdbAnime?.tmdb_id);
+        return tmdbId ? `tmdb-${tmdbId}` : '';
+    };
 
     useEffect(() => {
         handleAnimeClickRef.current = animeHook.handleAnimeClick;
@@ -658,7 +689,7 @@ function AnimeDetailsPageContent() {
                 const currentAnime = currentId === activeId && selectedAnime.relations?.edges?.length
                     ? selectedAnime
                     : cachedDetails?.data
-                        || ((await animeService.getAnimeDetails(currentId).catch(() => ({ data: null })))?.data || (currentId === activeId ? selectedAnime : null));
+                        || ((await animeService.getAnimeDetails(currentId, currentId === activeId ? selectedAnime?.type : undefined).catch(() => ({ data: null })))?.data || (currentId === activeId ? selectedAnime : null));
 
                 if (!currentAnime) continue;
                 collect(currentAnime);
@@ -702,7 +733,10 @@ function AnimeDetailsPageContent() {
         ? (
             isAnimePaheSession(selectedAnime.scraperId)
                 ? selectedAnime.scraperId
-                : (selectedAnime.id || selectedAnime.mal_id)
+                : (isMovieAnime(selectedAnime) && getTmdbRouteId(selectedAnime))
+                    || selectedAnime.id
+                    || selectedAnime.mal_id
+                    || getTmdbRouteId(selectedAnime)
         )?.toString() || ''
         : '';
     const inList = isInWatchList(animeId);
@@ -794,13 +828,14 @@ function AnimeDetailsPageContent() {
 
     const isUnreleased = selectedAnime.status === 'NOT_YET_RELEASED';
     const activeEpParam = searchParams.get('ep');
+    const isMovie = isMovieAnime(selectedAnime);
     
     const handleSeasonChipClick = (season: SeasonChip) => {
         if (season.isActive) return;
         
         if (season.source === 'tmdb' && season.tmdbSeasonNumber && (!season.anilistId || season.anilistId === activeSeasonId)) {
             setSelectedTmdbSeason({ activeId: activeSeasonId, seasonNumber: season.tmdbSeasonNumber });
-            setSearchParams({}); // Clear active episode when switching TMDB seasons
+            updateSearchParams({}); // Clear active episode when switching TMDB seasons
             return;
         }
 
@@ -817,6 +852,17 @@ function AnimeDetailsPageContent() {
                 })),
             },
         });
+    };
+    const scrollToPlayer = () => {
+        setTimeout(() => {
+            const playerEl = document.getElementById('details-video-player');
+            if (playerEl) {
+                const y = playerEl.getBoundingClientRect().top + window.scrollY - 32;
+                window.scrollTo({ top: y, behavior: 'smooth' });
+            } else {
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        }, 50);
     };
 
     const activeChip = activeDisplayChip;
@@ -904,12 +950,13 @@ function AnimeDetailsPageContent() {
             <div className="max-w-7xl mx-auto px-8 md:px-14 -mt-24 md:-mt-32 relative z-10">
                 <DetailsInfo
                     anime={selectedAnime}
-                    episodesCount={visibleEpisodes.length}
+                    episodesCount={isMovie ? 0 : visibleEpisodes.length}
                     isLoading={isEpisodesResolving}
                     inList={inList}
                     inFavorites={inFavorites}
                     onWatch={() => {
-                        setSearchParams({ ep: '1' });
+                        updateSearchParams({ ep: '1' });
+                        scrollToPlayer();
                     }}
                     onToggleList={handleToggleList}
                     onToggleFavorite={handleToggleFavorite}
@@ -918,7 +965,7 @@ function AnimeDetailsPageContent() {
                         <DetailsVideoPlayer 
                             animeId={animeId} 
                             animeTitle={selectedAnime.title} 
-                            onClose={() => setSearchParams({})} 
+                            onClose={() => updateSearchParams({})}
                             isWatched={Boolean(activeEpisodeWatchKey && watchedEpisodes.has(activeEpisodeWatchKey))}
                             isResolvingEpisode={isPlayerResolvingEpisode}
                             fallbackEpisode={activeVisibleEpisode}
@@ -930,7 +977,7 @@ function AnimeDetailsPageContent() {
                         />
                     ) : null}
 
-                    {!isUnreleased && (
+                    {!isUnreleased && !isMovie && (
                         <DetailsEpisodeGrid
                             episodes={visibleEpisodes}
                             watchedEpisodes={watchedEpisodes}
@@ -942,17 +989,8 @@ function AnimeDetailsPageContent() {
                             onSeasonClick={handleSeasonChipClick}
                             onEpisodeClick={(ep) => {
                                 const playbackEpisodeNumber = getPlaybackEpisodeNumber(ep);
-                                setSearchParams({ ep: String(playbackEpisodeNumber) });
-
-                                setTimeout(() => {
-                                    const playerEl = document.getElementById('details-video-player');
-                                    if (playerEl) {
-                                        const y = playerEl.getBoundingClientRect().top + window.scrollY - 32;
-                                        window.scrollTo({ top: y, behavior: 'smooth' });
-                                    } else {
-                                        window.scrollTo({ top: 0, behavior: 'smooth' });
-                                    }
-                                }, 50);
+                                updateSearchParams({ ep: String(playbackEpisodeNumber) });
+                                scrollToPlayer();
                             }}
                         />
                     )}
@@ -964,4 +1002,18 @@ function AnimeDetailsPageContent() {
     );
 }
 
-
+function DetailsPageSkeleton() {
+    return (
+        <div className="min-h-screen bg-[#0a0a0a] animate-pulse">
+            <div className="w-full h-[50vh] md:h-[65vh] bg-white/5" />
+            <div className="max-w-7xl mx-auto px-8 md:px-14 -mt-24 md:-mt-32 relative z-10 flex flex-col md:flex-row gap-8">
+                <div className="w-48 md:w-64 aspect-[2/3] rounded-xl bg-white/10" />
+                <div className="flex-1 mt-4 md:mt-32 flex flex-col gap-4">
+                    <div className="h-8 w-2/3 bg-white/10 rounded" />
+                    <div className="h-4 w-1/3 bg-white/10 rounded" />
+                    <div className="h-20 w-full bg-white/10 rounded mt-4" />
+                </div>
+            </div>
+        </div>
+    );
+}

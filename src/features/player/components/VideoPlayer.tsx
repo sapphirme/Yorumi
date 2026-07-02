@@ -107,6 +107,7 @@ export default function VideoPlayer(props: VideoPlayerProps) {
     const lastResolvedStreamUrlRef = useRef<string | undefined>(undefined);
     const hlsRef = useRef<Hls | null>(null);
     const iframeLoadTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const iframeReadyNotifiedRef = useRef(false);
     const nativeLoadTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const mediaStallTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const autoSkipPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -168,6 +169,13 @@ export default function VideoPlayer(props: VideoPlayerProps) {
             iframeLoadTimeoutRef.current = null;
         }
     }, []);
+
+    const notifyIframeReady = useCallback(() => {
+        if (iframeReadyNotifiedRef.current) return;
+        iframeReadyNotifiedRef.current = true;
+        onLoadRef.current?.();
+        onPlaybackStateChange?.({ isPlaying: true });
+    }, [onPlaybackStateChange]);
 
     const clearMediaStallTimeout = useCallback(() => {
         if (mediaStallTimeoutRef.current) {
@@ -232,6 +240,10 @@ export default function VideoPlayer(props: VideoPlayerProps) {
     }, [clearIframeLoadTimeout, resolvedStreamUrl, shouldUseNativeVideo]);
 
     useEffect(() => {
+        iframeReadyNotifiedRef.current = false;
+    }, [resolvedStreamUrl]);
+
+    useEffect(() => {
         clearNativeLoadTimeout();
         const video = videoRef.current;
         if (!video || !shouldUseNativeVideo || !resolvedStreamUrl) return;
@@ -270,14 +282,13 @@ export default function VideoPlayer(props: VideoPlayerProps) {
 
         const handleLoad = () => {
             clearIframeLoadTimeout();
-            onLoadRef.current?.();
-            onPlaybackStateChange?.({ isPlaying: true });
+            notifyIframeReady();
 
             try {
                 // Advanced CSS overrides for modern Tailwind players
                 webview.insertCSS(`
-                    :root {
-                        --primary: #3DB4F2 !important;
+                        :root {
+                            --primary: #3DB4F2 !important;
                         --primary-color: #3DB4F2 !important;
                         --theme-color: #3DB4F2 !important;
                         --accent: #3DB4F2 !important;
@@ -449,11 +460,11 @@ export default function VideoPlayer(props: VideoPlayerProps) {
             }
         };
 
-        webview.addEventListener('did-finish-load', handleLoad);
+        webview.addEventListener('dom-ready', handleLoad);
         return () => {
-            webview.removeEventListener('did-finish-load', handleLoad);
+            webview.removeEventListener('dom-ready', handleLoad);
         };
-    }, [clearIframeLoadTimeout, resolvedStreamUrl, shouldUseNativeVideo, onPlaybackStateChange]);
+    }, [clearIframeLoadTimeout, notifyIframeReady, resolvedStreamUrl, shouldUseNativeVideo]);
 
     useEffect(() => {
         clearMediaStallTimeout();
@@ -749,6 +760,8 @@ export default function VideoPlayer(props: VideoPlayerProps) {
                                     className="w-full h-full border-0 bg-black"
                                     allowpopups
                                     allowFullScreen
+                                    httpreferrer={resolvedStreamUrl?.includes('allmanga') ? 'https://allmanga.to/' : 'https://videasy.to/'}
+                                    useragent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
                                     webpreferences="webSecurity=no"
                                 />
                                 {displayMode === 'mini' && (

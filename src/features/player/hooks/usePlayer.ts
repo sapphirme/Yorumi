@@ -124,6 +124,11 @@ export function usePlayer(animeId: string | undefined, animeSlugTitle?: string, 
         if (!normalized) return '';
         return /^\d+$/.test(normalized) ? '' : normalized;
     };
+    const getTmdbRouteId = (anime: (Anime & { tmdbId?: unknown; tmdb_id?: unknown }) | null | undefined): string => {
+        const parsed = Number(anime?.tmdbId ?? anime?.tmdb_id);
+        return Number.isFinite(parsed) && parsed > 0 ? `tmdb-${parsed}` : '';
+    };
+    const selectedTmdbRouteId = getTmdbRouteId(selectedAnime);
 
     const parseEpisodeNumber = (value: unknown): number => {
         if (typeof value === 'number' && Number.isFinite(value)) return value;
@@ -237,6 +242,7 @@ export function usePlayer(animeId: string | undefined, animeSlugTitle?: string, 
             (
                 String(selectedAnime.id) === currentId ||
                 String(selectedAnime.mal_id) === currentId ||
+                selectedTmdbRouteId === currentId ||
                 (!!currentSession && extractDirectScraperSession(selectedAnime.scraperId) === currentSession)
             );
         if (!animeMatch) return;
@@ -249,7 +255,7 @@ export function usePlayer(animeId: string | undefined, animeSlugTitle?: string, 
         if (episodes.length > 0 || hasSeenEpisodeFetchStart) {
             setEpisodesResolved(true);
         }
-    }, [animeId, selectedAnime?.id, selectedAnime?.mal_id, epLoading, episodes.length, hasSeenEpisodeFetchStart]);
+    }, [animeId, selectedAnime?.id, selectedAnime?.mal_id, selectedTmdbRouteId, epLoading, episodes.length, hasSeenEpisodeFetchStart]);
 
     // Fetch Anime if missing
     useEffect(() => {
@@ -260,6 +266,7 @@ export function usePlayer(animeId: string | undefined, animeSlugTitle?: string, 
         if (selectedAnime && (
             String(selectedAnime.id) === currentId ||
             String(selectedAnime.mal_id) === currentId ||
+            selectedTmdbRouteId === currentId ||
             (!!currentSession && extractDirectScraperSession(selectedAnime.scraperId) === currentSession)
         )) {
             return;
@@ -278,7 +285,7 @@ export function usePlayer(animeId: string | undefined, animeSlugTitle?: string, 
                 title: fallbackTitle || String(animeId),
             } as Anime);
         }
-    }, [animeId, animeSlugTitle, location.state, selectedAnime?.id, selectedAnime?.mal_id, selectedAnime?.scraperId]);
+    }, [animeId, animeSlugTitle, location.state, selectedAnime?.id, selectedAnime?.mal_id, selectedAnime?.scraperId, selectedTmdbRouteId]);
 
     // Auto-load Episode
     useEffect(() => {
@@ -290,6 +297,7 @@ export function usePlayer(animeId: string | undefined, animeSlugTitle?: string, 
             (
                 String(selectedAnime.id) === currentId ||
                 String(selectedAnime.mal_id) === currentId ||
+                selectedTmdbRouteId === currentId ||
                 (!!currentSession && extractDirectScraperSession(selectedAnime.scraperId) === currentSession)
             );
 
@@ -344,7 +352,7 @@ export function usePlayer(animeId: string | undefined, animeSlugTitle?: string, 
                 loadStream(targetEp);
             }
         }
-    }, [episodes, fallbackEpisode, epNumParam, currentStream, streamLoading, selectedAnime?.id, selectedAnime?.mal_id, animeId, scraperSession, selectedServer]);
+    }, [episodes, fallbackEpisode, epNumParam, currentStream, streamLoading, selectedAnime?.id, selectedAnime?.mal_id, selectedTmdbRouteId, animeId, scraperSession, selectedServer]);
 
     // Episode-change bookkeeping.
     useEffect(() => {

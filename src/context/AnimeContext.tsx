@@ -377,7 +377,14 @@ export function AnimeProvider({ children }: { children: ReactNode }) {
 
     const trimEpisodesForAnime = (anime: Anime, episodeList: Episode[]) => {
         const expectedEpisodes = getExpectedEpisodeCount(anime);
-        if (expectedEpisodes <= 0) return [];
+        if (expectedEpisodes <= 0) {
+            if (String(anime.type || '').toUpperCase() !== 'MOVIE') return [];
+            return episodeList.slice(0, 1).map((episode) => ({
+                ...episode,
+                episodeNumber: '1',
+                _tmdbAbsolute: Number(episode._tmdbAbsolute || episode.episodeNumber || 1),
+            }));
+        }
         if (episodeList.length <= expectedEpisodes) return episodeList;
 
         const seasonNumber = getAnimeSeasonNumber(anime);
@@ -448,7 +455,20 @@ export function AnimeProvider({ children }: { children: ReactNode }) {
 
     const preserveFreshnessHint = (target: Anime, hint: Partial<Anime> | null | undefined): Anime => {
         if (!hint) return target;
-        const nextAnime = { ...target };
+        const nextAnime = { ...target } as Anime & { tmdbId?: unknown; tmdb_id?: unknown };
+        const hintWithTmdb = hint as Partial<Anime> & { tmdbId?: unknown; tmdb_id?: unknown };
+        const hintedTmdbId = Number(hintWithTmdb.tmdbId ?? hintWithTmdb.tmdb_id);
+        if (Number.isFinite(hintedTmdbId) && hintedTmdbId > 0) {
+            nextAnime.tmdbId = hintedTmdbId;
+        }
+
+        if (String(hint.type || '').toUpperCase() === 'MOVIE') {
+            nextAnime.type = 'MOVIE';
+            if (!nextAnime.episodes || Number(nextAnime.episodes) <= 0) {
+                nextAnime.episodes = 1;
+            }
+        }
+
         const hintedLatest = Number(hint.latestEpisode || 0);
         const currentLatest = Number(nextAnime.latestEpisode || 0);
         if (hintedLatest > currentLatest) {
@@ -1517,7 +1537,7 @@ export function AnimeProvider({ children }: { children: ReactNode }) {
             if (!detailsId && !anime.title) throw new Error('Could not identify anime ID');
 
             let fastPromiseSettled = false;
-            const fastPromise = detailsId ? animeService.getAnimeDetailsFast(detailsId)
+            const fastPromise = detailsId ? animeService.getAnimeDetailsFast(detailsId, currentAnime?.type)
                 .catch(() => null)
                 .finally(() => {
                     fastPromiseSettled = true;
@@ -1543,7 +1563,7 @@ export function AnimeProvider({ children }: { children: ReactNode }) {
                 setEpisodesBackgroundLoading(true);
             }
 
-            const detailsData = detailsId ? await animeService.getAnimeDetails(detailsId) : null;
+            const detailsData = detailsId ? await animeService.getAnimeDetails(detailsId, currentAnime?.type) : null;
             if (isStaleRequest()) return;
 
             if (detailsData?.data) {
@@ -1568,7 +1588,7 @@ export function AnimeProvider({ children }: { children: ReactNode }) {
                             
                             const fullDetailsId = getPreferredDetailsId(currentAnime);
                             if (fullDetailsId) {
-                                const fullDetailsData = await animeService.getAnimeDetails(fullDetailsId).catch(() => null);
+                                const fullDetailsData = await animeService.getAnimeDetails(fullDetailsId, currentAnime?.type).catch(() => null);
                                 if (fullDetailsData?.data) {
                                     currentAnime = preserveFreshnessHint(fullDetailsData.data, currentAnime);
                                 }
@@ -1664,7 +1684,7 @@ export function AnimeProvider({ children }: { children: ReactNode }) {
 
         const detailsId = anime.id || anime.mal_id;
         if (detailsId) {
-            animeService.getAnimeDetailsFast(detailsId).catch(() => undefined);
+            animeService.getAnimeDetailsFast(detailsId, anime?.type).catch(() => undefined);
         }
     };
 

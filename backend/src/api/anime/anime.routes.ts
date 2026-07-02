@@ -36,7 +36,8 @@ router.get('/metadata', async (req, res) => {
             return;
         }
 
-        const metadata = await streambertAnimeService.getMetadata(Math.floor(tmdbId));
+        const format = req.query.format ? String(req.query.format).toUpperCase() : undefined;
+        const metadata = await streambertAnimeService.getMetadata(Math.floor(tmdbId), format);
         if (!metadata) {
             res.status(404).json({ error: 'Anime not found' });
             return;

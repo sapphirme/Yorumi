@@ -339,7 +339,7 @@ const scraperSearchCache = new Map<string, { data: any[]; timestamp: number }>()
 const SCRAPER_SEARCH_TTL = 5 * 60 * 1000;
 const AZ_LIST_CACHE_TTL = 10 * 60 * 1000;
 const PERSISTED_CACHE_PREFIX = 'yorumi_api_cache_v8';
-const STREAM_CACHE_VERSION = 'v9';
+const STREAM_CACHE_VERSION = 'v11';
 const PERSISTED_STREAM_CACHE_PREFIX = `yorumi_stream_cache_${STREAM_CACHE_VERSION}`;
 
 const readPersistedCache = (key: string, ttl: number) => {
@@ -463,6 +463,41 @@ const clearCachedStream = (key: string) => {
 
 const getAnimeDetailsCacheKey = (id: number | string) => `anime-details:v4:${id}`;
 const getAnimeDetailsFastCacheKey = (id: number | string) => `anime-details-fast:v12:${id}`;
+const normalizeStreamLookupPart = (value: unknown) =>
+    String(value || '')
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+
+const getStreamLookupCacheScope = (options?: {
+    provider?: string;
+    title?: string;
+    titles?: string[];
+    year?: string | number;
+    format?: string;
+}) => {
+    const provider = String(options?.provider || '').trim().toLowerCase();
+    const format = String(options?.format || '').trim().toUpperCase();
+    if (provider !== 'videasy' && format !== 'MOVIE') return '';
+
+    const titleParts = [
+        options?.title,
+        ...(Array.isArray(options?.titles) ? options.titles : []),
+    ]
+        .map(normalizeStreamLookupPart)
+        .filter(Boolean);
+
+    return [
+        provider,
+        ...Array.from(new Set(titleParts)),
+        normalizeStreamLookupPart(options?.year),
+        normalizeStreamLookupPart(format),
+    ]
+        .filter(Boolean)
+        .join(':');
+};
+
 const getStreamCacheKey = (animeSession: string, episodeSession: string, provider = 'auto') =>
     `streams:${STREAM_CACHE_VERSION}:${provider}:${animeSession}:${episodeSession}`;
 const isAnimePaheOnlyStream = (item: any) => {
@@ -851,7 +886,7 @@ export const animeService = {
         await this.getAZList(letter, page).catch(() => undefined);
     },
 
-    async getAnimeDetails(id: number | string) {
+    async getAnimeDetails(id: number | string, format?: string) {
         if (typeof id === 'string' && (id.startsWith('s:') || isNaN(Number(id)))) {
             return { data: null };
         }
@@ -864,7 +899,8 @@ export const animeService = {
 
         const fetchPromise = (async () => {
             try {
-                const res = await fetch(`${API_BASE}/anime/metadata?id=${id}`);
+                const formatParam = format ? `&format=${encodeURIComponent(format)}` : '';
+                const res = await fetch(`${API_BASE}/anime/metadata?id=${id}${formatParam}`);
                 const data = await res.json();
                 if (!data || data.error) return { data: null };
                 const result = { data: mapAnilistToAnime(data) };
@@ -881,7 +917,7 @@ export const animeService = {
         return fetchPromise;
     },
 
-    async getAnimeDetailsFast(id: number | string) {
+    async getAnimeDetailsFast(id: number | string, format?: string) {
         if (typeof id === 'string' && (id.startsWith('s:') || isNaN(Number(id)))) {
             return { data: null, episodes: [], scraperSession: null };
         }
@@ -907,7 +943,8 @@ export const animeService = {
 
         const fetchPromise = (async () => {
             try {
-                const res = await fetch(`${API_BASE}/anime/metadata?id=${id}`);
+                const formatParam = format ? `&format=${encodeURIComponent(format)}` : '';
+                const res = await fetch(`${API_BASE}/anime/metadata?id=${id}${formatParam}`);
                 if (!res.ok) {
                     throw new Error(`Failed to fetch fast anime details: ${res.statusText}`);
                 }
@@ -1208,7 +1245,9 @@ export const animeService = {
         episodeNumber?: number;
     }) {
         const provider = String(options?.provider || 'auto').trim().toLowerCase() || 'auto';
-        const cacheKey = getStreamCacheKey(animeSession, episodeSession, provider);
+        const lookupScope = getStreamLookupCacheScope({ ...options, provider });
+        const scopedEpisodeSession = lookupScope ? `${episodeSession}:${lookupScope}` : episodeSession;
+        const cacheKey = getStreamCacheKey(animeSession, scopedEpisodeSession, provider);
         const cached = getCachedStream(cacheKey);
         if (cached) return cached;
 
@@ -1271,6 +1310,23 @@ export const animeService = {
         if (episodeSession) {
             clearCachedStream(getStreamCacheKey(animeSession, episodeSession, provider));
             inFlightRequests.delete(getStreamCacheKey(animeSession, episodeSession, provider));
+            const scopedPrefix = `streams:${STREAM_CACHE_VERSION}:${provider}:${animeSession}:${episodeSession}:`;
+            Array.from(streamCache.keys())
+                .filter((key) => key.startsWith(scopedPrefix))
+                .forEach((key) => clearCachedStream(key));
+            Array.from(inFlightRequests.keys())
+                .filter((key) => key.startsWith(scopedPrefix))
+                .forEach((key) => inFlightRequests.delete(key));
+            try {
+                for (let i = sessionStorage.length - 1; i >= 0; i -= 1) {
+                    const key = sessionStorage.key(i);
+                    if (key && key.startsWith(`${PERSISTED_STREAM_CACHE_PREFIX}:${scopedPrefix}`)) {
+                        sessionStorage.removeItem(key);
+                    }
+                }
+            } catch {
+                // Ignore storage errors.
+            }
             return;
         }
 

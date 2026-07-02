@@ -544,24 +544,20 @@ class ScraperService {
                     
                     if (resolvedSeason) {
                         seasonNumber = resolvedSeason;
-                        // If the absolute episode matcher resolved to the SAME season, it means the episode number is absolute
-                        // AND we should use the relative episode from the matcher.
                         if (absoluteMatch && absoluteMatch.seasonNumber === resolvedSeason) {
                             relEpisode = absoluteMatch.relativeEpisode;
                         } 
-                        // If the absolute matcher thinks it's a DIFFERENT season (e.g. episodeNumber=1 -> season 1), 
-                        // but the title clearly says Season 2, then episodeNumber=1 is already relative!
-                        // So relEpisode = episodeNumber.
                     } else if (absoluteMatch) {
-                        // Fallback: if we couldn't resolve season by title, trust the absolute episode matcher
                         seasonNumber = absoluteMatch.seasonNumber;
                         relEpisode = absoluteMatch.relativeEpisode;
                     }
                 }
 
+                const baseUrl = 'https://player.videasy.to';
+                const embedParams = new URLSearchParams({ overlay: 'true' });
                 const url = tmdbTarget.mediaType === 'movie' 
-                    ? `https://player.videasy.to/movie/${tmdbTarget.tmdbId}?overlay=true`
-                    : `https://player.videasy.to/tv/${tmdbTarget.tmdbId}/${seasonNumber}/${relEpisode}?overlay=true`;
+                    ? `${baseUrl}/movie/${tmdbTarget.tmdbId}?${embedParams.toString()}`
+                    : `${baseUrl}/tv/${tmdbTarget.tmdbId}/${seasonNumber}/${relEpisode}?${embedParams.toString()}`;
                 
                 return [{
                     quality: 'auto',
@@ -570,7 +566,7 @@ class ScraperService {
                     server: 'Videasy',
                     url: url,
                     isHls: false,
-                    referer: 'https://player.videasy.to/'
+                    referer: `${baseUrl}/`
                 }];
             }
             // Fall back to allmanga below if TMDB match fails
