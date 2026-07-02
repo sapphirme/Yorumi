@@ -95,7 +95,38 @@ export default function SearchModal({ isOpen, onClose, type }: SearchModalProps)
     const handleResultClick = (item: SearchPreviewItem) => {
         saveRecentSearch(item.title);
         onClose();
-        navigate(item.url, { state: { manga: item.manga } });
+        if (type === 'manga') {
+            navigate(item.url, { state: { manga: item.manga } });
+            return;
+        }
+
+        const raw = item.manga || {};
+        const isMovie = String(item.type || raw.media_type || '').toUpperCase() === 'MOVIE' || raw.media_type === 'movie';
+        const anime = {
+            ...(raw || {}),
+            id: typeof raw.id === 'number' && !item.url.includes('/tmdb-') ? raw.id : 0,
+            mal_id: typeof raw.mal_id === 'number' ? raw.mal_id : 0,
+            tmdbId: item.url.includes('/tmdb-') ? item.id : raw.tmdbId,
+            title: item.title,
+            title_english: item.title,
+            title_romaji: raw.original_name || raw.original_title || item.subtitle || item.title,
+            images: raw.images || {
+                jpg: {
+                    image_url: item.image,
+                    large_image_url: item.image,
+                },
+            },
+            score: item.score || 0,
+            status: raw.status || 'FINISHED',
+            type: isMovie ? 'MOVIE' : (item.type || raw.type || 'TV'),
+            episodes: isMovie ? 1 : (raw.episodes ?? null),
+            year: typeof item.date === 'number' ? item.date : raw.year,
+            aired: raw.aired || {
+                from: raw.release_date || raw.first_air_date,
+                string: item.date ? String(item.date) : undefined,
+            },
+        };
+        navigate(item.url, { state: { anime } });
     };
 
     const handleRecentSearchClick = (term: string) => {

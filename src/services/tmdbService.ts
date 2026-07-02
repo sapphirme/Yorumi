@@ -245,6 +245,7 @@ const getAnimeDetailsCacheKey = (anime: Anime) => {
 };
 
 const resolveTvDetails = async (anime: Anime): Promise<TmdbTvDetails | null> => {
+    if (String(anime.type || '').toUpperCase() === 'MOVIE') return null;
     const detailsCacheKey = getAnimeDetailsCacheKey(anime);
     const cachedDetails = readCachedValue<TmdbTvDetails | null>(detailsCacheKey);
     if (cachedDetails) return cachedDetails;

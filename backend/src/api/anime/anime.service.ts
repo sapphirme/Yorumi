@@ -105,17 +105,28 @@ export const streambertAnimeService = {
         };
     },
 
-    async getMetadata(tmdbId: number) {
-        const cacheKey = `anime:tmdb:meta:v2:${tmdbId}`;
+    async getMetadata(tmdbId: number, format?: string) {
+        const cacheKey = `anime:tmdb:meta:v3:${tmdbId}:${format || 'unknown'}`;
         const cached = await cacheGet<any>(cacheKey);
         if (cached) return cached;
 
-        let payload = await tmdbService.get<any>(`/tv/${tmdbId}`, { append_to_response: 'credits,recommendations,similar' }).catch(() => null);
-        if (!payload) {
+        let payload;
+        if (format === 'MOVIE') {
             payload = await tmdbService.get<any>(`/movie/${tmdbId}`, { append_to_response: 'credits,recommendations,similar' }).catch(() => null);
-            if (payload) payload.media_type = 'movie';
+            if (payload) {
+                payload.media_type = 'movie';
+            } else {
+                payload = await tmdbService.get<any>(`/tv/${tmdbId}`, { append_to_response: 'credits,recommendations,similar' }).catch(() => null);
+                if (payload) payload.media_type = 'tv';
+            }
         } else {
-            payload.media_type = 'tv';
+            payload = await tmdbService.get<any>(`/tv/${tmdbId}`, { append_to_response: 'credits,recommendations,similar' }).catch(() => null);
+            if (payload) {
+                payload.media_type = 'tv';
+            } else {
+                payload = await tmdbService.get<any>(`/movie/${tmdbId}`, { append_to_response: 'credits,recommendations,similar' }).catch(() => null);
+                if (payload) payload.media_type = 'movie';
+            }
         }
 
         if (!payload) return null;
