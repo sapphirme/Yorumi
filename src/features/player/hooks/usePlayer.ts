@@ -47,6 +47,7 @@ export function usePlayer(animeId: string | undefined, animeSlugTitle?: string, 
     const streamsHook = useStreams(scraperSession, selectedAnime?.title || animeSlugTitle, streamMetadata);
     const {
         currentStream,
+        serverSwitchLoading,
         streamLoading,
         currentEpisode,
         streams,
@@ -255,7 +256,8 @@ export function usePlayer(animeId: string | undefined, animeSlugTitle?: string, 
         if (episodes.length > 0 || hasSeenEpisodeFetchStart) {
             setEpisodesResolved(true);
         }
-    }, [animeId, selectedAnime?.id, selectedAnime?.mal_id, selectedTmdbRouteId, epLoading, episodes.length, hasSeenEpisodeFetchStart]);
+    }, [animeId, selectedAnime?.id, selectedAnime?.mal_id, selectedTmdbRouteId, epLoading,
+        episodes.length, hasSeenEpisodeFetchStart]);
 
     // Fetch Anime if missing
     useEffect(() => {
@@ -301,7 +303,7 @@ export function usePlayer(animeId: string | undefined, animeSlugTitle?: string, 
                 (!!currentSession && extractDirectScraperSession(selectedAnime.scraperId) === currentSession)
             );
 
-        if (!scraperSession && selectedServer !== 'videasy') return;
+        if (!scraperSession && !selectedAnime?.title) return;
 
         const playableEpisodes = episodes.length > 0
             ? episodes
@@ -352,7 +354,9 @@ export function usePlayer(animeId: string | undefined, animeSlugTitle?: string, 
                 loadStream(targetEp);
             }
         }
-    }, [episodes, fallbackEpisode, epNumParam, currentStream, streamLoading, selectedAnime?.id, selectedAnime?.mal_id, selectedTmdbRouteId, animeId, scraperSession, selectedServer]);
+    }, [episodes, fallbackEpisode, epNumParam, currentStream,
+
+        scraperSession, selectedServer]);
 
     // Episode-change bookkeeping.
     useEffect(() => {
@@ -460,7 +464,9 @@ export function usePlayer(animeId: string | undefined, animeSlugTitle?: string, 
             bustEpisodeCache(currentEpisode.session);
             loadStream(currentEpisode);
         }, delay);
-    }, [currentEpisode, currentStream, streamLoading, hasResolvedStreams, epNumParam, scraperSession, bustEpisodeCache, loadStream, resetScheduledStreamRetry]);
+    }, [currentEpisode, currentStream,
+
+        scraperSession, bustEpisodeCache, loadStream, resetScheduledStreamRetry]);
 
     useEffect(() => {
         return () => {
@@ -723,6 +729,7 @@ export function usePlayer(animeId: string | undefined, animeSlugTitle?: string, 
 
         // Loading States
         epLoading,
+        serverSwitchLoading,
         streamLoading,
         isPlayerReady,
         streamExhausted,

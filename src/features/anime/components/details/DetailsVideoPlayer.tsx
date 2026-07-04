@@ -42,6 +42,7 @@ export default function DetailsVideoPlayer({ animeId, animeTitle, onClose, isWat
         cleanCurrentTitle,
         resumeAtSeconds,
         streamLoading,
+        serverSwitchLoading,
         streamExhausted,
         skipTimestampsLoading,
         isExpanded,
@@ -76,6 +77,7 @@ export default function DetailsVideoPlayer({ animeId, animeTitle, onClose, isWat
         isHls: currentStream?.isHls,
         subtitles: currentStream?.subtitles,
         isLoading: streamLoading || (isResolvingEpisode && !currentEpisode),
+        isServerSwitching: serverSwitchLoading,
         streamExhausted,
         skipTimestampsLoading,
         hasPlayableSource: currentEpisode
@@ -138,6 +140,7 @@ export default function DetailsVideoPlayer({ animeId, animeTitle, onClose, isWat
         skipTimestampsLoading,
         streamExhausted,
         streamLoading,
+        serverSwitchLoading,
         streams,
         toggleExpand,
     ]);

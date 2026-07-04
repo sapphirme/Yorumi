@@ -1,5 +1,6 @@
 import { AllMangaScraper } from '../../scraper/allmanga';
 import { tmdbService } from './tmdb.service';
+import { Request, Response } from 'express'; // Trigger restart
 import { anilistService } from './anilist.service';
 
 import { acquireLock, cacheGet, cacheSet, releaseLock } from '../../utils/redis-cache';
@@ -523,57 +524,51 @@ class ScraperService {
     async getStreams(animeSession: string, epSession: string, options?: StreamProviderOptions) {
         const provider = String(options?.provider || 'auto').trim().toLowerCase() || 'auto';
 
-
-        // ── Videasy provider ──────────────────────────────────────────────
-        if (provider === 'videasy') {
+        // ── Custom Video Sources (video-sources.ts) ─────────────────────────
+        if (provider === 'vidsrc' || provider === 'anineko' || provider === 'animegg') {
             const title = String(options?.title || this.queryFromSessionSlug(animeSession)).trim();
-            const episodeNumber = Number(options?.episodeNumber || this.parseEpisodeNumber(epSession)) || 1;
-            const year = options?.year;
-            const format = options?.format;
-            const titles = options?.titles;
+            const tmdbTarget = await tmdbService.resolveMediaTarget({ 
+                title, 
+                titles: options?.titles, 
+                year: options?.year, 
+                format: options?.format 
+            });
 
-            const tmdbTarget = await tmdbService.resolveMediaTarget({ title, titles, year, format });
-            
             if (tmdbTarget) {
-                let seasonNumber = 1;
-                let relEpisode = episodeNumber;
-
-                if (tmdbTarget.mediaType === 'tv') {
-                    const resolvedSeason = await tmdbService.resolveSeasonByTitle(tmdbTarget.tmdbId, title);
-                    const absoluteMatch = await tmdbService.resolveAbsoluteEpisode(tmdbTarget.tmdbId, episodeNumber);
-                    
-                    if (resolvedSeason) {
-                        seasonNumber = resolvedSeason;
-                        if (absoluteMatch && absoluteMatch.seasonNumber === resolvedSeason) {
-                            relEpisode = absoluteMatch.relativeEpisode;
-                        } 
-                    } else if (absoluteMatch) {
-                        seasonNumber = absoluteMatch.seasonNumber;
-                        relEpisode = absoluteMatch.relativeEpisode;
-                    }
-                }
-
-                const baseUrl = 'https://player.videasy.to';
-                const embedParams = new URLSearchParams({ overlay: 'true' });
-                const url = tmdbTarget.mediaType === 'movie' 
-                    ? `${baseUrl}/movie/${tmdbTarget.tmdbId}?${embedParams.toString()}`
-                    : `${baseUrl}/tv/${tmdbTarget.tmdbId}/${seasonNumber}/${relEpisode}?${embedParams.toString()}`;
+                const anilistId = parseInt(animeSession, 10);
+                const episodeNumber = Number(options?.episodeNumber || this.parseEpisodeNumber(epSession)) || 1;
+                // Dynamically import to avoid circular dependency
+                const { animeVideoSources } = require('../anime/video-sources');
+                // Pass anilistId if available, fallback to tmdbId just in case (though video-sources expects anilistId for metadata)
+                const targetId = isNaN(anilistId) ? tmdbTarget.tmdbId : anilistId;
+                const streamResponse = await animeVideoSources.getStream(targetId, episodeNumber, provider, { title, tmdbId: tmdbTarget.tmdbId });
                 
-                return [{
-                    quality: 'auto',
-                    audio: 'sub',
-                    provider: 'videasy',
-                    server: 'Videasy',
-                    url: url,
-                    isHls: false,
-                    referer: `${baseUrl}/`
-                }];
+                if (streamResponse?.m3u8) {
+                    const isHls = /\.m3u8?(?:[?#]|$)/i.test(streamResponse.m3u8);
+                    const referer = streamResponse.referer || '';
+                    
+                    let finalUrl = streamResponse.m3u8;
+                    if (provider !== 'vidsrc' && finalUrl.startsWith('http')) {
+                        finalUrl = `/api/scraper/proxy?url=${encodeURIComponent(finalUrl)}&referer=${encodeURIComponent(referer)}${isHls && provider === 'anineko' ? '&proxyMedia=1' : ''}`;
+                    }
+                    
+                    return [{
+                        quality: 'auto',
+                        audio: 'sub',
+                        provider: provider,
+                        server: provider === 'anineko' ? 'AniNeko' : (provider === 'vidsrc' ? 'VidSrc' : 'AnimeGG'),
+                        url: finalUrl,
+                        isHls: isHls,
+                        referer: referer,
+                        subtitles: streamResponse.subtitles || [],
+                        directUrl: streamResponse.m3u8
+                    } as any];
+                }
             }
-            // Fall back to allmanga below if TMDB match fails
+            return [];
         }
-
         // ── AllManga provider ──────────────────────────────────────────────
-        if (provider === 'allmanga' || provider === 'auto' || provider === 'videasy' || this.isAllMangaSession(animeSession)) {
+        if (provider === 'allmanga' || provider === 'auto' || this.isAllMangaSession(animeSession)) {
             let title = String(options?.title || this.queryFromSessionSlug(animeSession)).trim();
             const episodeNumber = Number(options?.episodeNumber || this.parseEpisodeNumber(epSession));
             let showId = AllMangaScraper.fromSession(animeSession);
@@ -596,20 +591,24 @@ class ScraperService {
                 showId = '';
             }
 
-            const key = `streams:allmanga:v2:${showId || title.toLowerCase()}:${episodeNumber || epSession}`;
+            const key = `streams:allmanga:v4:${showId || title.toLowerCase()}:${episodeNumber || epSession}:${year || ''}`;
             const links = await this.getOrLoad(
                 key,
                 5 * 60 * 1000,
                 async () => showId
                     ? this.allMangaScraper.getLinksForShowId(showId, episodeNumber, title)
-                    : this.allMangaScraper.getLinksForEpisodeNumber(title, episodeNumber),
+                    : this.allMangaScraper.getLinksForEpisodeNumber(title, episodeNumber, year ? Number(year) : undefined),
                 {
                     shouldCache: (value) => Array.isArray(value) && value.length > 0,
                     allowCached: (value) => Array.isArray(value) && value.length > 0,
                 }
             );
 
-            return links;
+            // Filter out dead/parked domains that just serve ads now
+            return (Array.isArray(links) ? links : []).filter(link => {
+                const u = link?.directUrl || link?.url || '';
+                return u && !/streamsb|sbvideo|sbfull|sbspeed|sbfast|streamtape|embedsito/i.test(u);
+            });
         }
 
         return [];

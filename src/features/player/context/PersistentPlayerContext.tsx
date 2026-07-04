@@ -132,7 +132,7 @@ export function PersistentPlayerProvider({ children }: { children: ReactNode }) 
             
             // Preserve the active stream when returning to the same watch page.
             // We intentionally do NOT check isSameServer here because useStreams
-            // always re-initializes selectedServer to 'videasy' on mount, so
+            // always re-initializes selectedServer to 'vidsrc' on mount, so
             // the incoming props will mismatch if the user was on AllManga.
             // Intentional server switches go through loadStream, not registerPlayer.
             const shouldPreserveActiveStream = Boolean(

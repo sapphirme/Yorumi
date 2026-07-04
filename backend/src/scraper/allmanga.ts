@@ -481,7 +481,7 @@ export class AllMangaScraper {
         };
     }
 
-    private scoreShow(query: string, show: AllMangaShow, translationType: TranslationType, episodeNumber: number) {
+    private scoreShow(query: string, show: AllMangaShow, translationType: TranslationType, episodeNumber: number, year?: number) {
         const target = this.normalizeTitle(query);
         const title = this.normalizeTitle(show.name);
         if (!target || !title) return 0;
@@ -491,18 +491,33 @@ export class AllMangaScraper {
         else if (title.includes(target) || target.includes(title)) score = 80;
         if (score <= 0) return 0;
 
+        const rawTitle = String(show.englishName || show.name || '');
+        const isSpecial = /\b(movie|special|recap|ova|ona)\b/i.test(rawTitle);
+        const asksSpecial = /\b(movie|special|recap|ova|ona)\b/i.test(query);
+        if (isSpecial && !asksSpecial) score -= 100;
+
+        // Year-based scoring: strongly prefer shows from the same year
+        if (year && year > 0) {
+            const showYear = Number(show.season?.year || 0);
+            if (showYear > 0) {
+                if (showYear === year) score += 50;
+                else if (Math.abs(showYear - year) === 1) score += 10;
+                else score -= 60; // Wrong year → likely wrong season
+            }
+        }
+
         const availableEpisodes = Number(show.availableEpisodes?.[translationType] || 0);
         if (episodeNumber > 0 && availableEpisodes >= episodeNumber) score += 30;
         if (availableEpisodes > 1) score += Math.min(25, Math.floor(availableEpisodes / 50));
         return score;
     }
 
-    private async resolveShow(title: string, translationType: TranslationType, episodeNumber: number) {
+    private async resolveShow(title: string, translationType: TranslationType, episodeNumber: number, year?: number) {
         for (const candidate of this.candidateTitles(title)) {
             const shows = await this.search(candidate, translationType);
             const ranked = shows
                 .filter((show) => show?._id)
-                .map((show) => ({ show, score: this.scoreShow(candidate, show, translationType, episodeNumber) }))
+                .map((show) => ({ show, score: this.scoreShow(candidate, show, translationType, episodeNumber, year) }))
                 .sort((a, b) => b.score - a.score);
             const best = ranked.find((entry) => entry.score > 0)?.show || ranked[0]?.show;
             if (best?._id) return best;
@@ -722,14 +737,15 @@ export class AllMangaScraper {
         return current;
     }
 
-    async getLinksForEpisodeNumber(title: string, episodeNumber: number): Promise<StreamLink[]> {
+    async getLinksForEpisodeNumber(title: string, episodeNumber: number, year?: number): Promise<StreamLink[]> {
         const cleanTitle = String(title || '').trim();
         if (!cleanTitle || !Number.isFinite(episodeNumber) || episodeNumber <= 0) return [];
 
         const allLinks: StreamLink[] = [];
-        for (const audio of ['sub', 'dub'] as const) {
-            const show = await this.resolveShow(cleanTitle, audio, episodeNumber);
-            if (!show?._id) continue;
+        const audios: readonly TranslationType[] = ['sub', 'dub'];
+        await Promise.all(audios.map(async (audio) => {
+            const show = await this.resolveShow(cleanTitle, audio, episodeNumber, year);
+            if (!show?._id) return;
 
             const sources = await this.getEpisodeSources(show._id, episodeNumber, audio);
             const orderedSources = sources
@@ -747,7 +763,7 @@ export class AllMangaScraper {
             for (const links of resolvedLinksArrays) {
                 allLinks.push(...links);
             }
-        }
+        }));
 
         const seen = new Set<string>();
         return allLinks.filter((link) => {
@@ -762,7 +778,9 @@ export class AllMangaScraper {
         if (!showId || !Number.isFinite(episodeNumber) || episodeNumber <= 0) return [];
 
         const allLinks: StreamLink[] = [];
-        for (const audio of ['sub', 'dub'] as const) {
+        const audios: readonly TranslationType[] = ['sub', 'dub'];
+        
+        await Promise.all(audios.map(async (audio) => {
             let sources = await this.getEpisodeSources(showId, episodeNumber, audio);
             
             // Fallback to title search if the current showId doesn't have this audio track (common for sub/dub split shows)
@@ -791,7 +809,7 @@ export class AllMangaScraper {
             for (const links of resolvedLinksArrays) {
                 allLinks.push(...links);
             }
-        }
+        }));
 
         const seen = new Set<string>();
         return allLinks.filter((link) => {

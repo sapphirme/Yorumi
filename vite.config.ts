@@ -6,6 +6,8 @@ export default defineConfig({
   base: './',
   envDir: './backend',
   server: {
+    port: 5173,
+    strictPort: true,
     proxy: {
       '/avatars': {
         target: 'http://localhost:3001',

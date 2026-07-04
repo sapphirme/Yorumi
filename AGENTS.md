@@ -12,6 +12,7 @@ This file defines how coding agents should work in this repo so execution stays 
 - Frontend source: `src/`
 - Backend source: `backend/src/`
 - Build outputs: `dist/`, `backend/dist/` (do not hand-edit)
+- **yorumi-cli**: A standalone CLI tool (`yorumi-cli/`) completely unrelated to the main Yorumi app. It must work out-of-the-box for non-developer users to watch anime without needing the Yorumi backend running locally.
 
 ## Default Workflow
 1. Understand scope and impacted layer (`src`, `backend/src`).
@@ -27,6 +28,7 @@ This file defines how coding agents should work in this repo so execution stays 
 - Match local naming and file organization conventions.
 - Prefer TypeScript-safe fixes over `any`/casts.
 - When touching scraper logic, preserve fallback behavior and error handling.
+- If there is a new patch or bugfix deployed that affects data fetching, always clear the stale cache or ensure the cache is purged during testing.
 - Keep frontend and backend changes logically separated in commits/summary.
 
 ## Guardrails (Do Not)
@@ -43,10 +45,10 @@ Run only what is relevant to changed areas, but always run at least one verifica
 - Frontend/UI changes:
   - `npm run lint`
   - `npx tsc -p tsconfig.app.json --noEmit`
-  - `npm run build` (if change affects bundling/routes/config)
+  - `npm run build` (ALWAYS run this after any code modifications to ensure no build-time errors)
 - Backend/API/scraper changes:
   - `npm run dev --prefix backend` (smoke start)
-  - `npm run build --prefix backend`
+  - `npm run build --prefix backend` (ALWAYS run this after backend changes)
 If a command cannot run (time/tooling/env), state that explicitly and provide the next best verification evidence.
 
 ## Change Heuristics

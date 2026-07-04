@@ -705,16 +705,21 @@ router.get('/streams', async (req, res) => {
                 return next;
             })
             : result;
-        if (Array.isArray(normalized) && normalized.length === 0) {
-            // Do not cache empty stream payloads in browser/proxies.
-            res.set('Cache-Control', 'no-store');
-        } else {
-            res.set('Cache-Control', 'public, max-age=300, s-maxage=900, stale-while-revalidate=1800');
-        }
+        // Never allow HTTP caching of stream responses — stale streams cause wrong-episode playback.
+        // All caching is handled server-side in Redis/memory with proper keying.
+        res.set('Cache-Control', 'no-store');
         res.json(normalized);
     } catch (error: any) {
         res.status(500).json({ error: error.message });
     }
+});
+
+// ── Runtime cache wipe ─────────────────────────────────────────────────────
+router.post('/clear-stream-cache', (_req, res) => {
+    (scraperService as any).cache?.clear?.();
+    (scraperService as any).inFlight?.clear?.();
+    res.set('Cache-Control', 'no-store');
+    res.json({ ok: true, clearedAt: new Date().toISOString() });
 });
 
 router.get('/playable-stream', async (req, res) => {
@@ -958,6 +963,7 @@ router.get('/proxy', async (req, res) => {
                 try {
                     response = await axios.get(targetUrl, {
                         responseType: 'stream',
+
                         headers: {
                             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
                             Referer: referer,
@@ -995,44 +1001,83 @@ router.get('/proxy', async (req, res) => {
             ? (lowerUrl.includes('.vtt') ? 'text/vtt; charset=utf-8' : 'text/plain; charset=utf-8')
             : contentType;
 
-        res.status(response.status);
-        res.set('Content-Type', normalizedContentType);
-        res.set('Access-Control-Allow-Origin', '*');
-        res.set('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges');
-        
-        if (response.headers['content-range']) res.set('Content-Range', response.headers['content-range']);
-        if (response.headers['accept-ranges']) res.set('Accept-Ranges', response.headers['accept-ranges']);
-        if (response.headers['content-length']) res.set('Content-Length', response.headers['content-length']);
-
         const isM3u8 =
             contentType.includes('mpegurl') ||
             contentType.includes('m3u8') ||
             targetUrl.includes('.m3u8');
 
         if (isSubtitle) {
+            res.status(response.status);
+            res.set('Content-Type', normalizedContentType);
+            res.set('Access-Control-Allow-Origin', '*');
             const text = (await streamToBuffer(response.data)).toString('utf-8');
             return res.send(text);
         }
 
         if (!isM3u8) {
-            req.on('close', () => {
-                response.data?.destroy?.();
-            });
+            // Only buffer for PNG-magic check when the CDN claims it's an image or binary blob.
+            // Real video files (mp4, webm, etc.) must be piped for streaming/range-request support.
+            const isExplicitVideo = /\.(mp4|webm|mkv|avi|mov)(?:[?#]|$)/i.test(targetUrl);
+            const mightBeMasked = !isExplicitVideo && (contentType.startsWith('image/') || contentType === 'application/octet-stream' || contentType === '');
+
+            if (mightBeMasked) {
+                // Buffer to check for PNG-masked MPEG-TS (used by AniNeko/vivibebe CDN)
+                const rawBuf = await streamToBuffer(response.data);
+                let outBuf: Buffer = rawBuf;
+                let outContentType = normalizedContentType;
+
+                // PNG magic: 89 50 4E 47 — scan for MPEG-TS sync byte 0x47 repeating at 188-byte intervals
+                if (rawBuf.length > 8 && rawBuf[0] === 0x89 && rawBuf[1] === 0x50 && rawBuf[2] === 0x4E && rawBuf[3] === 0x47) {
+                    let syncIdx = -1;
+                    const limit = Math.min(rawBuf.length - 376, 10000);
+                    for (let i = 0; i < limit; i++) {
+                        if (rawBuf[i] === 0x47 && rawBuf[i + 188] === 0x47 && rawBuf[i + 376] === 0x47) {
+                            syncIdx = i;
+                            break;
+                        }
+                    }
+                    if (syncIdx !== -1) {
+                        outBuf = rawBuf.slice(syncIdx);
+                        outContentType = 'video/mp2t';
+                    }
+                }
+
+                res.status(response.status);
+                res.set('Content-Type', outContentType);
+                res.set('Access-Control-Allow-Origin', '*');
+                res.set('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges');
+                if (response.headers['content-range']) res.set('Content-Range', response.headers['content-range']);
+                if (response.headers['accept-ranges']) res.set('Accept-Ranges', response.headers['accept-ranges']);
+                res.set('Content-Length', String(outBuf.length));
+                return res.send(outBuf);
+            }
+
+            // Real video/audio stream — pipe directly for streaming + range-request support.
+            res.status(response.status);
+            res.set('Content-Type', normalizedContentType);
+            res.set('Access-Control-Allow-Origin', '*');
+            res.set('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges');
+            if (response.headers['content-range']) res.set('Content-Range', response.headers['content-range']);
+            if (response.headers['accept-ranges']) res.set('Accept-Ranges', response.headers['accept-ranges']);
+            if (response.headers['content-length']) res.set('Content-Length', response.headers['content-length']);
+            req.on('close', () => { response.data?.destroy?.(); });
             return response.data.pipe(res);
         }
+
+        res.status(response.status);
+        res.set('Content-Type', normalizedContentType);
+        res.set('Access-Control-Allow-Origin', '*');
+        res.set('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges');
+        if (response.headers['content-range']) res.set('Content-Range', response.headers['content-range']);
+        if (response.headers['accept-ranges']) res.set('Accept-Ranges', response.headers['accept-ranges']);
+        if (response.headers['content-length']) res.set('Content-Length', response.headers['content-length']);
 
         const body = (await streamToBuffer(response.data)).toString('utf-8');
         const urlObj = new URL(targetUrl);
         const basePath = targetUrl.substring(0, targetUrl.lastIndexOf('/') + 1);
-        // Preserve the original upstream referer across nested HLS playlists.
-        // Some hosts reject variant/segment requests when referer is replaced with the CDN origin.
         const nextReferer = requestedReferer || `${urlObj.origin}/`;
         const nextCookie = sanitizeCookie(upstreamCookieJar.get(cookieKey) || requestedCookie);
 
-        // Only sub-playlist (.m3u8) and encryption key URIs need to be proxied for CORS.
-        // Raw media segment lines (.ts, .aac, .mp4, etc.) are served directly from the upstream
-        // CDN so that Vercel is not burdened with streaming gigabytes of video through its
-        // serverless functions — which is the primary driver of Fluid Active CPU exhaustion.
         const getUrlPath = (value: string) => {
             try {
                 return new URL(value, basePath).pathname.toLowerCase();
@@ -1087,7 +1132,6 @@ router.get('/proxy', async (req, res) => {
                 if (!trimmed) return line;
 
                 if (trimmed.startsWith('#') && trimmed.includes('URI=')) {
-                    // Rewrite URI= attributes (encryption keys, etc.) through proxy for CORS.
                     return line.replace(/URI=["']([^"']+)["']/g, (_m, uri) => {
                         const absoluteUri = uri.startsWith('http')
                             ? uri
@@ -1104,7 +1148,8 @@ router.get('/proxy', async (req, res) => {
 
                 const proxySuffix = `&referer=${encodeURIComponent(nextReferer)}${nextCookie ? `&cookie=${encodeURIComponent(nextCookie)}` : ''}${proxyMediaSegments ? '&proxyMedia=1' : ''}`;
 
-                if (proxyMediaSegments && isMediaSegment(trimmed)) {
+                if (proxyMediaSegments) {
+                    // Always proxy all segments when proxyMedia=1 (needed for PNG-masked TS like AniNeko).
                     return `${getPublicBase(req)}/api/scraper/proxy?url=${encodeURIComponent(absolute)}${proxySuffix}`;
                 }
 

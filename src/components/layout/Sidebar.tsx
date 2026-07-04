@@ -1,7 +1,8 @@
 import { useState, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Search, Tv, BookOpen, Library, LogOut } from 'lucide-react';
+import { ArrowLeft, Search, Tv, BookOpen, Library, LogOut, Shield } from 'lucide-react';
 import SearchModal from '../shared/SearchModal';
+import BlockedStatsModal from '../modals/BlockedStatsModal';
 import { useContinueReading } from '../../hooks/useContinueReading';
 import { useContinueWatching } from '../../hooks/useContinueWatching';
 import { useWatchList } from '../../hooks/useWatchList';
@@ -66,6 +67,7 @@ export default function Sidebar() {
     const navigate = useNavigate();
     const location = useLocation();
     const [isSearchOpen, setIsSearchOpen] = useState(false);
+    const [isStatsOpen, setIsStatsOpen] = useState(false);
     const [searchType, setSearchType] = useState<'anime' | 'manga'>('anime');
     const [hoveredCard, setHoveredCard] = useState<{title: string, top: number} | null>(null);
 
@@ -226,6 +228,12 @@ export default function Sidebar() {
 
             <div className="flex flex-col items-center gap-4 w-full mt-auto pt-4">
                 <SidebarIcon 
+                    icon={Shield} 
+                    title="Blocked Stats" 
+                    onClick={() => setIsStatsOpen(true)} 
+                    className="text-green-500/80 hover:text-green-400 hover:bg-green-500/10" 
+                />
+                <SidebarIcon 
                     icon={LogOut} 
                     title="Exit App" 
                     onClick={() => window.close()} 
@@ -238,6 +246,10 @@ export default function Sidebar() {
             isOpen={isSearchOpen} 
             onClose={() => setIsSearchOpen(false)} 
             type={searchType} 
+        />
+        <BlockedStatsModal
+            isOpen={isStatsOpen}
+            onClose={() => setIsStatsOpen(false)}
         />
         {hoveredCard && (
             <div 

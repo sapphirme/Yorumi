@@ -745,7 +745,7 @@ export default function CustomVideoControls({
                                                         <Monitor className="w-5 h-5" />
                                                         <span className="text-sm font-medium">Server</span>
                                                     </div>
-                                                    <span className="text-xs text-white/70">{selectedServer === 'auto' ? 'Default' : selectedServerLabel}</span>
+                                                    <span className="text-xs text-white/70">{selectedServerLabel}</span>
                                                 </button>
                                             </div>
                                         )}
@@ -798,7 +798,7 @@ export default function CustomVideoControls({
                                                         }}
                                                         className={`flex w-full items-center justify-between rounded-xl p-3 text-left transition-colors ${selectedServer === server.key ? 'bg-white/10 text-white' : 'text-white/80 hover:bg-white/10'}`}
                                                     >
-                                                        <span className="text-sm font-medium">{server.key === 'auto' ? 'Default' : server.label}</span>
+                                                        <span className="text-sm font-medium">{server.label}</span>
                                                         {selectedServer === server.key ? <CheckCircle2 className="h-4 w-4" /> : <Circle className="h-4 w-4" />}
                                                     </button>
                                                 ))}

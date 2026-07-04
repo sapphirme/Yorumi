@@ -24,6 +24,7 @@ export interface VideoPlayerProps {
     isHls?: boolean;
     subtitles?: SubtitleTrack[];
     isLoading: boolean;
+    isServerSwitching?: boolean;
     hasPlayableSource?: boolean;
     streamExhausted?: boolean;
     skipTimestampsLoading?: boolean;
@@ -63,6 +64,7 @@ export default function VideoPlayer(props: VideoPlayerProps) {
         streamUrl,
         episodeSession,
         isLoading,
+        isServerSwitching,
         hasPlayableSource = true,
         streamExhausted = false,
         skipTimestampsLoading = false,
@@ -112,6 +114,7 @@ export default function VideoPlayer(props: VideoPlayerProps) {
     const mediaStallTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const autoSkipPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const autoNextTriggerKeyRef = useRef('');
+    const lastTimeRef = useRef<{ session?: string; time: number }>({ time: 0 });
     const apiOrigin = API_BASE.replace(/\/+$/, '').replace(/\/api$/i, '');
     const [showServerMenu, setShowServerMenu] = useState(false);
     const [isFullscreen, setIsFullscreen] = useState(false);
@@ -124,8 +127,9 @@ export default function VideoPlayer(props: VideoPlayerProps) {
         return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
     }, []);
     const getServerDisplayName = (key: string) => {
-        if (key === 'videasy') return 'Videasy';
-        if (key === 'auto') return 'AllManga';
+        if (key === 'allmanga' || key === 'auto') return 'AllManga';
+        if (key === 'anineko') return 'AniNeko';
+        if (key === 'animegg') return 'AnimeGG';
         return key;
     };
 
@@ -134,6 +138,8 @@ export default function VideoPlayer(props: VideoPlayerProps) {
         let url = streamUrl;
         if (!streamUrl.includes('/api/scraper/embed') && /^https?:\/\/([^/]+\.)?kwik\./i.test(streamUrl)) {
             url = `${apiOrigin}/api/scraper/embed?url=${encodeURIComponent(streamUrl)}`;
+        } else if (url.startsWith('/api/')) {
+            url = `${apiOrigin}${url}`;
         }
         return url;
     }, [apiOrigin, streamUrl]);
@@ -212,7 +218,11 @@ export default function VideoPlayer(props: VideoPlayerProps) {
         
         if (!sourceChanged || !resolvedStreamUrl) return;
 
-        const start = Number(startAtRef.current || 0);
+        const isSameEpisode = lastTimeRef.current.session === episodeSession;
+        const start = isSameEpisode && lastTimeRef.current.time > 0 
+            ? lastTimeRef.current.time 
+            : Number(startAtRef.current || 0);
+
         const applyStart = () => {
             if (start > 0 && Number.isFinite(video.duration) && start < video.duration - 1) {
                 video.currentTime = start;
@@ -549,7 +559,17 @@ export default function VideoPlayer(props: VideoPlayerProps) {
         if (!video || !shouldUseNativeVideo || !resolvedStreamUrl) return;
 
         const isHlsStream = Boolean(isHls) || /\.m3u8(?:[?#]|$)/i.test(resolvedStreamUrl);
-        if (!isHlsStream) return;
+        if (!isHlsStream) {
+            // Destroy any lingering HLS instance before assigning a direct src.
+            // Without this, switching from AniNeko (HLS) to AnimeGG (MP4) leaves
+            // hls.js attached, which intercepts video.src and prevents MP4 playback.
+            if (hlsRef.current) {
+                hlsRef.current.destroy();
+                hlsRef.current = null;
+            }
+            video.src = resolvedStreamUrl;
+            return;
+        }
 
         hlsRef.current?.destroy();
         hlsRef.current = null;
@@ -564,21 +584,66 @@ export default function VideoPlayer(props: VideoPlayerProps) {
             return;
         }
 
+        class PngFragmentLoader extends Hls.DefaultConfig.loader {
+            constructor(config: any) {
+                super(config);
+            }
+            load(context: any, config: any, callbacks: any) {
+                const onSuccess = callbacks.onSuccess;
+                callbacks.onSuccess = (response: any, stats: any, context: any) => {
+                    if (response.data && response.data instanceof ArrayBuffer) {
+                        const data = new Uint8Array(response.data);
+                        if (data.length > 8 && data[0] === 0x89 && data[1] === 0x50 && data[2] === 0x4E && data[3] === 0x47) {
+                            let syncIndex = -1;
+                            for (let i = 0; i < Math.min(data.length - 376, 5000); i++) {
+                                if (data[i] === 0x47 && data[i + 188] === 0x47 && data[i + 376] === 0x47) {
+                                    syncIndex = i;
+                                    break;
+                                }
+                            }
+                            if (syncIndex !== -1) {
+                                response.data = response.data.slice(syncIndex);
+                            }
+                        }
+                    }
+                    onSuccess(response, stats, context);
+                };
+                super.load(context, config, callbacks);
+            }
+        }
+
         let hlsRecoveryAttempts = 0;
         const hls = new Hls({
             enableWorker: true,
             lowLatencyMode: false,
+            startLevel: -1,            // auto-select quality via ABR
+            abrEwmaDefaultEstimate: 5_000_000, // assume ~5Mbps initially so ABR picks 720p+ by default
             manifestLoadingTimeOut: 10_000,
             manifestLoadingMaxRetry: 2,
             levelLoadingTimeOut: 10_000,
             levelLoadingMaxRetry: 2,
             fragLoadingTimeOut: 15_000,
             fragLoadingMaxRetry: 2,
+            fLoader: PngFragmentLoader as any,
         });
         hlsRef.current = hls;
         hls.attachMedia(video);
         hls.on(Hls.Events.MEDIA_ATTACHED, () => {
             hls.loadSource(resolvedStreamUrl);
+        });
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+            // HLS stream ready — start playback now that segments are available.
+            const isSameEpisode = lastTimeRef.current.session === episodeSession;
+            const start = isSameEpisode && lastTimeRef.current.time > 0 
+                ? lastTimeRef.current.time 
+                : Number(startAtRef.current || 0);
+                
+            if (start > 0 && Number.isFinite(video.duration) && start < video.duration - 1) {
+                video.currentTime = start;
+            }
+            video.play().catch((err) => {
+                console.warn('HLS autoplay failed or was blocked:', err);
+            });
         });
         hls.on(Hls.Events.ERROR, (_, data) => {
             if (data.fatal) {
@@ -689,6 +754,7 @@ export default function VideoPlayer(props: VideoPlayerProps) {
 
     return (
         <div className={`watch-player-shell w-full max-w-full h-full max-h-full relative bg-[#0b0c0f] group transition-all duration-300 overflow-hidden rounded-none shadow-none outline-none ${displayMode === 'mini' ? 'rounded-xl shadow-2xl shadow-black/70' : 'md:rounded-2xl md:shadow-2xl md:shadow-black/80'}`}>
+
             {resolvedStreamUrl ? (
                 <div className="relative w-full max-w-full h-full bg-black flex items-center justify-center z-10 overflow-hidden rounded-none md:rounded-2xl">
                     <div className="w-full h-full max-w-full max-h-full flex items-center justify-center bg-black overflow-hidden rounded-none md:rounded-2xl">
@@ -713,6 +779,7 @@ export default function VideoPlayer(props: VideoPlayerProps) {
                                     onError={() => onErrorRef.current?.()}
                                     onTimeUpdate={(event) => {
                                         const video = event.currentTarget;
+                                        lastTimeRef.current = { session: episodeSession, time: video.currentTime };
                                         onProgressRef.current?.({
                                             currentTime: video.currentTime,
                                             duration: video.duration,
@@ -757,10 +824,11 @@ export default function VideoPlayer(props: VideoPlayerProps) {
                                 <webview
                                     ref={webviewRef as any}
                                     src={resolvedStreamUrl}
+                                    partition="persist:player"
                                     className="w-full h-full border-0 bg-black"
                                     allowpopups
                                     allowFullScreen
-                                    httpreferrer={resolvedStreamUrl?.includes('allmanga') ? 'https://allmanga.to/' : 'https://videasy.to/'}
+                                    httpreferrer={streams?.[selectedStreamIndex]?.referer || (resolvedStreamUrl?.includes('allmanga') ? 'https://allmanga.to/' : '')}
                                     useragent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
                                     webpreferences="webSecurity=no"
                                 />
@@ -791,68 +859,9 @@ export default function VideoPlayer(props: VideoPlayerProps) {
                             </>
                         )}
                     </div>
-                    {displayMode !== 'mini' && !isFullscreen && (
-                        <div 
-                            className={`absolute top-0 left-0 p-4 sm:p-6 transition-opacity duration-300 z-[2147483647] ${showServerMenu || !shouldUseNativeVideo ? 'opacity-100 pointer-events-auto' : 'opacity-0 group-hover:opacity-100 pointer-events-none'}`}
-                        >
-                            <div className="pointer-events-auto relative">
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        setShowServerMenu(!showServerMenu);
-                                    }}
-                                    className="flex items-center gap-2 rounded-full watch-control-glass px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white shadow-[0_8px_28px_rgba(0,0,0,0.28)] transition-all hover:bg-white/20 active:scale-95 border border-white/10"
-                                >
-                                    <Globe className="h-3.5 w-3.5 text-white/90" />
-                                    <span>{getServerDisplayName(selectedServer)}</span>
-                                </button>
-                                
-                                {showServerMenu && (
-                                    <>
-                                        <div className="fixed inset-0 z-40" onClick={() => setShowServerMenu(false)} />
-                                        <div className="absolute left-0 mt-3 w-56 rounded-2xl bg-[#1A1A1A]/95 p-2 shadow-2xl backdrop-blur-xl border border-white/10 flex flex-col gap-1 z-50">
-                                            {serverOptions.map((server) => {
-                                                const isSelected = selectedServer === server.key;
-                                                const name = getServerDisplayName(server.key);
-                                                return (
-                                                    <button
-                                                        key={server.key}
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            onServerChange(server.key);
-                                                            onSetAutoQuality();
-                                                            setShowServerMenu(false);
-                                                        }}
-                                                        className={`flex w-full items-center justify-between rounded-xl p-3 text-left transition-colors ${isSelected ? 'bg-white/10 text-white' : 'text-white/80 hover:bg-white/10'}`}
-                                                    >
-                                                        <div className="flex items-center gap-2">
-                                                            <span className={`text-sm ${isSelected ? 'font-semibold' : 'font-medium'}`}>{name}</span>
-                                                            {server.key === 'auto' && (
-                                                                <span className="rounded bg-purple-500/20 px-1.5 py-0.5 text-[9px] font-bold text-purple-400 tracking-wider">ANIME</span>
-                                                            )}
-                                                        </div>
-                                                        {isSelected ? <CheckCircle2 className="h-4 w-4 text-white" /> : <Circle className="h-4 w-4 text-white/35" />}
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
-                                    </>
-                                )}
-                            </div>
-                        </div>
-                    )}
-                    {isLoading && (
-                        <div className="pointer-events-none absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/55">
-                            <LoadingSpinner />
-                            <p className="mt-4 text-gray-300 animate-pulse">fetching anime episode...</p>
-                        </div>
-                    )}
                 </div>
             ) : isLoading ? (
-                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/90 z-20">
-                    <LoadingSpinner />
-                    <p className="mt-4 text-gray-400 animate-pulse">fetching anime episode...</p>
-                </div>
+                <div className="absolute inset-0 bg-black z-20" />
             ) : !hasPlayableSource || streamExhausted ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/90 z-20">
                     <LoadingSpinner />
@@ -866,6 +875,63 @@ export default function VideoPlayer(props: VideoPlayerProps) {
                     <p>Episode not found</p>
                 </div>
             )}
+
+            {/* Server menu — ALWAYS visible regardless of loading/stream state */}
+            {displayMode !== 'mini' && !isFullscreen && (
+                <div 
+                    className={`absolute top-0 left-0 p-4 sm:p-6 transition-opacity duration-300 z-[2147483647] ${showServerMenu || !resolvedStreamUrl || !shouldUseNativeVideo ? 'opacity-100 pointer-events-auto' : 'opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto'}`}
+                >
+                    <div className="pointer-events-auto relative">
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setShowServerMenu(!showServerMenu);
+                            }}
+                            className="flex items-center gap-2 rounded-full watch-control-glass px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white shadow-[0_8px_28px_rgba(0,0,0,0.28)] transition-all hover:bg-white/20 active:scale-95 border border-white/10"
+                        >
+                            {isServerSwitching || (isLoading && !resolvedStreamUrl) ? (
+                                <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/20 border-t-white" />
+                            ) : (
+                                <Globe className="h-3.5 w-3.5 text-white/90" />
+                            )}
+                            <span>{getServerDisplayName(selectedServer)}</span>
+                        </button>
+                        
+                        {showServerMenu && (
+                            <>
+                                <div className="fixed inset-0 z-40" onClick={() => setShowServerMenu(false)} />
+                                <div className="absolute left-0 mt-3 w-56 rounded-2xl bg-[#1A1A1A]/95 p-2 shadow-2xl backdrop-blur-xl border border-white/10 flex flex-col gap-1 z-50">
+                                    {serverOptions.map((server) => {
+                                        const isSelected = selectedServer === server.key;
+                                        const name = getServerDisplayName(server.key);
+                                        return (
+                                            <button
+                                                key={server.key}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onServerChange(server.key);
+                                                    onSetAutoQuality();
+                                                    setShowServerMenu(false);
+                                                }}
+                                                className={`flex w-full items-center justify-between rounded-xl p-3 text-left transition-colors ${isSelected ? 'bg-white/10 text-white' : 'text-white/80 hover:bg-white/10'}`}
+                                            >
+                                                <div className="flex items-center gap-2">
+                                                    <span className={`text-sm ${isSelected ? 'font-semibold' : 'font-medium'}`}>{name}</span>
+                                                    {server.key === 'allmanga' && (
+                                                        <span className="rounded bg-purple-500/20 px-1.5 py-0.5 text-[9px] font-bold text-purple-400 tracking-wider">ANIME</span>
+                                                    )}
+                                                </div>
+                                                {isSelected ? <CheckCircle2 className="h-4 w-4 text-white" /> : <Circle className="h-4 w-4 text-white/35" />}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
+
