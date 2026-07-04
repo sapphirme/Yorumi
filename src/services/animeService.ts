@@ -339,7 +339,7 @@ const scraperSearchCache = new Map<string, { data: any[]; timestamp: number }>()
 const SCRAPER_SEARCH_TTL = 5 * 60 * 1000;
 const AZ_LIST_CACHE_TTL = 10 * 60 * 1000;
 const PERSISTED_CACHE_PREFIX = 'yorumi_api_cache_v8';
-const STREAM_CACHE_VERSION = 'v11';
+const STREAM_CACHE_VERSION = 'v13';
 const PERSISTED_STREAM_CACHE_PREFIX = `yorumi_stream_cache_${STREAM_CACHE_VERSION}`;
 
 const readPersistedCache = (key: string, ttl: number) => {
@@ -1269,6 +1269,7 @@ export const animeService = {
                         ...(Array.isArray(options?.titles) && options.titles.length > 0 ? { alt_titles: options.titles.join('|') } : {}),
                         ...(options?.year ? { year: options.year } : {}),
                         ...(options?.format ? { format: options.format } : {}),
+                        _cb: Date.now(),
                     },
                 });
                 const normalized = Array.isArray(data)
@@ -1411,6 +1412,22 @@ export const animeService = {
         if (!res.ok) throw new Error('Failed to fetch anime stream');
         const data = await res.json();
         return Array.isArray(data) ? data : [data];
+    },
+
+    // Wipe the backend in-memory stream cache + all frontend sessionStorage stream entries.
+    async clearStreamCache() {
+        try {
+            await fetch(`${API_BASE}/scraper/clear-stream-cache`, { method: 'POST' });
+        } catch { /* ignore if backend unavailable */ }
+        try {
+            const toDelete: string[] = [];
+            for (let i = 0; i < sessionStorage.length; i++) {
+                const k = sessionStorage.key(i);
+                if (k && k.startsWith('yorumi_stream_cache_')) toDelete.push(k);
+            }
+            toDelete.forEach(k => sessionStorage.removeItem(k));
+        } catch { /* ignore */ }
+        streamCache.clear();
     },
 
     // Get native spotlight anime from TMDB trending pool

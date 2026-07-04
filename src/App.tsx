@@ -64,6 +64,12 @@ function App() {
         <LazyMotion features={domAnimation}>
             <MotionConfig reducedMotion="user" transition={gentleTransition}>
                 <div className={`min-h-screen bg-yorumi-bg text-white font-sans ${activeTab === 'manga' ? 'selection:bg-yorumi-manga' : 'selection:bg-yorumi-accent'} selection:text-white overflow-x-hidden`}>
+                    {/* Electron drag region */}
+                    <div 
+                        className="fixed top-0 left-[70px] right-[150px] h-8 z-[9999]" 
+                        style={{ WebkitAppRegion: 'drag' } as any} 
+                    />
+                    
                     <div className="fixed inset-0 pointer-events-none z-0">
                         <div className={`absolute top-[-10%] left-[-10%] w-[40%] h-[40%] ${activeTab === 'manga' ? 'bg-yorumi-manga/5' : 'bg-yorumi-accent/5'} rounded-full blur-[120px]`} />
                         <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-yorumi-main/5 rounded-full blur-[120px]" />

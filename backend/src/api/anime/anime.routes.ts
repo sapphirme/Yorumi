@@ -111,7 +111,8 @@ router.get('/stream', async (req, res) => {
     try {
         const tmdbId = Number(req.query.tmdbId || req.query.id);
         const episode = Number(req.query.episode || 1);
-        const source = String(req.query.source || 'videasy');
+        const source = String(req.query.source || 'vidsrc');
+        const nocache = req.query.nocache === '1' || req.query.nocache === 'true';
         if (!Number.isFinite(tmdbId) || tmdbId <= 0) {
             res.status(400).json({ error: 'Query parameter id is required' });
             return;
@@ -122,8 +123,7 @@ router.get('/stream', async (req, res) => {
         }
 
         const title = req.query.title ? String(req.query.title) : undefined;
-        const year = req.query.year ? Number(req.query.year) : undefined;
-        const result = await animeVideoSources.getStream(Math.floor(tmdbId), episode, source);
+        const result = await animeVideoSources.getStream(Math.floor(tmdbId), episode, source, undefined, nocache);
         if (!result) {
             res.status(404).json({ error: 'No playable stream found' });
             return;

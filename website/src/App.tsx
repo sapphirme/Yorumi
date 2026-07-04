@@ -4,11 +4,11 @@ import {
   Globe,
   Sun,
   Moon,
-  Code2,
   Tv,
   BookOpen,
   Library,
-  ArrowRight
+  ArrowRight,
+  Star
 } from 'lucide-react';
 import { motion, useScroll, useTransform, AnimatePresence } from 'framer-motion';
 import type { Variants } from 'framer-motion';
@@ -129,18 +129,28 @@ function HeroSlider() {
 function App() {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
+  const [starCount, setStarCount] = useState<string>('...');
   const { scrollY } = useScroll();
   const yImage = useTransform(scrollY, [0, 500], [0, -50]);
 
   useEffect(() => {
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    setIsDarkMode(prefersDark);
-    if (prefersDark) document.documentElement.classList.add('dark');
+    setIsDarkMode(false);
+    document.documentElement.classList.remove('dark');
 
     const handleScroll = () => {
       setIsScrolled(window.scrollY > 20);
     };
     window.addEventListener('scroll', handleScroll);
+
+    fetch('https://api.github.com/repos/davenarchives/Yorumi')
+      .then(res => res.json())
+      .then(data => {
+        if (data.stargazers_count !== undefined) {
+          setStarCount(data.stargazers_count.toString());
+        }
+      })
+      .catch(console.error);
+
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
@@ -180,10 +190,20 @@ function App() {
 
         <div className="flex items-center gap-6">
           <div className="hidden md:flex items-center gap-6 font-bold text-sm tracking-wide text-yorumi-muted">
-            <a href="#features" className="hover:text-yorumi-text transition-colors">features</a>
             <a href="https://github.com/davenarchives/Yorumi" target="_blank" rel="noreferrer" className="hover:text-yorumi-text transition-colors flex items-center gap-2">
-              <Code2 className="w-4 h-4" />
-              source
+              <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current" aria-hidden="true">
+                <path d="M12 2A10 10 0 0 0 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02A9.58 9.58 0 0 1 12 6.84c.85 0 1.71.12 2.5.34 1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5A10 10 0 0 0 22 12 10 10 0 0 0 12 2z"></path>
+              </svg>
+              <span className="flex items-center gap-1">
+                <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                {starCount}
+              </span>
+            </a>
+            <a href="https://ko-fi.com/yorumii" target="_blank" rel="noreferrer" className="hover:text-yorumi-text transition-colors flex items-center gap-2">
+              <svg role="img" viewBox="0 0 24 24" className="w-5 h-5 fill-current" xmlns="http://www.w3.org/2000/svg">
+                <path d="M11.351 2.715c-2.7 0-4.986.025-6.83.26C2.078 3.285 0 5.154 0 8.61c0 3.506.182 6.13 1.585 8.493 1.584 2.701 4.233 4.182 7.662 4.182h.83c4.209 0 6.494-2.234 7.637-4a9.5 9.5 0 0 0 1.091-2.338C21.792 14.688 24 12.22 24 9.208v-.415c0-3.247-2.13-5.507-5.792-5.87-1.558-.156-2.65-.208-6.857-.208m0 1.947c4.208 0 5.09.052 6.571.182 2.624.311 4.13 1.584 4.13 4v.39c0 2.156-1.792 3.844-3.87 3.844h-.935l-.156.649c-.208 1.013-.597 1.818-1.039 2.546-.909 1.428-2.545 3.064-5.922 3.064h-.805c-2.571 0-4.831-.883-6.078-3.195-1.09-2-1.298-4.155-1.298-7.506 0-2.181.857-3.402 3.012-3.714 1.533-.233 3.559-.26 6.39-.26m6.547 2.287c-.416 0-.65.234-.65.546v2.935c0 .311.234.545.65.545 1.324 0 2.051-.754 2.051-2s-.727-2.026-2.052-2.026m-10.39.182c-1.818 0-3.013 1.48-3.013 3.142 0 1.533.858 2.857 1.949 3.897.727.701 1.87 1.429 2.649 1.896a1.47 1.47 0 0 0 1.507 0c.78-.467 1.922-1.195 2.623-1.896 1.117-1.039 1.974-2.364 1.974-3.897 0-1.662-1.247-3.142-3.039-3.142-1.065 0-1.792.545-2.338 1.298-.493-.753-1.246-1.298-2.312-1.298"/>
+              </svg>
+              Ko-fi
             </a>
           </div>
           
@@ -223,16 +243,22 @@ function App() {
           >
             <div className="flex flex-col gap-8">
               <div className="space-y-6">
-                <motion.div variants={itemVariants} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-yorumi-main/10 text-yorumi-main font-bold text-sm tracking-wide border border-yorumi-main/20 w-fit">
+                <motion.a
+                  variants={itemVariants}
+                  href="https://github.com/davenarchives/Yorumi/releases"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-yorumi-main/10 text-yorumi-main font-bold text-sm tracking-wide border border-yorumi-main/20 w-fit hover:bg-yorumi-main/20 hover:scale-105 active:scale-95 transition-all duration-200"
+                >
                   <span className="relative flex h-2 w-2">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yorumi-main opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-yorumi-main"></span>
                   </span>
-                  Yorumi v3.5.1
-                </motion.div>
-                <motion.h1 variants={itemVariants} className="text-5xl md:text-7xl lg:text-[6rem] font-display font-black leading-[1.05] tracking-tight text-yorumi-text">
-                  Welcome to <br />
-                  Yorumi.
+                  Yorumi v3.5.2
+                </motion.a>
+                <motion.h1 variants={itemVariants} className="text-4xl md:text-5xl lg:text-[4rem] font-display font-black leading-[1.1] tracking-tight text-yorumi-text">
+                  Your anime and manga <br />
+                  in one seamless space.
                 </motion.h1>
               </div>
               
@@ -243,7 +269,9 @@ function App() {
             
             <motion.div variants={itemVariants} className="flex flex-wrap items-center gap-4 pt-6">
               <a 
-                href="https://github.com/davenarchives/Yorumi/releases/latest/download/Yorumi.exe" 
+                href="https://github.com/davenarchives/Yorumi/releases" 
+                target="_blank"
+                rel="noreferrer"
                 className="group relative flex items-center justify-center gap-2 bg-yorumi-main text-white px-6 py-3 rounded-xl font-semibold text-base overflow-hidden transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-yorumi-main/20"
               >
                 <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out" />
