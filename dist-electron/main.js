@@ -2554,7 +2554,7 @@ app.whenReady().then(() => {
         const { autoUpdater } = __require('electron-updater');
         autoUpdater.checkForUpdatesAndNotify();
     } catch (e) {
-        console.error('Failed to check for updates:', e);
+        try { console.error('Failed to check for updates:', e); } catch (err) {}
     }
 
     try {
@@ -2569,19 +2569,25 @@ app.whenReady().then(() => {
         }
         
         if (fs.existsSync(backendPath)) {
-            console.log("Starting backend from:", backendPath);
+            try { console.log("Starting backend from:", backendPath); } catch (e) {}
             const backendProcess = cp.fork(backendPath, [], {
                 env: { ...process.env, VERCEL: 'false', ELECTRON_RUN_AS_NODE: '1', YORUMI_USER_DATA_DIR: userDataPath },
                 stdio: ['ignore', 'pipe', 'pipe', 'ipc']
             });
-            backendProcess.stdout.on('data', (data) => console.log(`Backend: ${data}`));
-            backendProcess.stderr.on('data', (data) => console.error(`Backend Error: ${data}`));
-            backendProcess.on('error', (err) => console.error("Backend process error:", err));
+            backendProcess.stdout.on('data', (data) => {
+                try { console.log(`Backend: ${data}`); } catch (e) {}
+            });
+            backendProcess.stderr.on('data', (data) => {
+                try { console.error(`Backend Error: ${data}`); } catch (e) {}
+            });
+            backendProcess.on('error', (err) => {
+                try { console.error("Backend process error:", err); } catch (e) {}
+            });
         } else {
-            console.error("Backend not found at:", backendPath);
+            try { console.error("Backend not found at:", backendPath); } catch (e) {}
         }
     } catch (e) {
-        console.error("Failed to start backend", e);
+        try { console.error("Failed to start backend", e); } catch (err) {}
     }
 	createWindow();
 	app.on("activate", () => {
