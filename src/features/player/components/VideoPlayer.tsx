@@ -7,6 +7,7 @@ import { API_BASE } from '../../../config/api';
 import CustomVideoControls from './CustomVideoControls';
 import type { StreamServerKey } from '../../../hooks/useStreams';
 import { shouldSkipIntro, shouldSkipOutro, type SkipTimestamp } from '../../../services/skipTimestamps';
+import sleepingGif from '../../../assets/sleeping.gif';
 
 const IFRAME_LOAD_TIMEOUT_MS = 18_000;
 const NATIVE_LOAD_TIMEOUT_MS = 20_000;
@@ -871,7 +872,7 @@ export default function VideoPlayer(props: VideoPlayerProps) {
                                 }
                             `}</style>
                             <div className="flex flex-col items-center" style={{ animation: 'animeSubtleFloat 2s ease-in-out infinite' }}>
-                                <img src="/sleeping.gif" alt="fetching player..." className="w-28 h-28 object-contain opacity-90" />
+                                <img src={sleepingGif} alt="fetching player..." className="w-28 h-28 object-contain opacity-90" />
                                 <p className="mt-4 text-white/70 text-sm font-medium tracking-wide">fetching anime player...</p>
                             </div>
                         </>
