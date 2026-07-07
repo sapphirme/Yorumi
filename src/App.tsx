@@ -12,6 +12,7 @@ import { PersistentPlayerProvider } from './features/player/context/PersistentPl
 import { gentleTransition } from './utils/motion';
 import { tmdbService } from './services/tmdbService';
 import ScrollRestoration from './components/layout/ScrollRestoration';
+import UpdateModal from './components/modals/UpdateModal';
 
 function App() {
     const location = useLocation();
@@ -85,6 +86,8 @@ function App() {
 
                         <ScrollToTop activeTab={activeTab as 'anime' | 'manga'} isVisible={showScrollToTop} />
                     </div>
+                    
+                    <UpdateModal />
                 </div>
             </MotionConfig>
         </LazyMotion>
