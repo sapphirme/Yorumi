@@ -113,7 +113,7 @@ export function usePlayer(animeId: string | undefined, animeSlugTitle?: string, 
     const streamRetryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const streamRetryStateRef = useRef<{ key: string; attempts: number }>({ key: '', attempts: 0 });
     const streamFailureStateRef = useRef<{ key: string; attempts: number }>({ key: '', attempts: 0 });
-    const STREAM_RETRY_DELAYS_MS = [1000, 2000, 3500, 5500, 8000];
+    const STREAM_RETRY_DELAYS_MS: number[] = [];
     const extractDirectScraperSession = (value: unknown): string => {
         const raw = String(value || '').trim();
         const normalized = raw

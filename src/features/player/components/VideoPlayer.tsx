@@ -130,7 +130,7 @@ export default function VideoPlayer(props: VideoPlayerProps) {
     const getServerDisplayName = (key: string) => {
         if (key === 'allmanga' || key === 'auto') return 'AllManga';
         if (key === 'anineko') return 'AniNeko';
-        if (key === 'animegg') return 'AnimeGG';
+        if (key === 'vidsrc') return 'VidSrc';
         return key;
     };
 
@@ -471,9 +471,25 @@ export default function VideoPlayer(props: VideoPlayerProps) {
             }
         };
 
+        const handleEnterFullscreen = () => {
+            const shell = webview.closest('.watch-player-shell');
+            if (shell) shell.requestFullscreen().catch(console.error);
+        };
+
+        const handleLeaveFullscreen = () => {
+            if (document.fullscreenElement) {
+                document.exitFullscreen().catch(console.error);
+            }
+        };
+
         webview.addEventListener('dom-ready', handleLoad);
+        webview.addEventListener('enter-html-full-screen', handleEnterFullscreen);
+        webview.addEventListener('leave-html-full-screen', handleLeaveFullscreen);
+
         return () => {
             webview.removeEventListener('dom-ready', handleLoad);
+            webview.removeEventListener('enter-html-full-screen', handleEnterFullscreen);
+            webview.removeEventListener('leave-html-full-screen', handleLeaveFullscreen);
         };
     }, [clearIframeLoadTimeout, notifyIframeReady, resolvedStreamUrl, shouldUseNativeVideo]);
 
@@ -880,9 +896,13 @@ export default function VideoPlayer(props: VideoPlayerProps) {
                 </div>
             ) : !hasPlayableSource || streamExhausted ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/90 z-20">
-                    <LoadingSpinner />
-                    <p className="mt-4 text-gray-400 animate-pulse">
-                        {streamExhausted ? 'Still retrying stream...' : 'Retrying stream...'}
+                    <div className="mb-4 text-white/50">
+                        <svg className="w-12 h-12 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                    </div>
+                    <p className="mt-4 text-gray-400 font-medium tracking-wide text-sm uppercase text-center px-6">
+                        NO STREAM AVAILABLE TRY ANOTHER SERVER
                     </p>
                 </div>
             ) : (
@@ -933,9 +953,6 @@ export default function VideoPlayer(props: VideoPlayerProps) {
                                             >
                                                 <div className="flex items-center gap-2">
                                                     <span className={`text-sm ${isSelected ? 'font-semibold' : 'font-medium'}`}>{name}</span>
-                                                    {server.key === 'allmanga' && (
-                                                        <span className="rounded bg-purple-500/20 px-1.5 py-0.5 text-[9px] font-bold text-purple-400 tracking-wider">ANIME</span>
-                                                    )}
                                                 </div>
                                                 {isSelected ? <CheckCircle2 className="h-4 w-4 text-white" /> : <Circle className="h-4 w-4 text-white/35" />}
                                             </button>

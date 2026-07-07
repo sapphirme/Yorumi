@@ -127,18 +127,23 @@ export function PersistentPlayerProvider({ children }: { children: ReactNode }) 
                 props.streamUrl &&
                 currentProps.streamUrl === props.streamUrl
             );
-            const previousPath = previousWatchUrl.split('?')[0];
-            const nextPath = nextWatchUrl.split('?')[0];
-            
-            // Preserve the active stream when returning to the same watch page.
-            // We intentionally do NOT check isSameServer here because useStreams
-            // always re-initializes selectedServer to 'vidsrc' on mount, so
-            // the incoming props will mismatch if the user was on AllManga.
-            // Intentional server switches go through loadStream, not registerPlayer.
+
+            const isSameEpisode = Boolean(
+                currentProps?.episodeSession &&
+                props.episodeSession &&
+                currentProps.episodeSession === props.episodeSession
+            );
+
+            const isIncomingStreamEmpty = !props.streamUrl && !props.isLoading;
+            const isServerSwitchLoading = props.isLoading && isSameEpisode;
+
+            // Preserve the active stream if:
+            // 1. The incoming stream is exactly the same (prevents video flicker).
+            // 2. The incoming state is totally empty (user navigated to a new page but didn't click an episode yet).
+            // 3. The incoming state is loading the exact SAME episode (user switched servers/qualities, so keep playing in background).
             const shouldPreserveActiveStream = Boolean(
                 currentProps?.streamUrl &&
-                previousPath === nextPath &&
-                (!props.streamUrl || props.isLoading || isSameIncomingStream)
+                (isSameIncomingStream || isIncomingStreamEmpty || isServerSwitchLoading)
             );
 
             if (!shouldPreserveActiveStream || !currentProps) {
@@ -151,7 +156,6 @@ export function PersistentPlayerProvider({ children }: { children: ReactNode }) 
                 episodeSession: currentProps.episodeSession,
                 isHls: currentProps.isHls,
                 subtitles: currentProps.subtitles,
-                selectedServer: currentProps.selectedServer,
                 isLoading: false,
                 hasPlayableSource: currentProps.hasPlayableSource,
                 streamExhausted: false,

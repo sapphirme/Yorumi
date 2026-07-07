@@ -20,6 +20,7 @@ const getSourceLabel = (stream: StreamLink) => {
     if (key === 'kwik') return 'Kwik';
     if (key === 'hls') return 'HLS';
     if (key === 'embed') return 'Embed';
+    if (key === 'vidsrc') return 'VidSrc';
     if (key === 'gogoanime' || key.startsWith('gogoanime-')) return 'GogoAnime';
     if (key === 'gogoanime-hd-1') return 'GogoAnime HD-1';
     if (key === 'gogoanime-hd-2') return 'GogoAnime HD-2';
@@ -36,12 +37,12 @@ type StreamLookupMetadata = {
     format?: string;
 };
 
-export type StreamServerKey = 'allmanga' | 'anineko' | 'animegg';
+export type StreamServerKey = 'allmanga' | 'anineko' | 'vidsrc';
 
 const STREAM_SERVER_OPTIONS: Array<{ key: StreamServerKey; label: string }> = [
+    { key: 'vidsrc', label: 'VidSrc' },
     { key: 'allmanga', label: 'AllManga' },
     { key: 'anineko', label: 'AniNeko' },
-    { key: 'animegg', label: 'AnimeGG' },
 ];
 
 export function useStreams(scraperSession: string | null, animeTitle?: string, animeMetadata?: StreamLookupMetadata) {
@@ -51,13 +52,13 @@ export function useStreams(scraperSession: string | null, animeTitle?: string, a
     const [selectedStreamIndex, setSelectedStreamIndex] = useState<number>(0);
     const [isAutoQuality, setIsAutoQuality] = useState(true);
     const [selectedAudio, setSelectedAudio] = useState<'sub' | 'dub'>('sub');
-    const [selectedServer, setSelectedServer] = useState<StreamServerKey>('allmanga');
+    const [selectedServer, setSelectedServer] = useState<StreamServerKey>('vidsrc');
     const [showQualityMenu, setShowQualityMenu] = useState(false);
     const [streamLoading, setStreamLoading] = useState(false);
     const [serverSwitchLoading, setServerSwitchLoading] = useState(false);
     const streamCache = useRef(new Map<string, Promise<StreamLink[]>>());
     const activeLoadRequestRef = useRef(0);
-    const previousServerRef = useRef<StreamServerKey>('allmanga');
+    const previousServerRef = useRef<StreamServerKey>('vidsrc');
 
     const currentStream = streams[selectedStreamIndex] || null;
     const normalizeDirectScraperSession = (value: unknown) => {
@@ -254,6 +255,14 @@ export function useStreams(scraperSession: string | null, animeTitle?: string, a
                             ? selectedAudio
                             : (cachedData.some((s) => normalizeAudio(s.audio) === 'sub') ? 'sub' : 'dub');
                         const nextStreams = filterStreams(cachedData, nextAudio);
+
+                        const actualProvider = String(cachedData[0].provider || cachedData[0].server || '').trim().toLowerCase();
+                        const isValidServer = STREAM_SERVER_OPTIONS.some(s => s.key === actualProvider);
+                        if (actualProvider && actualProvider !== selectedServer && isValidServer) {
+                            previousServerRef.current = actualProvider as StreamServerKey;
+                            setSelectedServer(actualProvider as StreamServerKey);
+                        }
+
                         setSelectedAudio(nextAudio);
                         setAllStreams(cachedData);
                         setStreams(nextStreams);
@@ -277,6 +286,7 @@ export function useStreams(scraperSession: string | null, animeTitle?: string, a
                 } finally {
                     if (activeLoadRequestRef.current === requestId) {
                         setServerSwitchLoading(false);
+                        setStreamLoading(false);
                     }
                 }
                 return;
@@ -301,6 +311,13 @@ export function useStreams(scraperSession: string | null, animeTitle?: string, a
                     : (streamData.some((s) => normalizeAudio(s.audio) === 'sub') ? 'sub' : 'dub');
                 const nextStreams = filterStreams(streamData, nextAudio);
 
+                const actualProvider = String(streamData[0].provider || streamData[0].server || '').trim().toLowerCase();
+                const isValidServer = STREAM_SERVER_OPTIONS.some(s => s.key === actualProvider);
+                if (actualProvider && actualProvider !== selectedServer && isValidServer) {
+                    previousServerRef.current = actualProvider as StreamServerKey;
+                    setSelectedServer(actualProvider as StreamServerKey);
+                }
+
                 setSelectedAudio(nextAudio);
                 setAllStreams(streamData);
                 setStreams(nextStreams);
@@ -319,6 +336,7 @@ export function useStreams(scraperSession: string | null, animeTitle?: string, a
         } finally {
             if (activeLoadRequestRef.current === requestId) {
                 setStreamLoading(false);
+                setServerSwitchLoading(false);
             }
         }
     }, [ensureStreamData, ensureStreamDataForServer, selectedServer, selectedAudio, filterStreams, currentEpisode, getEpisodeCacheKey]);
@@ -375,7 +393,7 @@ export function useStreams(scraperSession: string | null, animeTitle?: string, a
         setStreams([]);
         setSelectedStreamIndex(0);
         setSelectedAudio('sub');
-        setSelectedServer('allmanga');
+        setSelectedServer('vidsrc');
         setStreamLoading(false);
         setServerSwitchLoading(false);
         streamCache.current.clear();

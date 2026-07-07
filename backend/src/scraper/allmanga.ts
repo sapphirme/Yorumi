@@ -642,7 +642,7 @@ export class AllMangaScraper {
             }
 
             return [{
-                quality: '720',
+                quality: '1080',
                 audio,
                 provider: 'allmanga',
                 server,
@@ -665,7 +665,7 @@ export class AllMangaScraper {
                 const finalUrl = await this.followRedirects(fetchUrl);
                 if (!finalUrl) return [];
                 return [{
-                    quality: '720',
+                    quality: '1080',
                     audio,
                     provider: 'allmanga',
                     server: sourceName,
@@ -689,7 +689,7 @@ export class AllMangaScraper {
                 .map((link) => {
                     const url = String(link.link || '');
                     return {
-                        quality: String(link.resolutionStr || '').replace(/[^\d]/g, '') || '720',
+                        quality: String(link.resolutionStr || '').replace(/[^\d]/g, '') || '1080',
                         audio,
                         provider: 'allmanga',
                         server: sourceName,

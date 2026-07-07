@@ -525,7 +525,7 @@ class ScraperService {
         const provider = String(options?.provider || 'auto').trim().toLowerCase() || 'auto';
 
         // ── Custom Video Sources (video-sources.ts) ─────────────────────────
-        if (provider === 'vidsrc' || provider === 'anineko' || provider === 'animegg') {
+        if (provider === 'vidsrc' || provider === 'anineko') {
             const title = String(options?.title || this.queryFromSessionSlug(animeSession)).trim();
             const tmdbTarget = await tmdbService.resolveMediaTarget({ 
                 title, 
@@ -546,17 +546,18 @@ class ScraperService {
                 if (streamResponse?.m3u8) {
                     const isHls = /\.m3u8?(?:[?#]|$)/i.test(streamResponse.m3u8);
                     const referer = streamResponse.referer || '';
+                    const actualSource = String(streamResponse.source || provider).trim().toLowerCase();
                     
                     let finalUrl = streamResponse.m3u8;
-                    if (provider !== 'vidsrc' && finalUrl.startsWith('http')) {
-                        finalUrl = `/api/scraper/proxy?url=${encodeURIComponent(finalUrl)}&referer=${encodeURIComponent(referer)}${isHls && provider === 'anineko' ? '&proxyMedia=1' : ''}`;
+                    if (actualSource !== 'vidsrc' && finalUrl.startsWith('http')) {
+                        finalUrl = `/api/scraper/proxy?url=${encodeURIComponent(finalUrl)}&referer=${encodeURIComponent(referer)}${isHls && actualSource === 'anineko' ? '&proxyMedia=1' : ''}`;
                     }
                     
                     return [{
                         quality: 'auto',
                         audio: 'sub',
-                        provider: provider,
-                        server: provider === 'anineko' ? 'AniNeko' : (provider === 'vidsrc' ? 'VidSrc' : 'AnimeGG'),
+                        provider: actualSource,
+                        server: actualSource === 'anineko' ? 'AniNeko' : 'VidSrc',
                         url: finalUrl,
                         isHls: isHls,
                         referer: referer,

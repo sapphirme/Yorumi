@@ -400,10 +400,39 @@ class AnimeGGSource implements VideoSource {
                 headers: { 'User-Agent': USER_AGENT, Referer: `https://www.animegg.org` }
             }).then(r => r.data);
 
-            const srcMatch = embedHtml.match(/var\s+videoSources\s*=\s*\[\{.*?file\s*:\s*["']([^"']+)["']/i);
-            if (!srcMatch) return null;
+            const videoSourcesMatch = embedHtml.match(/var\s+videoSources\s*=\s*(\[.*?\])\s*;/is);
+            let url = '';
             
-            let url = srcMatch[1];
+            if (videoSourcesMatch) {
+                const arrStr = videoSourcesMatch[1];
+                const sources = [];
+                const blockRegex = /\{([^{}]+)\}/g;
+                let blockMatch;
+                while ((blockMatch = blockRegex.exec(arrStr))) {
+                    const block = blockMatch[1];
+                    const fileMatch = block.match(/file\s*:\s*["']([^"']+)["']/i);
+                    const labelMatch = block.match(/label\s*:\s*["']([^"']+)["']/i);
+                    if (fileMatch) {
+                        sources.push({ url: fileMatch[1], label: labelMatch ? labelMatch[1] : '0' });
+                    }
+                }
+                
+                if (sources.length > 0) {
+                    sources.sort((a, b) => {
+                        const aVal = parseInt(a.label.replace(/\\D/g, '')) || 0;
+                        const bVal = parseInt(b.label.replace(/\\D/g, '')) || 0;
+                        return bVal - aVal; // descending order, highest first
+                    });
+                    url = sources[0].url;
+                }
+            }
+            
+            if (!url) {
+                const srcMatch = embedHtml.match(/var\s+videoSources\s*=\s*\[\\{.*?file\s*:\s*["']([^"']+)["']/i);
+                if (!srcMatch) return null;
+                url = srcMatch[1];
+            }
+            
             if (!url.startsWith('http')) url = `https://www.animegg.org${url}`;
 
             return {
@@ -425,13 +454,15 @@ const sources: VideoSource[] = [
     new EmbedSource('vidsrc', 'https://vsembed.su'),
     new AllMangaSource(),
     new AniNekoSource(),
-    new AnimeGGSource(),
 ];
 
 function orderedSources(requested: string) {
     if (requested === 'auto') return sources;
     const source = requested ? sources.find((item) => item.id === requested) : null;
-    return source ? [source] : sources;
+    if (source) {
+        return [source, ...sources.filter(s => s.id !== requested)];
+    }
+    return sources;
 }
 
 export const animeVideoSources = {
