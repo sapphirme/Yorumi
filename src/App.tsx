@@ -13,6 +13,7 @@ import { gentleTransition } from './utils/motion';
 import { tmdbService } from './services/tmdbService';
 import ScrollRestoration from './components/layout/ScrollRestoration';
 import UpdateModal from './components/modals/UpdateModal';
+import OTAUpdateModal from './components/modals/OTAUpdateModal';
 
 function App() {
     const location = useLocation();
@@ -88,6 +89,7 @@ function App() {
                     </div>
                     
                     <UpdateModal />
+                    <OTAUpdateModal />
                 </div>
             </MotionConfig>
         </LazyMotion>

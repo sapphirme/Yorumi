@@ -2552,9 +2552,42 @@ function createWindow() {
 app.whenReady().then(() => {
     try {
         const { autoUpdater } = __require('electron-updater');
-        autoUpdater.checkForUpdatesAndNotify();
+        autoUpdater.autoDownload = false;
+        
+        ipcMain.handle('check-updates', async () => {
+            try {
+                return await autoUpdater.checkForUpdates();
+            } catch(e) { return { error: e.message }; }
+        });
+        ipcMain.handle('download-update', async () => {
+            try {
+                return await autoUpdater.downloadUpdate();
+            } catch(e) { return { error: e.message }; }
+        });
+        ipcMain.handle('install-update', () => {
+            autoUpdater.quitAndInstall();
+        });
+
+        autoUpdater.on('update-available', (info) => {
+            if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('update-available', info);
+        });
+        autoUpdater.on('update-not-available', (info) => {
+            if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('update-not-available', info);
+        });
+        autoUpdater.on('download-progress', (progressObj) => {
+            if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('update-progress', progressObj);
+        });
+        autoUpdater.on('update-downloaded', (info) => {
+            if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('update-downloaded', info);
+        });
+        autoUpdater.on('error', (err) => {
+            if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('update-error', err.message);
+        });
+        
+        // Initial check
+        autoUpdater.checkForUpdates().catch(() => {});
     } catch (e) {
-        try { console.error('Failed to check for updates:', e); } catch (err) {}
+        try { console.error('Failed to configure auto-updater:', e); } catch (err) {}
     }
 
     try {
