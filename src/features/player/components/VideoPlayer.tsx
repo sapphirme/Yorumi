@@ -151,7 +151,7 @@ export default function VideoPlayer(props: VideoPlayerProps) {
         if (/\/api\/scraper\/embed\?/i.test(resolvedStreamUrl)) return false;
         if (/\/api\/scraper\/proxy\?/i.test(resolvedStreamUrl)) return true;
         if (/\.(mp4|webm|mkv)(?:[?#]|$)/i.test(resolvedStreamUrl)) return true;
-        return /fast4speed\.rsvp|googlevideo\.com/i.test(resolvedStreamUrl);
+        return /fast4speed\.rsvp|googlevideo\.com|okcdn\.ru|ok\.ru/i.test(resolvedStreamUrl);
     }, [isHls, resolvedStreamUrl]);
 
     useEffect(() => {
