@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Sparkles, Code2, Bug, Zap } from 'lucide-react';
 
-const CURRENT_VERSION = '3.5.3';
+const CURRENT_VERSION = '3.5.4';
 
 export default function UpdateModal() {
     const [isOpen, setIsOpen] = useState(false);
@@ -68,11 +68,11 @@ export default function UpdateModal() {
                                 <section>
                                     <h3 className="flex items-center gap-2 text-lg font-semibold text-yorumi-accent mb-3">
                                         <Zap className="h-5 w-5" />
-                                        VidSrc & Player Upgrades
+                                        AllManga Scraper Restored
                                     </h3>
                                     <ul className="list-disc pl-5 space-y-2 text-gray-300 text-sm leading-relaxed">
-                                        <li><strong className="text-white">VidSrc Default:</strong> VidSrc is now explicitly designated as the default streaming provider, ensuring reliable soft-subs out of the box.</li>
-                                        <li><strong className="text-white">True Fullscreen Embeds:</strong> Clicking the fullscreen button within iframe-based players like VidSrc now explicitly forces the entire application to enter true OS-level full-monitor mode, bypassing standard Electron restrictions.</li>
+                                        <li><strong className="text-white">AES-GCM Decryption:</strong> We've successfully reverse-engineered AllAnime's new AES-GCM stream encryption. The `AllManga` scraper is fully operational again!</li>
+                                        <li><strong className="text-white">AllManga Defaulted:</strong> Since it's the fastest and most reliable provider, `AllManga` has been re-assigned as the default server globally.</li>
                                     </ul>
                                 </section>
 
@@ -80,22 +80,21 @@ export default function UpdateModal() {
                                 <section>
                                     <h3 className="flex items-center gap-2 text-lg font-semibold text-green-400 mb-3">
                                         <Code2 className="h-5 w-5" />
-                                        Streamlined Providers
+                                        AniNeko Stability
                                     </h3>
                                     <ul className="list-disc pl-5 space-y-2 text-gray-300 text-sm leading-relaxed">
-                                        <li><strong className="text-white">AnimeGG Removed:</strong> AnimeGG has been completely removed from the frontend UI and backend scraper to simplify the fallback sequence and eliminate unreliable endpoints.</li>
-                                        <li>The "ANIME" badge on AllManga was removed for a cleaner server dropdown.</li>
+                                        <li><strong className="text-white">Quality Locking:</strong> Fixed an issue where the `AniNeko` scraper would randomly stutter or pause. We now force the highest-quality HLS stream by default, preventing buggy adaptive bitrate switching.</li>
                                     </ul>
                                 </section>
 
                                 {/* Section 3 */}
                                 <section>
                                     <h3 className="flex items-center gap-2 text-lg font-semibold text-[#facc15] mb-3">
-                                        <Bug className="h-5 w-5" />
-                                        Bug Fixes
+                                        <Sparkles className="h-5 w-5" />
+                                        UI Polish
                                     </h3>
                                     <ul className="list-disc pl-5 space-y-2 text-gray-300 text-sm leading-relaxed">
-                                        <li>Fixed a persistent bug in the stream cache manager that forcefully reverted the selected server to AllManga every time a new anime page was opened. The player now consistently respects your default or chosen state.</li>
+                                        <li><strong className="text-white">Universal Loading Screens:</strong> The floating "sleeping anime" loading screen now beautifully applies to all streaming providers, not just AllManga.</li>
                                     </ul>
                                 </section>
                             </div>

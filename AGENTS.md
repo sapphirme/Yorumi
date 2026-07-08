@@ -47,6 +47,7 @@ Run only what is relevant to changed areas, but always run at least one verifica
   - `npm run lint`
   - `npx tsc -p tsconfig.app.json --noEmit`
   - `npm run build` (ALWAYS run this after any code modifications to ensure no build-time errors)
+  - `npm run build:electron` (ALWAYS run this to ensure the Electron packaging pipeline works)
 - Backend/API/scraper changes:
   - `npm run dev --prefix backend` (smoke start)
   - `npm run build --prefix backend` (ALWAYS run this after backend changes)
