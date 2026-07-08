@@ -39,6 +39,7 @@ This file defines how coding agents should work in this repo so execution stays 
 - Do not hardcode secrets or tokens; use environment variables.
 - Do not silently change ports, routes, or IPC channel names.
 - Do not weaken error handling in scraper/network flows.
+- When bumping the application version, ALWAYS update the hardcoded version badge in `website/src/App.tsx`.
 
 ## Validation Matrix
 Run only what is relevant to changed areas, but always run at least one verification command.
