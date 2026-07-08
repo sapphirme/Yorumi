@@ -250,7 +250,51 @@ export class AniNekoSource implements VideoSource {
                 || embedHtml.match(/file\s*:\s*["'](https?:\/\/[^"']+\.m3u8[^"']*)["']/i)
                 || embedHtml.match(/["'](https?:\/\/[^"']+\/master\.m3u8[^"']*)["']/i);
                 
-            const m3u8 = hlsMatch ? hlsMatch[1] : embedUrl;
+            let m3u8 = hlsMatch ? hlsMatch[1] : embedUrl;
+            
+            // Fix for AniNeko: Parse master m3u8 to extract the highest quality stream directly.
+            // This prevents the video player from automatically switching qualities and causing skips/pauses.
+            if (m3u8 && m3u8.includes('.m3u8')) {
+                try {
+                    const m3u8Res = await axios.get<string>(m3u8, {
+                        headers: { 'User-Agent': USER_AGENT, Referer: embedUrl }
+                    });
+                    const m3u8Data = m3u8Res.data;
+                    if (m3u8Data.includes('#EXT-X-STREAM-INF')) {
+                        const lines = m3u8Data.split('\n');
+                        let bestUrl = '';
+                        let bestBandwidth = -1;
+                        
+                        for (let i = 0; i < lines.length; i++) {
+                            const line = lines[i].trim();
+                            if (line.startsWith('#EXT-X-STREAM-INF')) {
+                                const bandwidthMatch = line.match(/BANDWIDTH=(\d+)/);
+                                const bandwidth = bandwidthMatch ? parseInt(bandwidthMatch[1], 10) : 0;
+                                const nextLine = lines[i + 1]?.trim();
+                                
+                                if (nextLine && !nextLine.startsWith('#')) {
+                                    if (bandwidth > bestBandwidth) {
+                                        bestBandwidth = bandwidth;
+                                        bestUrl = nextLine;
+                                    }
+                                }
+                            }
+                        }
+                        
+                        if (bestUrl) {
+                            if (bestUrl.startsWith('http')) {
+                                m3u8 = bestUrl;
+                            } else {
+                                // Resolve relative URL based on the master playlist URL
+                                const baseUrl = m3u8.substring(0, m3u8.lastIndexOf('/') + 1);
+                                m3u8 = baseUrl + bestUrl;
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.log(`[AniNeko] Failed to parse master playlist:`, err);
+                }
+            }
             
             let cleanReferer = embedUrl;
             const subs: SubtitleTrack[] = [];
@@ -466,9 +510,9 @@ function orderedSources(requested: string) {
 }
 
 export const animeVideoSources = {
-    async getStream(anilistId: number, episode: number, requestedSource = 'vidsrc', options?: { title?: string, tmdbId?: number }, nocache = false): Promise<StreamResponse | null> {
-        const sourceId = String(requestedSource || 'vidsrc').trim().toLowerCase();
-        const cacheKey = `anime:stream:v2:${anilistId}:${episode}:${sourceId}`;
+    async getStream(anilistId: number, episode: number, requestedSource = 'allmanga', options?: { title?: string, tmdbId?: number }, nocache = false): Promise<StreamResponse | null> {
+        const sourceId = String(requestedSource || 'allmanga').trim().toLowerCase();
+        const cacheKey = `anime:stream:v3:${anilistId}:${episode}:${sourceId}`;
         if (!nocache) {
             const cached = await cacheGet<StreamResponse>(cacheKey);
             if (cached) return cached;

@@ -40,8 +40,8 @@ type StreamLookupMetadata = {
 export type StreamServerKey = 'allmanga' | 'anineko' | 'vidsrc';
 
 const STREAM_SERVER_OPTIONS: Array<{ key: StreamServerKey; label: string }> = [
-    { key: 'vidsrc', label: 'VidSrc' },
     { key: 'allmanga', label: 'AllManga' },
+    { key: 'vidsrc', label: 'VidSrc' },
     { key: 'anineko', label: 'AniNeko' },
 ];
 
@@ -52,13 +52,13 @@ export function useStreams(scraperSession: string | null, animeTitle?: string, a
     const [selectedStreamIndex, setSelectedStreamIndex] = useState<number>(0);
     const [isAutoQuality, setIsAutoQuality] = useState(true);
     const [selectedAudio, setSelectedAudio] = useState<'sub' | 'dub'>('sub');
-    const [selectedServer, setSelectedServer] = useState<StreamServerKey>('vidsrc');
+    const [selectedServer, setSelectedServer] = useState<StreamServerKey>('allmanga');
     const [showQualityMenu, setShowQualityMenu] = useState(false);
     const [streamLoading, setStreamLoading] = useState(false);
     const [serverSwitchLoading, setServerSwitchLoading] = useState(false);
     const streamCache = useRef(new Map<string, Promise<StreamLink[]>>());
     const activeLoadRequestRef = useRef(0);
-    const previousServerRef = useRef<StreamServerKey>('vidsrc');
+    const previousServerRef = useRef<StreamServerKey>('allmanga');
 
     const currentStream = streams[selectedStreamIndex] || null;
     const normalizeDirectScraperSession = (value: unknown) => {
@@ -393,7 +393,7 @@ export function useStreams(scraperSession: string | null, animeTitle?: string, a
         setStreams([]);
         setSelectedStreamIndex(0);
         setSelectedAudio('sub');
-        setSelectedServer('vidsrc');
+        setSelectedServer('allmanga');
         setStreamLoading(false);
         setServerSwitchLoading(false);
         streamCache.current.clear();

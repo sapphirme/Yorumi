@@ -12,6 +12,18 @@ const ANIMETSU_IMAGE_PROXY = 'https://animetsu.net';
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0';
 const EPISODE_QUERY_HASH = 'd405d0edd690624b66baba3068e0edc3ac90f1597d898a1ec8db4e5c43c00fec';
 
+const BUILD_ID = '9';
+const EPOCH = 4128;
+const VERSION = 1;
+const TS_BUCKET_MS = 300_000;
+
+const KEY_A = Buffer.from('b1a9a4d051988f1b1b12dbb747439d9bd64b09ea17835600a7eaa4de87c1ad87', 'hex');
+const KEY_B = Buffer.from('k7DLdv5SGiuEyGUtcncl5wQOR7r4aenLfDV3AOBKlAU=', 'base64');
+const CRYPTO_KEY = Buffer.alloc(32);
+for (let i = 0; i < 32; i++) {
+    CRYPTO_KEY[i] = KEY_A[i] ^ KEY_B[i];
+}
+
 const SEARCH_GQL = `query($search:SearchInput $limit:Int $page:Int $translationType:VaildTranslationTypeEnumType $countryOrigin:VaildCountryOriginEnumType){shows(search:$search limit:$limit page:$page translationType:$translationType countryOrigin:$countryOrigin){edges{_id name availableEpisodes __typename}}}`;
 const LATEST_UPDATES_GQL = `query($search:SearchInput $limit:Int $page:Int $translationType:VaildTranslationTypeEnumType $countryOrigin:VaildCountryOriginEnumType){shows(search:$search limit:$limit page:$page translationType:$translationType countryOrigin:$countryOrigin){edges{_id name englishName thumbnail banner type status score averageScore season availableEpisodes lastEpisodeDate lastEpisodeInfo lastEpisodeTimestamp episodeCount genres slugTime} pageInfo{total totalPages page hasNextPage}}}`;
 const EPISODE_INFOS_GQL = `query($showId:String! $episodeNumStart:Float! $episodeNumEnd:Float!){episodeInfos(showId:$showId episodeNumStart:$episodeNumStart episodeNumEnd:$episodeNumEnd){_id notes description thumbnails uploadDates episodeIdNum vidInforssub vidInforsdub}}`;
@@ -115,9 +127,60 @@ export class AllMangaScraper {
         return result.replace(/\\u002F/gi, '/').replace(/\\\|/g, '');
     }
 
+    private generateAaReq(queryHash: string): string {
+        const ts = Math.floor(Date.now() / TS_BUCKET_MS) * TS_BUCKET_MS;
+        const payload = {
+            v: VERSION,
+            ts,
+            epoch: EPOCH,
+            buildId: BUILD_ID,
+            qh: queryHash,
+        };
+
+        const seed = `${EPOCH}:${BUILD_ID}:${queryHash}:${ts}`;
+        const nonce = crypto.createHash('sha256').update(seed).digest().subarray(0, 12);
+
+        const plaintext = Buffer.from(JSON.stringify(payload));
+        const cipher = crypto.createCipheriv('aes-256-gcm', CRYPTO_KEY, nonce);
+
+        const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+        const authTag = cipher.getAuthTag();
+
+        const envelope = Buffer.concat([
+            Buffer.from([VERSION]),
+            nonce,
+            ciphertext,
+            authTag,
+        ]);
+
+        return envelope.toString('base64');
+    }
+
     private decryptTobeparsed(blob: string): AllMangaSource[] {
         try {
             const raw = Buffer.from(blob, 'base64');
+            
+            // New AES-GCM logic (Version 1 envelope)
+            if (raw.length > 0 && raw[0] === VERSION) {
+                const nonce = raw.subarray(1, 13);
+                const ciphertext = raw.subarray(13, raw.length - 16);
+                const authTag = raw.subarray(raw.length - 16);
+                
+                const decipher = crypto.createDecipheriv('aes-256-gcm', CRYPTO_KEY, nonce);
+                decipher.setAuthTag(authTag);
+                
+                const plain = decipher.update(ciphertext, undefined, 'utf8') + decipher.final('utf8');
+                try {
+                    const parsed = JSON.parse(plain);
+                    if (Array.isArray(parsed)) return parsed;
+                    if (Array.isArray(parsed?.episode?.sourceUrls)) return parsed.episode.sourceUrls;
+                } catch {
+                    // Ignore JSON parse errors and return empty
+                }
+                return [];
+            }
+            
+            // Fallback to old AES-256-CTR logic
             const key = crypto.createHash('sha256').update('Xot36i3lK3:v1').digest();
             const iv = Buffer.concat([raw.subarray(1, 13), Buffer.from([0, 0, 0, 2])]);
             const ciphertext = raw.subarray(13, raw.length - 16);
@@ -177,10 +240,12 @@ export class AllMangaScraper {
 
     private async episodeGql(variables: Record<string, unknown>) {
         try {
+            const aaReq = this.generateAaReq(EPISODE_QUERY_HASH);
             const params = new URLSearchParams({
                 variables: JSON.stringify(variables),
                 extensions: JSON.stringify({
                     persistedQuery: { version: 1, sha256Hash: EPISODE_QUERY_HASH },
+                    aaReq,
                 }),
             });
             const response = await axios.get(`${API_URL}?${params.toString()}`, {
@@ -188,6 +253,7 @@ export class AllMangaScraper {
                 headers: {
                     ...requestHeaders,
                     Origin: ALLANIME_ORIGIN,
+                    'x-build-id': BUILD_ID,
                 },
             });
             if (response.data?.data?.tobeparsed || response.data?.data?.episode?.sourceUrls) {

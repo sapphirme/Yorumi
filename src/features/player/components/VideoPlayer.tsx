@@ -879,20 +879,16 @@ export default function VideoPlayer(props: VideoPlayerProps) {
                 </div>
             ) : isLoading ? (
                 <div className="absolute inset-0 bg-black z-20 flex items-center justify-center">
-                    {selectedServer === 'allmanga' ? (
-                        <>
-                            <style>{`
-                                @keyframes animeSubtleFloat {
-                                    0%, 100% { transform: translateY(0); }
-                                    50% { transform: translateY(-8px); }
-                                }
-                            `}</style>
-                            <div className="flex flex-col items-center" style={{ animation: 'animeSubtleFloat 2s ease-in-out infinite' }}>
-                                <img src={sleepingGif} alt="fetching player..." className="w-28 h-28 object-contain opacity-90" />
-                                <p className="mt-4 text-white/70 text-sm font-medium tracking-wide">fetching anime player...</p>
-                            </div>
-                        </>
-                    ) : null}
+                    <style>{`
+                        @keyframes animeSubtleFloat {
+                            0%, 100% { transform: translateY(0); }
+                            50% { transform: translateY(-8px); }
+                        }
+                    `}</style>
+                    <div className="flex flex-col items-center" style={{ animation: 'animeSubtleFloat 2s ease-in-out infinite' }}>
+                        <img src={sleepingGif} alt="fetching player..." className="w-28 h-28 object-contain opacity-90" />
+                        <p className="mt-4 text-white/70 text-sm font-medium tracking-wide">fetching anime player...</p>
+                    </div>
                 </div>
             ) : !hasPlayableSource || streamExhausted ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/90 z-20">

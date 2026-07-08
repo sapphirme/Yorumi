@@ -30,6 +30,7 @@ This file defines how coding agents should work in this repo so execution stays 
 - When touching scraper logic, preserve fallback behavior and error handling.
 - If there is a new patch or bugfix deployed that affects data fetching, always clear the stale cache or ensure the cache is purged during testing.
 - Keep frontend and backend changes logically separated in commits/summary.
+- After we have changes, always document them and put them on the changelogs.
 
 ## Guardrails (Do Not)
 - Do not edit generated/build artifacts in `dist*` or `backend/dist`.
