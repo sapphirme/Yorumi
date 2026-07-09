@@ -887,7 +887,7 @@ export const animeService = {
     },
 
     async getAnimeDetails(id: number | string, format?: string) {
-        if (typeof id === 'string' && isNaN(Number(id)) && !id.startsWith('s:')) {
+        if (typeof id === 'string' && (id.startsWith('s:') || isNaN(Number(id)))) {
             return { data: null };
         }
         const cacheKey = getAnimeDetailsCacheKey(id);
@@ -899,13 +899,8 @@ export const animeService = {
 
         const fetchPromise = (async () => {
             try {
-                let res;
-                if (typeof id === 'string' && id.startsWith('s:')) {
-                    res = await fetch(`${API_BASE}/anilist/anime/${encodeURIComponent(id)}/fast`);
-                } else {
-                    const formatParam = format ? `&format=${encodeURIComponent(format)}` : '';
-                    res = await fetch(`${API_BASE}/anime/metadata?id=${id}${formatParam}`);
-                }
+                const formatParam = format ? `&format=${encodeURIComponent(format)}` : '';
+                const res = await fetch(`${API_BASE}/anime/metadata?id=${id}${formatParam}`);
                 const data = await res.json();
                 if (!data || data.error) return { data: null };
                 const result = { data: mapAnilistToAnime(data) };
@@ -923,7 +918,7 @@ export const animeService = {
     },
 
     async getAnimeDetailsFast(id: number | string, format?: string) {
-        if (typeof id === 'string' && isNaN(Number(id)) && !id.startsWith('s:')) {
+        if (typeof id === 'string' && (id.startsWith('s:') || isNaN(Number(id)))) {
             return { data: null, episodes: [], scraperSession: null };
         }
         const cacheKey = getAnimeDetailsFastCacheKey(id);
@@ -948,13 +943,8 @@ export const animeService = {
 
         const fetchPromise = (async () => {
             try {
-                let res;
-                if (typeof id === 'string' && id.startsWith('s:')) {
-                    res = await fetch(`${API_BASE}/anilist/anime/${encodeURIComponent(id)}/fast`);
-                } else {
-                    const formatParam = format ? `&format=${encodeURIComponent(format)}` : '';
-                    res = await fetch(`${API_BASE}/anime/metadata?id=${id}${formatParam}`);
-                }
+                const formatParam = format ? `&format=${encodeURIComponent(format)}` : '';
+                const res = await fetch(`${API_BASE}/anime/metadata?id=${id}${formatParam}`);
                 if (!res.ok) {
                     throw new Error(`Failed to fetch fast anime details: ${res.statusText}`);
                 }

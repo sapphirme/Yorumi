@@ -158,6 +158,7 @@ export const streambertAnimeService = {
     async search(filters: any) {
         const page = filters.page || 1;
         
+        let path = '/discover/tv';
         let sort_by = 'popularity.desc';
         if (filters.sort && Array.isArray(filters.sort)) {
             if (filters.sort.includes('POPULARITY_DESC')) {
@@ -168,63 +169,6 @@ export const streambertAnimeService = {
             }
         }
 
-        if (filters.query) {
-            const cacheKey = `anime:allanime:search:v4:${Buffer.from(filters.query).toString('base64url')}`;
-            const cached = await cacheGet<any>(cacheKey);
-            if (cached) return cached;
-
-            const { scraperService } = require('../scraper/scraper.service');
-            const searchResults = await scraperService.searchAllManga(filters.query);
-            
-            const mappedMedia = (searchResults || []).map((item: any) => ({
-                id: item.id,
-                idMal: item.idMal || 0,
-                title: {
-                    romaji: item.jname || item.title || '',
-                    english: item.title || '',
-                    native: item.jname || item.title || '',
-                    userPreferred: item.title || ''
-                },
-                coverImage: {
-                    extraLarge: item.poster || '',
-                    large: item.poster || '',
-                    medium: item.poster || '',
-                    color: '#000000'
-                },
-                bannerImage: item.banner || '',
-                description: '',
-                episodes: Number(item.episodes || item.latestEpisode || 0),
-                status: item.status === 'RELEASING' ? 'RELEASING' : (item.status === 'FINISHED' ? 'FINISHED' : 'RELEASING'),
-                season: undefined,
-                seasonYear: Number(item.year || 0) || undefined,
-                genres: item.genres || [],
-                tags: [],
-                averageScore: Number(item.score || 0) * 10,
-                meanScore: Number(item.score || 0) * 10,
-                popularity: Number(item.score || 0) * 1000,
-                format: item.type === 'Movie' || item.type === 'MOVIE' ? 'MOVIE' : 'TV',
-                isAdult: false,
-                startDate: { year: null, month: null, day: null },
-                countryOfOrigin: 'JP',
-                characters: { edges: [] },
-                relations: { edges: [] },
-                recommendations: { nodes: [] },
-                staff: { edges: [] },
-                studios: { nodes: [] },
-                externalLinks: [],
-                streamingEpisodes: [],
-            }));
-
-            const result = {
-                pageInfo: { total: mappedMedia.length, perPage: 20, currentPage: 1, lastPage: 1, hasNextPage: false },
-                media: mappedMedia
-            };
-            
-            await cacheSet(cacheKey, result, FIVE_MINUTES_SECONDS);
-            return result;
-        }
-
-        let path = '/discover/tv';
         let params: Record<string, any> = {
             with_genres: '16',
             with_original_language: 'ja',
@@ -233,7 +177,15 @@ export const streambertAnimeService = {
             include_adult: false,
         };
 
-        if (filters.seasonYear) {
+        if (filters.query) {
+            path = '/search/multi';
+            params = {
+                query: filters.query,
+                page,
+                include_adult: false,
+                language: 'en-US'
+            };
+        } else if (filters.seasonYear) {
             let firstDate = `${filters.seasonYear}-01-01`;
             let lastDate = `${filters.seasonYear}-12-31`;
             
@@ -246,14 +198,24 @@ export const streambertAnimeService = {
             params['first_air_date.lte'] = lastDate;
         }
 
-        const cacheKey = `anime:tmdb:search:v4:${Buffer.from(JSON.stringify({ path, params })).toString('base64url')}`;
+        const cacheKey = `anime:tmdb:search:v2:${Buffer.from(JSON.stringify({ path, params })).toString('base64url')}`;
         const cached = await cacheGet<any>(cacheKey);
         if (cached) return cached;
 
         const payload = await tmdbService.get<any>(path, params);
         if (!payload || !payload.results) return { pageInfo: { total: 0, perPage: 20, currentPage: page, lastPage: 1, hasNextPage: false }, media: [] };
 
-        let mappedMedia = payload.results.map((i: any) => mapTmdbToAnilistMedia(i));
+        let results = payload.results;
+        if (filters.query) {
+            results = results.filter((item: any) => {
+                if (item.media_type === 'person') return false;
+                const lang = item.original_language;
+                const countries = item.origin_country || [];
+                const genreIds = item.genre_ids || [];
+                const hasAnimation = genreIds.includes(16);
+                return hasAnimation && (lang === 'ja' || countries.includes('JP'));
+            });
+        }
 
         const res = {
             pageInfo: {
@@ -263,7 +225,7 @@ export const streambertAnimeService = {
                 lastPage: payload.total_pages || 1,
                 hasNextPage: (payload.page || 1) < (payload.total_pages || 1)
             },
-            media: mappedMedia
+            media: results.map((i: any) => mapTmdbToAnilistMedia(i))
         };
 
         await cacheSet(cacheKey, res, FIVE_MINUTES_SECONDS);
