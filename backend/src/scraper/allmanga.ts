@@ -12,17 +12,56 @@ const ANIMETSU_IMAGE_PROXY = 'https://animetsu.net';
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0';
 const EPISODE_QUERY_HASH = 'd405d0edd690624b66baba3068e0edc3ac90f1597d898a1ec8db4e5c43c00fec';
 
-const BUILD_ID = '9';
-const EPOCH = 4128;
+const BUILD_ID = '21';
+const EPOCH = 4129;
 const VERSION = 1;
 const TS_BUCKET_MS = 300_000;
 
-const KEY_A = Buffer.from('b1a9a4d051988f1b1b12dbb747439d9bd64b09ea17835600a7eaa4de87c1ad87', 'hex');
-const KEY_B = Buffer.from('k7DLdv5SGiuEyGUtcncl5wQOR7r4aenLfDV3AOBKlAU=', 'base64');
-const CRYPTO_KEY = Buffer.alloc(32);
-for (let i = 0; i < 32; i++) {
-    CRYPTO_KEY[i] = KEY_A[i] ^ KEY_B[i];
-}
+let _KEY_A = Buffer.from('c79454d9005ec111ed887bca2104a6711d16b37eb8ccfda10148599d632d7c99', 'hex');
+let _KEY_B = Buffer.from('gmJaUdy/trTY2q/nlX9hZuLPPWnsIIe/11LecoFjfKM=', 'base64');
+let _CRYPTO_KEY = Buffer.alloc(32);
+let _BUILD_ID = BUILD_ID;
+let _EPOCH = EPOCH;
+
+const updateCryptoKey = () => {
+    for (let i = 0; i < 32; i++) {
+        _CRYPTO_KEY[i] = _KEY_A[i] ^ _KEY_B[i];
+    }
+};
+updateCryptoKey();
+
+let keysScraped = false;
+
+const scrapeKeys = async () => {
+    if (keysScraped) return;
+    try {
+        const mkissa = await axios.get("https://mkissa.to", { timeout: 5000 }).then(r => r.data);
+        const appjs_match = mkissa.match(/(https:\/\/cdn\.mkissa\.net\/all\/mk\/_app\/immutable\/entry\/app\.[^"']+\.js)/);
+        if (!appjs_match) return;
+        const appjs = await axios.get(appjs_match[1], { timeout: 5000 }).then(r => r.data);
+        
+        const buildIdMatch = appjs.match(/"buildId":"([^"]+)"/);
+        const epochMatch = appjs.match(/epoch:([0-9]+)/);
+        if (buildIdMatch) _BUILD_ID = buildIdMatch[1];
+        if (epochMatch) _EPOCH = parseInt(epochMatch[1], 10);
+        
+        const encjs_match = appjs.match(/from"\.\.(\/chunks\/[^"']*\.js)";import/);
+        if (!encjs_match) return;
+        const encjs = await axios.get("https://cdn.mkissa.net/all/mk/_app/immutable" + encjs_match[1], { timeout: 5000 }).then(r => r.data);
+        
+        const maskMatch = encjs.match(/mask\s*:\s*"([a-f0-9]{64})"/);
+        const partBMatch = encjs.match(/partB\s*:\s*"([^"]+)"/);
+        
+        if (maskMatch && partBMatch) {
+            _KEY_A = Buffer.from(maskMatch[1], 'hex');
+            _KEY_B = Buffer.from(partBMatch[1], 'base64');
+            updateCryptoKey();
+            keysScraped = true;
+        }
+    } catch {
+        // Silently fallback to defaults
+    }
+};
 
 const SEARCH_GQL = `query($search:SearchInput $limit:Int $page:Int $translationType:VaildTranslationTypeEnumType $countryOrigin:VaildCountryOriginEnumType){shows(search:$search limit:$limit page:$page translationType:$translationType countryOrigin:$countryOrigin){edges{_id name availableEpisodes __typename}}}`;
 const LATEST_UPDATES_GQL = `query($search:SearchInput $limit:Int $page:Int $translationType:VaildTranslationTypeEnumType $countryOrigin:VaildCountryOriginEnumType){shows(search:$search limit:$limit page:$page translationType:$translationType countryOrigin:$countryOrigin){edges{_id name englishName thumbnail banner type status score averageScore season availableEpisodes lastEpisodeDate lastEpisodeInfo lastEpisodeTimestamp episodeCount genres slugTime} pageInfo{total totalPages page hasNextPage}}}`;
@@ -132,16 +171,16 @@ export class AllMangaScraper {
         const payload = {
             v: VERSION,
             ts,
-            epoch: EPOCH,
-            buildId: BUILD_ID,
+            epoch: _EPOCH,
+            buildId: _BUILD_ID,
             qh: queryHash,
         };
 
-        const seed = `${EPOCH}:${BUILD_ID}:${queryHash}:${ts}`;
+        const seed = `${_EPOCH}:${_BUILD_ID}:${queryHash}:${ts}`;
         const nonce = crypto.createHash('sha256').update(seed).digest().subarray(0, 12);
 
         const plaintext = Buffer.from(JSON.stringify(payload));
-        const cipher = crypto.createCipheriv('aes-256-gcm', CRYPTO_KEY, nonce);
+        const cipher = crypto.createCipheriv('aes-256-gcm', _CRYPTO_KEY, nonce);
 
         const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
         const authTag = cipher.getAuthTag();
@@ -160,16 +199,17 @@ export class AllMangaScraper {
         try {
             const raw = Buffer.from(blob, 'base64');
             
-            // New AES-GCM logic (Version 1 envelope)
             if (raw.length > 0 && raw[0] === VERSION) {
+                // Despite the GCM prefix, AllAnime currently encrypts the response payload using CTR
+                // with a static legacy key, followed by an unused 16-byte tag.
                 const nonce = raw.subarray(1, 13);
                 const ciphertext = raw.subarray(13, raw.length - 16);
-                const authTag = raw.subarray(raw.length - 16);
                 
-                const decipher = crypto.createDecipheriv('aes-256-gcm', CRYPTO_KEY, nonce);
-                decipher.setAuthTag(authTag);
-                
+                const key = crypto.createHash('sha256').update('Xot36i3lK3:v1').digest();
+                const iv = Buffer.concat([nonce, Buffer.from([0, 0, 0, 2])]);
+                const decipher = crypto.createDecipheriv('aes-256-ctr', key, iv);
                 const plain = decipher.update(ciphertext, undefined, 'utf8') + decipher.final('utf8');
+                
                 try {
                     const parsed = JSON.parse(plain);
                     if (Array.isArray(parsed)) return parsed;
@@ -240,6 +280,8 @@ export class AllMangaScraper {
 
     private async episodeGql(variables: Record<string, unknown>) {
         try {
+            await scrapeKeys();
+            
             const aaReq = this.generateAaReq(EPISODE_QUERY_HASH);
             const params = new URLSearchParams({
                 variables: JSON.stringify(variables),
@@ -253,7 +295,8 @@ export class AllMangaScraper {
                 headers: {
                     ...requestHeaders,
                     Origin: ALLANIME_ORIGIN,
-                    'x-build-id': BUILD_ID,
+                    Referer: ALLANIME_ORIGIN,
+                    'x-build-id': _BUILD_ID,
                 },
             });
             if (response.data?.data?.tobeparsed || response.data?.data?.episode?.sourceUrls) {
