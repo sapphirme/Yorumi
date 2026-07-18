@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Sparkles, Code2, Bug, Zap } from 'lucide-react';
 
-const CURRENT_VERSION = '3.5.4';
+const CURRENT_VERSION = '3.5.5';
 
 export default function UpdateModal() {
     const [isOpen, setIsOpen] = useState(false);
@@ -72,6 +72,7 @@ export default function UpdateModal() {
                                     </h3>
                                     <ul className="list-disc pl-5 space-y-2 text-gray-300 text-sm leading-relaxed">
                                         <li><strong className="text-white">AES-GCM Decryption:</strong> We've successfully reverse-engineered AllAnime's new AES-GCM stream encryption. The `AllManga` scraper is fully operational again!</li>
+                                        <li><strong className="text-white">Playback Fix:</strong> Fixed a bug where streams wouldn't play due to an invalid referer token (`youtu-chan.com`), ensuring smooth proxy playback.</li>
                                         <li><strong className="text-white">AllManga Defaulted:</strong> Since it's the fastest and most reliable provider, `AllManga` has been re-assigned as the default server globally.</li>
                                     </ul>
                                 </section>

@@ -4,64 +4,21 @@ import type { AnimeSearchResult, Episode, StreamLink, ThumbnailInfo } from './ty
 import { tmdbService } from '../api/scraper/tmdb.service';
 
 const API_URL = 'https://api.allanime.day/api';
-const ALLMANGA_REFERER = 'https://allmanga.to';
-const ALLANIME_ORIGIN = 'https://youtu-chan.com';
+const ALLMANGA_REFERER = 'https://youtu-chan.com';
+const STREAM_REFERER = 'https://allmanga.to';
+
 const ANIMETSU_API_URL = 'https://animetsu.net/v2/api/anime';
 const ANIMETSU_REFERER = 'https://animetsu.net/';
 const ANIMETSU_IMAGE_PROXY = 'https://animetsu.net';
-const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0';
+const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:150.0) Gecko/20100101 Firefox/150.0';
 const EPISODE_QUERY_HASH = 'd405d0edd690624b66baba3068e0edc3ac90f1597d898a1ec8db4e5c43c00fec';
 
-const BUILD_ID = '21';
-const EPOCH = 4129;
 const VERSION = 1;
+const AA_KEY = Buffer.from('cf4777b5778aeadc9449e12769ea545d00c43cd8ff65d482364586cde204f359', 'hex');
+const ALLANIME_KEY = Buffer.from('cf4777b5778aeadc9449e12769ea545d00c43cd8ff65d482364586cde204f359', 'hex');
+const AA_EPOCH = 4130;
+const AA_BUILD_ID = '12';
 const TS_BUCKET_MS = 300_000;
-
-let _KEY_A = Buffer.from('c79454d9005ec111ed887bca2104a6711d16b37eb8ccfda10148599d632d7c99', 'hex');
-let _KEY_B = Buffer.from('gmJaUdy/trTY2q/nlX9hZuLPPWnsIIe/11LecoFjfKM=', 'base64');
-let _CRYPTO_KEY = Buffer.alloc(32);
-let _BUILD_ID = BUILD_ID;
-let _EPOCH = EPOCH;
-
-const updateCryptoKey = () => {
-    for (let i = 0; i < 32; i++) {
-        _CRYPTO_KEY[i] = _KEY_A[i] ^ _KEY_B[i];
-    }
-};
-updateCryptoKey();
-
-let keysScraped = false;
-
-const scrapeKeys = async () => {
-    if (keysScraped) return;
-    try {
-        const mkissa = await axios.get("https://mkissa.to", { timeout: 5000 }).then(r => r.data);
-        const appjs_match = mkissa.match(/(https:\/\/cdn\.mkissa\.net\/all\/mk\/_app\/immutable\/entry\/app\.[^"']+\.js)/);
-        if (!appjs_match) return;
-        const appjs = await axios.get(appjs_match[1], { timeout: 5000 }).then(r => r.data);
-        
-        const buildIdMatch = appjs.match(/"buildId":"([^"]+)"/);
-        const epochMatch = appjs.match(/epoch:([0-9]+)/);
-        if (buildIdMatch) _BUILD_ID = buildIdMatch[1];
-        if (epochMatch) _EPOCH = parseInt(epochMatch[1], 10);
-        
-        const encjs_match = appjs.match(/from"\.\.(\/chunks\/[^"']*\.js)";import/);
-        if (!encjs_match) return;
-        const encjs = await axios.get("https://cdn.mkissa.net/all/mk/_app/immutable" + encjs_match[1], { timeout: 5000 }).then(r => r.data);
-        
-        const maskMatch = encjs.match(/mask\s*:\s*"([a-f0-9]{64})"/);
-        const partBMatch = encjs.match(/partB\s*:\s*"([^"]+)"/);
-        
-        if (maskMatch && partBMatch) {
-            _KEY_A = Buffer.from(maskMatch[1], 'hex');
-            _KEY_B = Buffer.from(partBMatch[1], 'base64');
-            updateCryptoKey();
-            keysScraped = true;
-        }
-    } catch {
-        // Silently fallback to defaults
-    }
-};
 
 const SEARCH_GQL = `query($search:SearchInput $limit:Int $page:Int $translationType:VaildTranslationTypeEnumType $countryOrigin:VaildCountryOriginEnumType){shows(search:$search limit:$limit page:$page translationType:$translationType countryOrigin:$countryOrigin){edges{_id name availableEpisodes __typename}}}`;
 const LATEST_UPDATES_GQL = `query($search:SearchInput $limit:Int $page:Int $translationType:VaildTranslationTypeEnumType $countryOrigin:VaildCountryOriginEnumType){shows(search:$search limit:$limit page:$page translationType:$translationType countryOrigin:$countryOrigin){edges{_id name englishName thumbnail banner type status score averageScore season availableEpisodes lastEpisodeDate lastEpisodeInfo lastEpisodeTimestamp episodeCount genres slugTime} pageInfo{total totalPages page hasNextPage}}}`;
@@ -166,66 +123,16 @@ export class AllMangaScraper {
         return result.replace(/\\u002F/gi, '/').replace(/\\\|/g, '');
     }
 
-    private generateAaReq(queryHash: string): string {
-        const ts = Math.floor(Date.now() / TS_BUCKET_MS) * TS_BUCKET_MS;
-        const payload = {
-            v: VERSION,
-            ts,
-            epoch: _EPOCH,
-            buildId: _BUILD_ID,
-            qh: queryHash,
-        };
-
-        const seed = `${_EPOCH}:${_BUILD_ID}:${queryHash}:${ts}`;
-        const nonce = crypto.createHash('sha256').update(seed).digest().subarray(0, 12);
-
-        const plaintext = Buffer.from(JSON.stringify(payload));
-        const cipher = crypto.createCipheriv('aes-256-gcm', _CRYPTO_KEY, nonce);
-
-        const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
-        const authTag = cipher.getAuthTag();
-
-        const envelope = Buffer.concat([
-            Buffer.from([VERSION]),
-            nonce,
-            ciphertext,
-            authTag,
-        ]);
-
-        return envelope.toString('base64');
-    }
-
     private decryptTobeparsed(blob: string): AllMangaSource[] {
         try {
             const raw = Buffer.from(blob, 'base64');
-            
-            if (raw.length > 0 && raw[0] === VERSION) {
-                // Despite the GCM prefix, AllAnime currently encrypts the response payload using CTR
-                // with a static legacy key, followed by an unused 16-byte tag.
-                const nonce = raw.subarray(1, 13);
-                const ciphertext = raw.subarray(13, raw.length - 16);
-                
-                const key = crypto.createHash('sha256').update('Xot36i3lK3:v1').digest();
-                const iv = Buffer.concat([nonce, Buffer.from([0, 0, 0, 2])]);
-                const decipher = crypto.createDecipheriv('aes-256-ctr', key, iv);
-                const plain = decipher.update(ciphertext, undefined, 'utf8') + decipher.final('utf8');
-                
-                try {
-                    const parsed = JSON.parse(plain);
-                    if (Array.isArray(parsed)) return parsed;
-                    if (Array.isArray(parsed?.episode?.sourceUrls)) return parsed.episode.sourceUrls;
-                } catch {
-                    // Ignore JSON parse errors and return empty
-                }
-                return [];
-            }
-            
-            // Fallback to old AES-256-CTR logic
-            const key = crypto.createHash('sha256').update('Xot36i3lK3:v1').digest();
-            const iv = Buffer.concat([raw.subarray(1, 13), Buffer.from([0, 0, 0, 2])]);
+            const nonce = raw.subarray(1, 13);
             const ciphertext = raw.subarray(13, raw.length - 16);
-            const decipher = crypto.createDecipheriv('aes-256-ctr', key, iv);
+
+            const iv = Buffer.concat([nonce, Buffer.from([0, 0, 0, 2])]);
+            const decipher = crypto.createDecipheriv('aes-256-ctr', ALLANIME_KEY, iv);
             const plain = decipher.update(ciphertext, undefined, 'utf8') + decipher.final('utf8');
+
             try {
                 const parsed = JSON.parse(plain);
                 if (Array.isArray(parsed)) return parsed;
@@ -278,25 +185,42 @@ export class AllMangaScraper {
         }
     }
 
+    private generateAaReq(): string {
+        const ts = Math.floor(Date.now() / TS_BUCKET_MS) * TS_BUCKET_MS;
+        const payload = { v: VERSION, ts, epoch: AA_EPOCH, buildId: AA_BUILD_ID, qh: EPISODE_QUERY_HASH };
+        const seed = `${AA_EPOCH}:${AA_BUILD_ID}:${EPISODE_QUERY_HASH}:${ts}`;
+        const nonce = crypto.createHash('sha256').update(seed).digest().subarray(0, 12);
+        
+        const plaintext = Buffer.from(JSON.stringify(payload));
+        const cipher = crypto.createCipheriv('aes-256-gcm', AA_KEY, nonce);
+        
+        const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+        const authTag = cipher.getAuthTag();
+        
+        const envelope = Buffer.concat([Buffer.from([VERSION]), nonce, ciphertext, authTag]);
+        return envelope.toString('base64');
+    }
+
+    /**
+     * Episode source fetcher: uses a GET request with persisted query hash + Origin header
+     * (matching current ani-cli approach), falling back to POST if GET fails.
+     */
     private async episodeGql(variables: Record<string, unknown>) {
         try {
-            await scrapeKeys();
-            
-            const aaReq = this.generateAaReq(EPISODE_QUERY_HASH);
             const params = new URLSearchParams({
                 variables: JSON.stringify(variables),
                 extensions: JSON.stringify({
                     persistedQuery: { version: 1, sha256Hash: EPISODE_QUERY_HASH },
-                    aaReq,
+                    aaReq: this.generateAaReq(),
                 }),
             });
             const response = await axios.get(`${API_URL}?${params.toString()}`, {
                 timeout: 12_000,
                 headers: {
-                    ...requestHeaders,
-                    Origin: ALLANIME_ORIGIN,
-                    Referer: ALLANIME_ORIGIN,
-                    'x-build-id': _BUILD_ID,
+                    'User-Agent': USER_AGENT,
+                    Origin: ALLMANGA_REFERER,
+                    Referer: ALLMANGA_REFERER,
+                    'x-build-id': AA_BUILD_ID,
                 },
             });
             if (response.data?.data?.tobeparsed || response.data?.data?.episode?.sourceUrls) {
@@ -758,7 +682,7 @@ export class AllMangaScraper {
                 url: finalUrl,
                 directUrl: isIframe ? undefined : finalUrl,
                 isHls,
-                referer: ALLMANGA_REFERER,
+                referer: STREAM_REFERER,
                 thumbnails: this.extractThumbnails(sourceUrl),
             }];
         }
@@ -781,7 +705,7 @@ export class AllMangaScraper {
                     url: finalUrl,
                     directUrl: finalUrl,
                     isHls: /\.m3u8(?:[?#]|$)/i.test(finalUrl),
-                    referer: /(^|\.)googlevideo\.com$/i.test(new URL(finalUrl).hostname) ? 'https://www.youtube.com' : ALLMANGA_REFERER,
+                    referer: /(^|\.)googlevideo\.com$/i.test(new URL(finalUrl).hostname) ? 'https://www.youtube.com' : STREAM_REFERER,
                     thumbnails: this.extractThumbnails(finalUrl),
                 }];
             }
@@ -805,7 +729,7 @@ export class AllMangaScraper {
                         url,
                         directUrl: url,
                         isHls: /\.m3u8(?:[?#]|$)/i.test(url),
-                        referer: ALLMANGA_REFERER,
+                        referer: STREAM_REFERER,
                         thumbnails: this.extractThumbnails(url),
                     };
                 });
