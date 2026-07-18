@@ -136,7 +136,7 @@ const hasReleaseUnit = (item: Partial<Anime>, unit: 'cour' | 'part') =>
 
 const isMainSeriesSeason = (item: Partial<Anime>) => {
     const format = String(item.type || '').toUpperCase();
-    return format === 'TV' || format === 'TV_SHORT';
+    return format === 'TV' || format === 'TV_SHORT' || format === 'ONA';
 };
 
 const getSeasonSortDate = (item: Partial<Anime>) => {
@@ -191,7 +191,7 @@ const getRelatedSeasonCandidates = (anime: Anime) =>
         .filter((edge) => {
             const relation = String(edge.relationType || '').toUpperCase();
             const format = String(edge.node.format || '').toUpperCase();
-            return (relation === 'PREQUEL' || relation === 'SEQUEL') && (format === 'TV' || format === 'TV_SHORT');
+            return (relation === 'PREQUEL' || relation === 'SEQUEL') && (format === 'TV' || format === 'TV_SHORT' || format === 'ONA');
         })
         .map((edge) => mapRelationNodeToAnime(edge.node));
 

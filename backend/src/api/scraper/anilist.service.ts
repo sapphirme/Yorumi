@@ -52,7 +52,7 @@ class AnilistService {
                 .filter((e: any) =>
                     e.relationType === 'SEQUEL' &&
                     e.node?.type === 'ANIME' &&
-                    (e.node?.format === 'TV' || e.node?.format === 'TV_SHORT')
+                    (e.node?.format === 'TV' || e.node?.format === 'TV_SHORT' || e.node?.format === 'ONA')
                 )
                 .sort((a: any, b: any) => {
                     const ya = a.node.startDate?.year || a.node.seasonYear || 9999;
